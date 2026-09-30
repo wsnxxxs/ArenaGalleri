@@ -49,7 +49,7 @@ npm run check:intake
 
 展示目录按字段白名单生成，保留提示词与页面必需内容，排除私有源码链接、源提交、完整模型池及内部收录字段。发布时排除来源标记、构建记录、海报指纹和源码映射，保留运行资源及第三方许可。提示词和可运行作品是公开展示内容，访客仍可保存。
 
-将 `deploy/nginx/gallery-private-files.conf` 安装到网页目录之外，在 Gallery 的 Nginx `server {}` 中 include，语法检查后 reload。它拦截遗留内部文件；读取频率、模型包下载和并发限制需要配套安装共享后台的 Nginx 限流配置。差异发布时也须清除旧站点遗留的内部文件。限流响应显示稍后刷新提示，不自动重试。
+将 `deploy/nginx/gallery-private-files.conf` 安装到网页目录之外，在 Gallery、API 及作品域名的 Nginx `server {}` 中分别 include，语法检查后 reload。它拦截遗留内部文件；读取频率、模型包下载和并发限制需要配套安装共享后台的 Nginx 限流配置。差异发布时也须清除旧站点遗留的内部文件。限流响应显示稍后刷新提示，不自动重试。正式站已于 2026-09-30 安装并验收，后续仍以当前交接及线上核对为准。
 
 跨仓 HTTP 冒烟可在本地另行执行：配置忽略的 `integration.json`（参照示例），设置 `SERVER_REPO_DIR` 指向独立后台检出目录，然后运行 `npm run test:integration`。该命令使用隔离临时数据库，不把后台源码纳入本仓库。
 
