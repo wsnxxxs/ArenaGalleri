@@ -1,0 +1,18 @@
+{
+  "name": "arena-galleri",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && npm start",
+    "start": "vite preview --host 0.0.0.0 --port 5173",
+    "build": "npm run fetch:datapack && node scripts/assemble-site.mjs",
+    "fetch:datapack": "node scripts/fetch-datapack.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "node scripts/check-syntax.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:integration": "node scripts/integration-smoke.mjs",
+    "check:intake": "node scripts/check-intake.mjs"
+  },
+  "devDependencies": { "playwright": "^1.63.0", "vite": "^7.3.6" },
+  "engines": { "node": ">=22.13" }
+}

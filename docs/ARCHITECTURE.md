@@ -1,0 +1,37 @@
+# Gallery 架构
+
+`site/` 是原生 ES Module 与 CSS 前端。构建工具消费独立私有数据包，后台 API 提供动态功能；本仓库不包含后台实现或另一前端。
+
+## 构建
+
+本地 `datapack.json` 固定包版本 → 认证下载及校验 → 忽略的 `.datapack/` → 叠加 `site/` → 忽略的 `dist/`。
+
+`scripts/fetch-datapack.mjs` 使用 GitHub CLI 认证下载，复用 vendored 客户端的解包与安装校验。同版本缓存先验证再复用。`scripts/datapack.mjs` 校验模型、路径、截图与海报；原作收录和生成工具在私有数据仓库维护。
+
+`scripts/public-catalog.mjs` 明确列出公开字段并排除内部文件。`assemble-site.mjs` 只复制可发布资源，再写入展示目录，原始包不改动。输入与站点出现路径碰撞时失败。
+
+`cache-bust.mjs` 根据前端 commit 和资产内容生成统一版本，覆盖主站 import map、入口与 CSS。修改 API 配置也会改变资产版本。海报指纹只覆盖渲染相关文件；修改这些文件须在数据仓库重新生成海报。
+
+## 模块
+
+| 模块 | 职责 |
+| --- | --- |
+| `app.js` / `home.js` | 路由、馆藏、提示词、首页与对比 |
+| `platform-api.js` / `platform.js` | API 地址、凭据请求、版本协议、会话与公共界面 |
+| `arena.js` / `leaderboard.js` | Gallery 内的盲评和榜单界面，调用独立后台 |
+| `publish.js` / `submit.js` / `account.js` | 题目、投稿、个人中心与审核界面 |
+| `question-preview.js` / `result-previews.js` | 代表作品选择和卡片模型展示 |
+| `preview-model.js` / `scene-resources.js` | 模型读取与资源回收 |
+| `sandtable*.js` / `exhibition.js` | 三维沙盘及原作展厅 |
+| `turnstile.js` | 按后台配置展示注册验证 |
+| `ui.js` / CSS | 公共组件、布局、主题与偏好 |
+
+`site/arena.js` 是画廊原有界面模块，不是另一前端的合并副本。
+
+启动先读本地展示目录，再核对后台 bootstrap。数据版本仍用于写请求兼容，API 契约不可用时保留静态浏览。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。
+
+## 验证与部署
+
+公开 CI 只运行语法检查和合成数据测试。完整构建、数据完整性、跨仓联调和浏览器验收在受信任环境执行，配置与数据缓存不能放入公开 Actions 缓存或 artifact。
+
+Nginx 私有文件规则见 `deploy/nginx/gallery-private-files.conf`。频率与并发控制由共享后台的部署配置配套提供；仅更新前端代码不会启用这些服务器规则。正常浏览、限流响应及版本一致性需要在正式部署时核对。

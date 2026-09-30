@@ -1,0 +1,69 @@
+/* Live pages keep their own colours, layouts and rendering. */
+.display-modes { display:flex; gap:3px; padding:3px; border:1px solid #dadbd0; border-radius:7px; white-space:nowrap; }
+.display-modes a { padding:5px 10px; text-decoration:none; font-size:11px; color:#838674; border-radius:4px; }
+.display-modes a[aria-current=page] { background:#46513c; color:#fffdf5; }
+.display-modes a:hover { background:#e3e6da; color:#46513c; }
+.exhibition-stage { position:relative; flex:1; min-width:0; overflow:hidden; background-color:#eae8df; background-image:radial-gradient(#b7bbad 1px, transparent 1px); cursor:grab; touch-action:none; }
+.exhibition-stage.is-dragging { cursor:grabbing; }
+.exhibition-world { position:absolute; inset:0; transform-origin:0 0; will-change:transform; }
+.exhibition-heading { position:absolute; top:22px; left:28px; right:28px; display:flex; align-items:center; justify-content:space-between; pointer-events:none; z-index:1; }
+.exhibition-mode { font-size:10px; color:#838674; display:flex; gap:7px; align-items:center; }
+.exhibition-mode::before,.exhibition-live i { content:''; width:5px; height:5px; border-radius:50%; background:#728866; display:inline-block; }
+.exhibition-card { position:absolute; width:720px; height:510px; display:flex; flex-direction:column; background:#f9f8f1; border-radius:8px; overflow:hidden; box-shadow:0 15px 45px #35392e20,0 0 0 1px #fff9; }
+.exhibition-card-head { height:42px; flex:none; display:flex; align-items:center; gap:12px; padding:0 15px; color:#4a5142; }
+.exhibition-number { color:#9a9f8d; font:11px var(--mono); }
+.exhibition-card-head>div { display:flex; align-items:baseline; gap:13px; min-width:0; }
+.exhibition-card-head strong { font-size:13px; font-weight:600; white-space:nowrap; }
+.exhibition-card-head>div>span { font-size:10px; color:#9a9f8d; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.exhibition-live { margin-left:auto; font:9px var(--mono); letter-spacing:1px; white-space:nowrap; color:#849377; }
+.exhibition-card-head button { border:0; background:none; color:#9a9f8d; padding:0 4px; font-size:19px; }
+.exhibition-viewport { height:450px; position:relative; flex:none; overflow:hidden; background:#171b18; }
+.exhibition-viewport iframe { display:block; position:absolute; top:0; left:0; width:1280px; height:800px; transform:scale(.5625); transform-origin:0 0; border:0; background:#171b18; pointer-events:none; }
+.exhibition-glass { position:absolute; inset:0; width:100%; height:100%; border:0; padding:0; background:transparent; color:white; cursor:inherit; touch-action:none; }
+.exhibition-glass>span { position:absolute; right:18px; bottom:16px; padding:8px 13px; border:1px solid #fff5; border-radius:5px; background:#162018c9; font-size:12px; opacity:0; transition:opacity .15s; }
+.exhibition-glass:hover>span,.exhibition-glass:focus-visible>span { opacity:1; }
+.exhibition-card-foot { height:18px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 14px; background:#f9f8f1; font-size:9px; color:#929888; }
+.exhibition-card-foot button { border:0; background:none; color:#66765a; padding:0 0 0 16px; font-size:9px; }
+.exhibition-empty { position:absolute; inset:50% auto auto 50%; transform:translate(-50%,-50%); text-align:center; width:min(470px,90%); cursor:default; }
+.exhibition-empty-art { position:relative; width:180px; height:100px; margin:26px auto 15px; }
+.exhibition-empty-art i { position:absolute; width:91px; height:67px; border:1px solid #aab39d; border-radius:4px; background:#e9eee2; transform:rotate(-12deg); left:7px; top:18px; box-shadow:0 8px 18px #72836315; }
+.exhibition-empty-art i:nth-child(2) { transform:rotate(11deg); left:84px; top:9px; background:#e6dfd0; border-color:#bdb4a0; }
+.exhibition-empty-art i:nth-child(3) { transform:rotate(-2deg); left:46px; top:0; background:#f8f6ed; border-color:#b6bca8; }
+.exhibition-empty h1 { font:34px/1.5 var(--serif); letter-spacing:2px; color:#4a5541; }
+.exhibition-empty p { font-size:12px; line-height:2; color:#818975; margin:18px 0 24px; }
+.exhibition-empty .btn { font-size:12px; }
+.exhibition-toolbar { position:absolute; bottom:45px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:3px; padding:6px; background:#f9f8f1f2; border:1px solid #fff; box-shadow:0 5px 24px #414a3520; border-radius:9px; cursor:default; z-index:2; }
+.exhibition-toolbar button { white-space:nowrap; border:0; background:transparent; color:#657359; border-radius:4px; padding:7px 12px; font-size:12px; }
+.exhibition-toolbar button:hover { background:#e4e9db; }
+.exhibition-toolbar output { width:44px; text-align:center; color:#7c8671; font:11px var(--mono); }
+.exhibition-toolbar i { height:17px; width:1px; background:#d9ddce; margin:0 4px; }
+.exhibition-hint { position:absolute; bottom:13px; left:12px; right:12px; text-align:center; pointer-events:none; font-size:10px; color:#8a927f; }
+.exhibition-focusbar { position:absolute; top:14px; left:20px; right:20px; height:38px; display:flex; align-items:center; gap:18px; z-index:3; cursor:default; }
+.exhibition-focusbar button { border:1px solid #c7cebb; border-radius:5px; background:#f6f8ee; color:#506145; padding:7px 12px; font-size:12px; white-space:nowrap; }
+.exhibition-focusbar>span { display:flex; align-items:baseline; gap:12px; min-width:0; }
+.exhibition-focusbar b { font-size:12px; color:#4e5d42; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.exhibition-focusbar small { color:#8a947c; font-size:10px; white-space:nowrap; }
+.exhibition-focusbar a { margin-left:auto; color:#6f7e60; font-size:11px; white-space:nowrap; text-decoration:none; }
+.is-operating .exhibition-stage { cursor:default; touch-action:auto; }
+.is-operating .exhibition-world { transform:none!important; }
+.is-operating .exhibition-card:not(.is-active) { visibility:hidden; }
+.is-operating .exhibition-heading { display:none; }
+.exhibition-card.is-active { left:20px!important; top:64px!important; bottom:20px; right:20px; width:auto; height:auto; }
+.exhibition-card.is-active .exhibition-viewport { flex:1; height:auto; }
+.exhibition-card.is-active iframe { width:100%; height:100%; transform:none; pointer-events:auto; }
+.exhibition-card.is-active .exhibition-glass { display:none; }
+.exhibition-card.is-active .exhibition-card-foot { height:26px; }
+.exhibition-card.is-active .exhibition-card-foot [data-focus] { display:none; }
+@media(max-width:1400px) { .sandbar-sub { display:none; } }
+@media(max-width:700px) {
+ .sandbar-rule+div,.sand-count { display:none; }
+ .display-modes { margin-left:auto; } .display-modes a { font-size:11px; padding:5px 8px; }
+ .exhibition-heading { left:18px; right:18px; top:20px; } .exhibition-mode { display:none; }
+ .exhibition-empty h1 { font-size:28px; } .exhibition-empty p { font-size:11px; }
+ .exhibition-toolbar { bottom:49px; } .exhibition-toolbar button { padding:7px 9px; }
+ .exhibition-hint { font-size:9px; bottom:15px; }
+ .exhibition-focusbar { left:10px; right:10px; gap:10px; }
+ .exhibition-focusbar small,.exhibition-focusbar a { display:none; }
+ .exhibition-card.is-active { left:8px!important; right:8px; bottom:8px; }
+ .exhibition-card.is-active .exhibition-card-head>div>span,.exhibition-card.is-active .exhibition-live { display:none; }
+}

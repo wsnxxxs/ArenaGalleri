@@ -1,0 +1,10 @@
+{
+  "server": {
+    "repo": "OWNER/SERVER_REPOSITORY",
+    "commit": "REPLACE_WITH_THE_40_CHARACTER_SERVER_COMMIT"
+  },
+  "data": {
+    "repo": "OWNER/PRIVATE_DATA_REPOSITORY",
+    "commit": "REPLACE_WITH_THE_40_CHARACTER_DATA_SOURCE_COMMIT"
+  }
+}

@@ -1,0 +1,70 @@
+// Runtime configuration keeps the static gallery and the API independently deployable.
+export function apiBaseUrl() {
+  const base = new URL(globalThis.SAME_PROMPT_CONFIG?.apiBaseUrl || 'api/', document.baseURI);
+  if (base.pathname === '/') base.pathname = '/api/';
+  if (!base.pathname.endsWith('/')) base.pathname += '/';
+  return base;
+}
+
+export const apiUrl = (path) => new URL(path.replace(/^\/+/, ''), apiBaseUrl()).href;
+
+export function compatibleBuild(buildInfo, bootstrap) {
+  return Boolean(buildInfo && Object.hasOwn(buildInfo, 'datapack') && bootstrap.apiVersion === 1);
+}
+
+export function staleBuild(buildInfo, bootstrap) {
+  if (typeof buildInfo.datapack === 'string' && /^[a-f0-9]{40}$/.test(buildInfo.datapack)) {
+    return bootstrap.datapack !== buildInfo.datapack;
+  }
+  return buildInfo.datapack === null && bootstrap.datapack === null
+    && typeof buildInfo.catalogDigest === 'string' && /^[a-f0-9]{64}$/.test(buildInfo.catalogDigest)
+    && bootstrap.catalogDigest !== buildInfo.catalogDigest;
+}
+
+let datapackVersion = null;
+export function setDatapackVersion(version) {
+  datapackVersion = typeof version === 'string' && /^[a-f0-9]{40}$/.test(version) ? version : null;
+}
+
+// Only writes are version-checked by the server; keeping reads free of the custom header
+// spares cross-origin GETs a CORS preflight.
+export function fetchApi(path, options = {}) {
+  const headers = new Headers(options.headers);
+  const write = !['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase());
+  if (datapackVersion && write) headers.set('X-Datapack-Version', datapackVersion);
+  return fetch(apiUrl(path), { ...options, headers, credentials: 'include' });
+}
+
+export function createUploadRequest(path) {
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', apiUrl(path));
+  xhr.withCredentials = true;
+  if (datapackVersion) xhr.setRequestHeader('X-Datapack-Version', datapackVersion);
+  return xhr;
+}
+
+export function mediaUrl(value) {
+  if (!value || typeof value !== 'string') return value;
+  const configured = globalThis.SAME_PROMPT_CONFIG?.mediaBaseUrl;
+  const base = configured ? new URL(configured, document.baseURI) : new URL('../', apiBaseUrl());
+  if (!base.pathname.endsWith('/')) base.pathname += '/';
+  return new URL(value.replace(/^\/+/, ''), base).href;
+}
+
+const work = (item) => !item || item.curated ? item : {
+  ...item,
+  cover: mediaUrl(item.cover),
+  captures: item.captures && Object.fromEntries(Object.entries(item.captures).map(([name, url]) => [name, mediaUrl(url)])),
+};
+const works = (items) => items?.map(work);
+
+// Only the API's known DTOs contain server media. Curated question assets remain on the frontend.
+export function resolveApiMedia(data, endpoint) {
+  if (!data || typeof data !== 'object') return data;
+  if (endpoint === 'bootstrap' || endpoint === 'me' || endpoint === 'review') return Array.isArray(data.works) ? { ...data, works: works(data.works) } : data;
+  if (endpoint === 'work') return { ...data, work: work(data.work) };
+  if (endpoint === 'draft') return { ...data, preview: data.preview ? new URL(data.preview, new URL('../', apiBaseUrl())).href : data.preview };
+  if (endpoint === 'match') return { ...data, a: mediaUrl(data.a), b: mediaUrl(data.b) };
+  if (endpoint === 'reveal') return { ...data, a: work(data.a), b: work(data.b) };
+  return data;
+}

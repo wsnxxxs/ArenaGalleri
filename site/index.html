@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>亿模亿样 · 模型前端效果对比</title>
+  <meta name="description" content="同一份提示词，不同模型的前端表达。浏览作品、并排体验、查看截图与提示词。" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#121211" />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  <script>
+    // The exhibition opens in ink; an explicit theme choice is kept across visits.
+    (() => {
+      let saved = null;
+      try { saved = localStorage.getItem('theme'); } catch { /* storage blocked */ }
+      const theme = saved === 'light' || saved === 'dark' ? saved : 'dark';
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="sandtable.css" />
+  <link rel="stylesheet" href="exhibition.css" />
+  <link rel="stylesheet" href="platform.css" />
+  <link rel="stylesheet" href="studio.css" />
+</head>
+<body>
+  <div id="app" aria-live="polite"></div>
+  <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="图片浏览" hidden>
+    <div class="lb-top">
+      <span class="lb-count" aria-live="polite"></span>
+      <button class="lb-btn lb-close" data-lb="close" aria-label="关闭（Esc）"></button>
+    </div>
+    <button class="lb-btn lb-nav lb-prev" data-lb="prev" aria-label="上一张（←）"></button>
+    <figure class="lb-figure">
+      <img class="lb-img" alt="" />
+      <figcaption class="lb-caption"></figcaption>
+    </figure>
+    <button class="lb-btn lb-nav lb-next" data-lb="next" aria-label="下一张（→）"></button>
+  </div>
+  <noscript>此页面需要启用 JavaScript。</noscript>
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js","three/addons/utils/BufferGeometryUtils.js":"./vendor/BufferGeometryUtils.js"}}</script>
+  <script src="runtime-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
