@@ -21,6 +21,7 @@
 | `arena.js` / `leaderboard.js` | Gallery 内的盲评和榜单界面，调用独立后台 |
 | `publish.js` / `submit.js` / `account.js` | 题目、投稿、个人中心与审核界面 |
 | `question-preview.js` / `result-previews.js` | 代表作品选择和卡片模型展示 |
+| `prompt-variants.js` | 提示词版本、同模型结果分组与当前版本选择 |
 | `preview-model.js` / `scene-resources.js` | 模型读取与资源回收 |
 | `sandtable*.js` / `exhibition.js` | 三维沙盘及原作展厅 |
 | `turnstile.js` | 按后台配置展示注册验证 |
@@ -29,6 +30,8 @@
 `site/arena.js` 是画廊原有界面模块，不是另一前端的合并副本。
 
 启动先读本地展示目录，再核对后台 bootstrap。数据版本仍用于写请求兼容，API 契约不可用时保留静态浏览。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。
+
+题库只对有解答的题读取代表作品榜单，空题直接显示等待首份答案，避免无用请求触发共享读取限制。同题长短版本保持题目 ID，卡片按模型、推理档位与来源分组；每份作品保留独立 ID，并排预览两栏各自选择已收录版本。
 
 ## 验证与部署
 
