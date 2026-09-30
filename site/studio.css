@@ -494,7 +494,11 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .submission-question h3 { font: 550 16px/1.55 var(--sans); }
 .submission-question .summary { margin: 4px 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .submission-question .work-meta { display: flex; flex-wrap: wrap; gap: 4px 15px; font-size: 11px; }
-.submission-question > .btn { flex: none; }
+.submission-question > .actions { display: flex; flex: none; align-items: center; gap: 8px; }
+.submission-question h3 .status { margin-left: 8px; vertical-align: 2px; }
+.submission-question .result-reason { margin: 6px 0 0; }
+/* The review queue lists questions with their full prompt folded away. */
+.review-question .prompt-peek { margin-top: 8px; }
 .submission-section .work-row { grid-template-columns: 116px minmax(0, 1fr) auto; gap: 16px; }
 .account-empty { display: flex; flex: 1; min-height: 440px; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 50px 20px; }
 .account-empty > .i { width: 34px; height: 34px; color: var(--muted); margin-bottom: 22px; }

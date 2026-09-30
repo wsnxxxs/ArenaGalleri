@@ -1249,7 +1249,7 @@ async function route({ keepScroll = false } = {}) {
   const inExhibition = t && hasExhibition(t) && (a === 'exhibition' || a === 'sandtable');
   const inViewer = t && a && !inExhibition;
   const fromAccount = lastPage === 'me' || lastPage === 'review';
-  if (t && fromAccount) origin = { task: t.id, href: lastHash, text: lastPage === 'review' ? '作品审核' : ACCOUNT_LISTS[lastHash] ?? '个人中心' };
+  if (t && fromAccount) origin = { task: t.id, href: lastHash, text: lastPage === 'review' ? '审核' : ACCOUNT_LISTS[lastHash] ?? '个人中心' };
   else if (t?.id !== origin?.task) origin = null;
   lastPage = platformPage ?? taskId ?? '';
   lastHash = location.hash;

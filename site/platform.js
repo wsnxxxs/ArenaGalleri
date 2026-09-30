@@ -107,6 +107,20 @@ export function statusBadge(status, { always = false, reason = '' } = {}) {
   if (!info || (status === 'verified' && !always)) return '';
   return `<span class="status status-${status}" title="${esc(reason || info.hint)}">${icon(info.icon)}${info.label}</span>`;
 }
+// Content moderation holds works and questions back until they pass; only authors and admins see it.
+export const MODERATION = {
+  pending: { label: '内容审核中', icon: 'clock', tone: 'unverified' },
+  review: { label: '等待人工复核', icon: 'clock', tone: 'unverified' },
+  rejected: { label: '内容未通过', icon: 'alert', tone: 'questioned' },
+};
+export function moderationBadge(moderation, hint = '', labels = {}) {
+  const info = MODERATION[moderation?.status];
+  return info ? `<span class="status status-${info.tone}" title="${esc(hint)}">${icon(info.icon)}${labels[moderation.status] ?? info.label}</span>` : '';
+}
+// Questions are always reviewed by a person, so a pending one waits for an admin.
+export const QUESTION_LABELS = { pending: '等待人工审核' };
+// Everything waiting on an admin: unverified or held works, and questions under review.
+export const reviewCount = () => (platform.review?.unverified ?? 0) + (platform.review?.questions ?? 0);
 
 // ---- toast and dialogs ------------------------------------------------------------------
 let toastTimer = 0;
@@ -412,7 +426,7 @@ export function accountControl(current = false) {
     <button class="account-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="登录与菜单">
       <span class="account-name">账户</span>
       ${icon('menu')}
-      ${platform.review?.unverified ? `<span class="dot" aria-hidden="true"></span>` : ''}
+      ${reviewCount() ? `<span class="dot" aria-hidden="true"></span>` : ''}
     </button>
   </div>`;
 }
@@ -432,7 +446,7 @@ function menuHtml() {
   return `${nav}<div class="menu-user"><span class="avatar" aria-hidden="true">${avatarFace(user.avatar, name)}</span><span><b>${esc(name)}</b><small>${user.role === 'admin' ? '管理员' : '成员'} · 已评 ${platform.me?.votes ?? 0} 组</small></span></div>
     <div class="menu-group">
       <a href="#/me" role="menuitem">${icon('user')}个人中心</a>
-      ${user.role === 'admin' ? `<a href="#/review" role="menuitem">${icon('shield')}审核${platform.review?.unverified ? `<span class="count">${platform.review.unverified}</span>` : ''}</a>` : ''}
+      ${user.role === 'admin' ? `<a href="#/review" role="menuitem">${icon('shield')}审核${reviewCount() ? `<span class="count">${reviewCount()}</span>` : ''}</a>` : ''}
       <button role="menuitem" data-logout>${icon('logout')}退出登录</button>
     </div>`;
 }

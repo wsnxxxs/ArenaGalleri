@@ -1,12 +1,13 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
-import { api, avatarFace, codeSender, confirmDialog, openDialog, platform, refreshPlatform, requireUser, statusBadge, toast } from './platform.js';
+import { api, avatarFace, codeSender, confirmDialog, moderationBadge, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 
-const TABS = { unverified: '未验证', verified: '已验证', questioned: '存疑', log: '记录' };
+const TABS = { unverified: '未验证', verified: '已验证', questioned: '存疑', questions: '题目', log: '记录' };
 const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的题目' };
 const ACCOUNT = { title: '个人中心', description: '每一道提问，每一份解答，都是你的创作足迹。' };
-const ACTIONS = { submit: '提交作品', verified: '通过验证', questioned: '标记存疑', unverified: '退回未验证', delete: '删除作品' };
+const ACTIONS = { submit: '提交作品', verified: '通过验证', questioned: '标记存疑', unverified: '退回未验证', delete: '删除作品',
+  'question-create': '发起题目', 'question-review': '审核题目', 'question-delete': '删除题目' };
 
 export function mount(root, ctx) {
   return ctx.route === 'review' ? review(root, ctx) : mine(root, ctx);
@@ -18,7 +19,7 @@ function accountNav(ctx, current) {
     ['#/me', 'user', ME_TABS.overview, current === 'overview'],
     ['#/me/works', 'grid', ME_TABS.works, current === 'works'],
     ['#/me/questions', 'text', ME_TABS.questions, current === 'questions'],
-    ...(platform.user?.role === 'admin' ? [['#/review', 'shield', '作品审核', current === 'review', platform.review?.unverified || undefined]] : []),
+    ...(platform.user?.role === 'admin' ? [['#/review', 'shield', '审核', current === 'review', reviewCount() || undefined]] : []),
   ]);
 }
 
@@ -36,28 +37,42 @@ function reactionSummary(w) {
   return entries.length ? `<span class="reaction-sum">${entries.map(([emoji, n]) => `<span>${emoji}<b>${n}</b></span>`).join('')}</span>` : '';
 }
 
-// Content moderation runs before an upload goes public; only its author and admins see it.
-const MODERATION = {
-  pending: { label: '内容审核中', hint: '内容审核通过前只有你能看到这件作品，通常几分钟内完成。' },
-  review: { label: '等待人工复核', hint: '自动审核没能确定结果，管理员会人工复核；通过前只有你能看到。' },
-  rejected: { label: '内容未通过', hint: '内容审核未通过，作品不会公开。' },
+// What a held work or question means for its author, by moderation status.
+const HELD = {
+  work: {
+    pending: '内容审核通过前只有你能看到这件作品，通常几分钟内完成。',
+    review: '自动审核没能确定结果，管理员会人工复核；通过前只有你能看到。',
+    rejected: '内容审核未通过，作品不会公开。',
+  },
+  question: {
+    pending: '新题目由管理员人工审核，通过前只有你能看到；示例结果的审核进度在「我的作品」里。',
+    review: '管理员正在复核，通过前只有你能看到。',
+    rejected: '审核未通过，题目不会公开。可以删除后重新发起。',
+  },
 };
-const hiddenByModeration = (w) => Boolean(MODERATION[w.moderation?.status]);
+const held = (item) => Boolean(HELD.work[item.moderation?.status]);
+function heldNote(kind, item) {
+  const status = item.moderation?.status;
+  const hint = HELD[kind][status];
+  if (!hint) return '';
+  const reason = status === 'rejected' && item.moderation.reason ? `原因：${item.moderation.reason}` : '';
+  return `<p class="result-reason">${icon(status === 'rejected' ? 'alert' : 'clock')}<span>${esc(hint + reason)}</span></p>`;
+}
 
 function workRow(ctx, w, { admin = false } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task);
   const model = ctx.MODELS.get(w.model) ?? { name: w.modelName };
-  const moderation = MODERATION[w.moderation?.status];
+  const hidden = held(w);
   const variant = task?.promptVariants?.find((v) => v.id === w.promptVariant);
   // A work still under moderation is missing from the public gallery; open its private preview.
-  const href = moderation ? esc(w.scene) : `#/${esc(w.task)}/${esc(w.id)}`;
+  const href = hidden ? esc(w.scene) : `#/${esc(w.task)}/${esc(w.id)}`;
   return `<article class="work-row" data-status="${w.status}">
     ${thumb(ctx, w, { link: false })}
     <div class="work-main">
-      <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(w.modelName)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}${moderation ? `<span class="status ${w.moderation.status === 'rejected' ? 'status-questioned' : 'status-unverified'}" title="${esc(moderation.hint)}">${icon(w.moderation.status === 'rejected' ? 'alert' : 'clock')}${moderation.label}</span>` : ''}${statusBadge(w.status, { always: true, reason: w.reason })}</p>
-      <h3><a href="${href}"${moderation ? ' target="_blank" rel="noopener"' : ''}>${esc(w.title)}</a></h3>
+      <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(w.modelName)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}${moderationBadge(w.moderation, HELD.work[w.moderation?.status])}${statusBadge(w.status, { always: true, reason: w.reason })}</p>
+      <h3><a href="${href}"${hidden ? ' target="_blank" rel="noopener"' : ''}>${esc(w.title)}</a></h3>
       <p class="work-meta">${esc(task?.title ?? w.task)}${variant ? ` · ${esc(variant.label)}` : ''}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
-      ${moderation ? `<p class="result-reason">${icon(w.moderation.status === 'rejected' ? 'alert' : 'clock')}<span>${esc(w.moderation.status === 'rejected' && w.moderation.reason ? `${moderation.hint}原因：${w.moderation.reason}` : moderation.hint)}</span></p>` : ''}
+      ${heldNote('work', w)}
       ${w.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(w.reason)}</span></p>` : ''}
     </div>
     <div class="work-side">
@@ -127,23 +142,45 @@ async function removeWork(w, { admin }) {
 }
 
 function signedOut(root, ctx, text) {
-  root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '作品审核', crumbs: [{ text: '个人中心', href: '#/me' }, { text: '作品审核' }] })}<section class="account-empty">
+  root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '审核', crumbs: [{ text: '个人中心', href: '#/me' }, { text: '审核' }] })}<section class="account-empty">
     ${icon('user')}<h2>${esc(text)}</h2>
     <p>登录后，你上传的作品和核验结果会显示在这里。</p>
     <div class="actions"><button class="btn primary" data-auth="login">登录 / 注册</button><a class="btn" href="#/questions">回到题库</a></div>
   </section>${ctx.pageEnd()}`;
 }
 
+// A question held by moderation has no public page yet, so it is shown without links.
 function questionRow(ctx, question) {
   const task = ctx.DATA.tasks.find((item) => item.id === question.id);
   const works = task?.results.filter(ctx.interactive).length ?? 0;
+  const hidden = held(question);
   return `<article class="submission-question">
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
-    <div class="submission-question-body"><h3><a href="#/${esc(question.id)}">${esc(question.title)}</a></h3>
+    <div class="submission-question-body"><h3>${hidden ? esc(question.title) : `<a href="#/${esc(question.id)}">${esc(question.title)}</a>`}${moderationBadge(question.moderation, HELD.question[question.moderation?.status], QUESTION_LABELS)}</h3>
       <p class="summary">${esc(question.summary)}</p>
-      <p class="work-meta">${question.tags.map((tag) => `#${esc(tag)}`).join(' · ')}<span>${esc(question.date)} · ${works} 件作品</span></p>
-    </div><a class="btn sm" href="#/${esc(question.id)}">查看题目${icon('next')}</a>
+      <p class="work-meta">${question.tags.map((tag) => `#${esc(tag)}`).join(' · ')}<span>${esc(question.date)}${hidden ? '' : ` · ${works} 件作品`}</span></p>
+      ${heldNote('question', question)}
+    </div><div class="actions">${hidden ? '' : `<a class="btn sm" href="#/${esc(question.id)}">查看题目${icon('next')}</a>`}${works && !hidden ? '' : `<button class="icon-btn" data-delete-question="${esc(question.id)}" title="删除题目" aria-label="删除「${esc(question.title)}」">${icon('trash')}</button>`}</div>
   </article>`;
+}
+
+async function removeQuestion(question) {
+  const ok = await confirmDialog({
+    title: '删除这道题？',
+    message: `「${question.title}」会被删除，无法恢复。未公开的题目会连同示例结果一起撤回；已经有人作答的题目不能删除。`,
+    confirm: '删除',
+    danger: true,
+  });
+  if (!ok) return false;
+  try {
+    await api(`questions/${encodeURIComponent(question.id)}`, { method: 'DELETE' });
+    toast('题目已删除');
+    await refreshPlatform('question');
+    return true;
+  } catch (error) {
+    toast(error.message);
+    return false;
+  }
 }
 
 function activityCalendar(activity) {
@@ -341,7 +378,7 @@ function mine(root, ctx) {
     const body = !signedIn ? `<div class="notice submissions-login">${icon('user')}<p>登录后查看你发起的题目与上传的作品。</p><button class="btn primary sm" data-auth="login">登录 / 注册</button></div>`
       : tab === 'overview' ? profileOverview(state)
       : tab === 'works' ? `<section class="submission-section">${state.works === null ? `<p class="muted">${state.error ? '作品暂时未能载入。' : '正在载入作品…'}</p>` : works.length
-          ? `<p class="submission-summary">${works.length} 件作品${works.some(hiddenByModeration) ? ` · ${works.filter(hiddenByModeration).length} 件未通过或正在内容审核` : ''} · ${count('unverified')} 件等待核验${count('questioned') ? ` · ${count('questioned')} 件存疑` : ''}</p><div class="work-list">${works.map((w) => workRow(ctx, w)).join('')}</div>`
+          ? `<p class="submission-summary">${works.length} 件作品${works.some(held) ? ` · ${works.filter(held).length} 件未通过或正在内容审核` : ''} · ${count('unverified')} 件等待核验${count('questioned') ? ` · ${count('questioned')} 件存疑` : ''}</p><div class="work-list">${works.map((w) => workRow(ctx, w)).join('')}</div>`
           : '<div class="submission-empty"><b>还没有上传作品</b><p>选一道题，上传你让模型生成的答案。</p><button class="btn sm" type="button" data-upload>上传作品</button></div>'}</section>`
       : `<section class="submission-section">${state.questions === null ? `<p class="muted">${state.error ? '题目暂时未能载入。' : '正在载入题目…'}</p>` : questions.length
           ? `<div class="submission-questions">${questions.map((question) => questionRow(ctx, question)).join('')}</div>`
@@ -395,6 +432,12 @@ function mine(root, ctx) {
     if (editButton) {
       const work = state.works?.find((w) => w.id === editButton.dataset.editWork);
       if (work) editWork(ctx, work);
+      return;
+    }
+    const questionButton = e.target.closest('[data-delete-question]');
+    if (questionButton) {
+      const question = state.questions?.find((q) => q.id === questionButton.dataset.deleteQuestion);
+      if (question) await removeQuestion(question);
       return;
     }
     const button = e.target.closest('[data-delete]');
@@ -609,17 +652,86 @@ function openReview(ctx, w, { onDecided } = {}) {
   });
 }
 
+const questionWaiting = (q) => ['pending', 'review'].includes(q.moderation?.status);
+
+// A sample result sent with a new question; admins open its private preview before deciding.
+function sampleRow(w) {
+  return `<li>${esc(w.modelName)}${w.effort ? ` · ${esc(w.effort)}` : ''} · ${esc(w.title)}${moderationBadge(w.moderation, HELD.work[w.moderation?.status])}${w.scene ? `<a class="text-link" href="${esc(w.scene)}" target="_blank" rel="noopener">预览结果${icon('arrow')}</a>` : ''}</li>`;
+}
+
+function reviewQuestionRow(q) {
+  const status = q.moderation?.status ?? 'legacy';
+  const shown = ['legacy', 'approved'].includes(status);
+  const detail = [q.moderation?.reason, q.moderation?.categories?.length ? `类别：${q.moderation.categories.join('、')}` : '']
+    .filter(Boolean).join(' · ');
+  const samples = q.samples ?? [];
+  return `<article class="submission-question review-question">
+    <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
+    <div class="submission-question-body"><h3>${shown ? `<a href="#/${esc(q.id)}">${esc(q.title)}</a>` : esc(q.title)}${moderationBadge(q.moderation, '', QUESTION_LABELS)}</h3>
+      <p class="summary">${esc(q.summary)}</p>
+      <p class="work-meta">${esc(q.ownerName ?? q.owner ?? '已注销的用户')}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.tags.map((tag) => `<span>#${esc(tag)}</span>`).join('')}</p>
+      ${detail ? `<p class="result-reason">${icon(status === 'rejected' ? 'alert' : 'guide')}<span>${esc(detail)}</span></p>` : ''}
+      ${samples.length ? `<ul class="question-samples">${samples.map(sampleRow).join('')}</ul>` : shown ? '' : '<p class="result-reason"><span>没有附带示例结果。</span></p>'}
+      <details class="prompt-peek"><summary>${icon('guide')}完整提示词</summary><pre>${esc(q.prompt)}</pre></details>
+    </div>
+    <div class="actions">
+      ${shown ? '' : `<button class="btn sm primary" data-q-decide="approved" data-q="${esc(q.id)}">通过</button>`}
+      ${status === 'rejected' ? '' : `<button class="btn sm" data-q-decide="rejected" data-q="${esc(q.id)}">拒绝</button>`}
+      <button class="icon-btn" data-q-delete="${esc(q.id)}" title="删除题目" aria-label="删除「${esc(q.title)}」">${icon('trash')}</button>
+    </div>
+  </article>`;
+}
+
+// Approving needs no reason; rejecting requires one that the author will read.
+function decideQuestion(q, status) {
+  return new Promise((resolve) => {
+    let saved = false;
+    const sheet = openDialog({
+      title: status === 'approved' ? '通过这道题？' : '拒绝这道题',
+      className: 'confirm-sheet',
+      onClose: () => resolve(saved),
+      body: `<form data-q-form novalidate>
+        <p class="sheet-text">「${esc(q.title)}」${status === 'approved' ? '会公开到题库并开放投稿。' : '不会公开，作者会看到下面的理由。'}</p>
+        <label class="field"><span class="field-label">理由${status === 'rejected' ? '<i>*</i>' : '<small>选填</small>'}</span><textarea class="input" name="reason" rows="3" maxlength="500"></textarea></label>
+        <p class="form-error" role="alert"></p>
+        <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary${status === 'rejected' ? ' danger' : ''}" type="submit">${status === 'approved' ? '通过' : '拒绝'}</button></div>
+      </form>`,
+    });
+    const form = $('[data-q-form]', sheet.el);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const reason = form.reason.value.trim();
+      const error = $('.form-error', form);
+      if (status === 'rejected' && !reason) { error.textContent = '请写明拒绝理由'; form.reason.focus(); return; }
+      const button = $('[type="submit"]', form);
+      button.disabled = true;
+      try {
+        await api(`questions/${encodeURIComponent(q.id)}/moderation`, { method: 'POST', body: { status, reason } });
+        saved = true;
+        sheet.close();
+        toast(status === 'approved' ? '题目已通过' : '题目已拒绝');
+      } catch (err) {
+        error.textContent = err.message;
+        button.disabled = false;
+      }
+    });
+  });
+}
+
 function review(root, ctx) {
   const tab = Object.hasOwn(TABS, ctx.param ?? '') ? ctx.param : 'unverified';
-  const state = { works: null, audit: [], error: '' };
+  const state = { works: null, audit: [], questions: null, questionsError: '', error: '' };
   let active = true, request = 0;
   async function load() {
     const version = ++request;
     if (platform.user?.role !== 'admin') return draw();
     try {
-      const data = await api('review');
+      // An older API has no question review; the works tabs keep working without it.
+      const [data, questions] = await Promise.all([api('review'),
+        api('admin/questions').then((body) => ({ list: body.questions }), (error) => ({ error: error.status === 404 ? '后端暂不支持题目审核。' : error.message }))]);
       if (!active || version !== request) return;
-      Object.assign(state, { works: data.works, audit: data.audit, error: '' });
+      Object.assign(state, { works: data.works, audit: data.audit, error: '',
+        questions: questions.list ?? state.questions ?? [], questionsError: questions.error ?? '' });
     } catch (error) {
       if (!active || version !== request) return;
       state.error = error.message;
@@ -629,24 +741,34 @@ function review(root, ctx) {
   function draw() {
     if (!platform.user) return signedOut(root, ctx, '请先登录管理员账号');
     if (platform.user.role !== 'admin') {
-      root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '作品审核', nav: accountNav(ctx, 'review'), crumbs: [{ text: '个人中心', href: '#/me' }, { text: '作品审核' }] })}<section class="account-empty">${icon('shield')}<h2>只有管理员可以审核作品</h2><p>管理员由站点维护者在服务器上授予。</p><a class="btn primary" href="#/questions">回到题库${icon('right')}</a></section>${ctx.pageEnd()}`;
+      root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '审核', nav: accountNav(ctx, 'review'), crumbs: [{ text: '个人中心', href: '#/me' }, { text: '审核' }] })}<section class="account-empty">${icon('shield')}<h2>只有管理员可以审核作品</h2><p>管理员由站点维护者在服务器上授予。</p><a class="btn primary" href="#/questions">回到题库${icon('right')}</a></section>${ctx.pageEnd()}`;
       return;
     }
     const works = state.works ?? [];
     const count = (status) => works.filter((w) => w.status === status).length;
     const titles = new Map(works.map((w) => [w.id, w.title]));
+    const questions = state.questions ?? [];
+    const questionTitles = new Map([...ctx.DATA.tasks, ...questions].map((q) => [q.id, q.title]));
+    const tabCount = (id) => (id === 'questions' ? questions.filter(questionWaiting).length : count(id));
     const list = tab === 'log'
-      ? (state.audit.length ? `<ol class="audit">${state.audit.map((row) => `<li><time>${formatTime(row.at)}</time><span class="audit-actor">${esc(row.actor)}</span><b>${esc(ACTIONS[row.action] ?? row.action)}</b><span class="audit-work">${row.work ? (titles.has(row.work) ? `<a href="#/${esc(row.task)}/${esc(row.work)}">${esc(titles.get(row.work))}</a>` : `<span class="muted">${esc(row.work)}（已删除）</span>`) : ''}${row.detail ? ` · ${esc(row.detail)}` : ''}</span></li>`).join('')}</ol>` : '<p class="muted">还没有记录。</p>')
+      ? (state.audit.length ? `<ol class="audit">${state.audit.map((row) => `<li><time>${formatTime(row.at)}</time><span class="audit-actor">${esc(row.actor)}</span><b>${esc(ACTIONS[row.action] ?? row.action)}</b><span class="audit-work">${!row.work && row.action?.startsWith('question-') && row.task ? esc(questionTitles.get(row.task) ?? row.task) : ''}${row.work ? (titles.has(row.work) ? `<a href="#/${esc(row.task)}/${esc(row.work)}">${esc(titles.get(row.work))}</a>` : `<span class="muted">${esc(row.work)}（已删除）</span>`) : ''}${row.detail ? ` · ${esc(row.detail)}` : ''}</span></li>`).join('')}</ol>` : '<p class="muted">还没有记录。</p>')
+      : tab === 'questions' ? (() => {
+        if (state.questionsError) return `<p class="muted">${esc(state.questionsError)}</p>`;
+        const waiting = questions.filter(questionWaiting).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+        const rest = questions.filter((q) => !questionWaiting(q));
+        return questions.length ? `<div class="submission-questions">${[...waiting, ...rest].map(reviewQuestionRow).join('')}</div>`
+          : '<div class="board-empty"><p class="board-empty-title">还没有社区题目</p><p>用户发起的题目会在这里审核；待审的排在最前。</p></div>';
+      })()
       : (() => {
         const rows = works.filter((w) => w.status === tab).sort((a, b) => (tab === 'unverified' ? Date.parse(a.addedAt) - Date.parse(b.addedAt) : Date.parse(b.addedAt) - Date.parse(a.addedAt)));
         return rows.length ? `<div class="work-list">${rows.map((w) => workRow(ctx, w, { admin: true })).join('')}</div>`
           : `<div class="board-empty"><p class="board-empty-title">${tab === 'unverified' ? '没有等待核验的作品' : `没有${TABS[tab]}的投稿`}</p><p>${tab === 'unverified' ? '新的投稿会按提交顺序出现在这里。' : '馆藏作品由仓库收录流程管理，不在这里审核。'}</p></div>`;
       })();
-    root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '作品审核', nav: accountNav(ctx, 'review'),
-      crumbs: [{ text: '个人中心', href: '#/me' }, { text: '作品审核' }],
-      caption: `<nav class="seg review-tabs" aria-label="审核分类">${Object.entries(TABS).map(([id, text]) => `<a href="#/review/${id}"${id === tab ? ' aria-current="page"' : ''}>${text}${id === 'log' || state.works === null ? '' : `<span>${count(id)}</span>`}</a>`).join('')}</nav>` })}
+    root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '审核', nav: accountNav(ctx, 'review'),
+      crumbs: [{ text: '个人中心', href: '#/me' }, { text: '审核' }],
+      caption: `<nav class="seg review-tabs" aria-label="审核分类">${Object.entries(TABS).map(([id, text]) => `<a href="#/review/${id}"${id === tab ? ' aria-current="page"' : ''}>${text}${id === 'log' || state.works === null ? '' : `<span>${tabCount(id)}</span>`}</a>`).join('')}</nav>` })}
       <section class="submission-section">
-        <p class="submission-summary">核对作品能否运行、是否符合题目、生成信息是否可信。无法核实的作品保留作参考，并写明原因。</p>
+        <p class="submission-summary">${tab === 'questions' ? '新题目由管理员人工审核，通过后才公开并开放投稿。先打开示例结果，确认提示词是一项具体、可比较的生成任务；拒绝时写明理由，作者会看到。' : '核对作品能否运行、是否符合题目、生成信息是否可信。无法核实的作品保留作参考，并写明原因。'}</p>
         ${state.error ? `<p class="form-error">${esc(state.error)}</p>` : ''}
         ${state.works === null ? '<p class="muted">正在载入…</p>' : list}
       </section>
@@ -662,7 +784,30 @@ function review(root, ctx) {
       return ' · 待核验队列已清空';
     },
   });
-  root.onclick = (e) => {
+  // Question decisions, retries and deletions; returns false when the click is not one of them.
+  async function questionAction(e) {
+    const decide = e.target.closest('[data-q-decide]');
+    const remove = e.target.closest('[data-q-delete]');
+    const id = decide?.dataset.q ?? remove?.dataset.qDelete;
+    const q = id && state.questions?.find((item) => item.id === id);
+    if (!q) return false;
+    const path = `questions/${encodeURIComponent(q.id)}`;
+    try {
+      if (decide && !(await decideQuestion(q, decide.dataset.qDecide))) return true;
+      if (remove) {
+        if (!(await confirmDialog({ title: '删除这道题？', message: `「${q.title}」会从题库中移除并写入审核记录。已有作品或投票的题目需要先处理作品。`, confirm: '删除', danger: true }))) return true;
+        await api(path, { method: 'DELETE' });
+        toast('题目已删除');
+      }
+    } catch (err) {
+      toast(err.message);
+      return true;
+    }
+    await refreshPlatform('question');
+    return true;
+  }
+  root.onclick = async (e) => {
+    if (await questionAction(e)) return;
     const reviewButton = e.target.closest('[data-review]');
     const work = reviewButton && state.works?.find((w) => w.id === reviewButton.dataset.review);
     if (work) open(work);
