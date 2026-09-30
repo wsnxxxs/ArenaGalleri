@@ -14,6 +14,7 @@ import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon
 import { STATUS, accountControl, api, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, statusBadge } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { questionPreview } from './question-preview.js';
+import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 
 const root = $('#app');
 let DATA;
@@ -397,7 +398,15 @@ function renderLibrary() {
 }
 
 // ---- task -----------------------------------------------------------------------------
-const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [] };
+const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, variants: new Map() };
+const selectedVariant = (t) => variantsOf(t).find((variant) => variant.id === taskState.promptVariant);
+const selectedPrompt = (t) => selectedVariant(t)?.prompt ?? t.prompt;
+const displayedResults = (t) => groupVariantResults(t, sortedResults(t), taskState.variants);
+function resultVariantButtons(t, r, pane = null) {
+  const choices = variantChoices(t, r);
+  if (!choices.length) return '';
+  return `<div class="seg result-variants" role="group" aria-label="${esc(label(r))}的提示词版本">${choices.map((choice) => `<button ${pane === null ? 'data-result-variant' : `data-pane-variant="${pane}"`} data-variant-result="${esc(choice.result?.id ?? '')}" aria-pressed="${choice.id === r.promptVariant}"${choice.result ? '' : ' disabled title="这版结果尚未收录"'}>${esc(choice.label)}</button>`).join('')}</div>`;
+}
 let resultPreviews = null;
 let previewVersion = 0;
 async function updateResultPreviews(t) {
@@ -476,6 +485,7 @@ function resultCard(t, r) {
       ${t.results.length > 1 ? `<button class="pick" data-pick="${esc(r.id)}" aria-pressed="false" aria-label="加入对比：${esc(r.title)}"><span class="pick-box">${icon('plus')}${icon('check')}</span><span class="pick-text">对比</span></button>` : ''}
     </div>
     <div class="result-body">
+      ${resultVariantButtons(t, r)}
       <p class="result-model">${brandMark(m, 'brand-mark sm')}<b>${esc(m.name)}</b>${resultBadges(r)}${statusBadge(r.status, { reason: r.reason })}</p>
       <h3><a href="${viewHref(t, r.id)}">${esc(r.title)}${icon('arrow')}</a></h3>
       ${r.summary ? `<p class="summary">${esc(r.summary)}</p>` : ''}
@@ -497,7 +507,7 @@ const GROUPS = [
   { status: 'questioned', title: '存疑', note: '核验存疑 · 仅供参考，不参与互动与盲评' },
 ];
 function resultGroups(t) {
-  const sorted = sortedResults(t);
+  const sorted = displayedResults(t);
   if (t.results.every((r) => r.status === 'verified')) return `<div class="result-grid" data-group="verified">${sorted.map((r) => resultCard(t, r)).join('')}</div>`;
   return GROUPS.map((g) => {
     const items = sorted.filter((r) => r.status === g.status);
@@ -524,7 +534,7 @@ function sourceChoices(results, field, nameField, resolve) {
 
 function renderTask(t) {
   if (taskState.task !== t.id) {
-    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [] });
+    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, variants: new Map() });
     taskScores = new Map();
   }
   taskBoard?.destroy?.();
@@ -593,11 +603,12 @@ function renderTask(t) {
     </section>` : ''}
 
     <section id="prompt" data-panel="prompt" class="block wrap" hidden>
-      <div class="block-head"><h2>提示词</h2><p>所有作品使用的原始提示词。</p></div>
+      <div class="block-head"><h2>提示词</h2><p>${variantsOf(t).length ? '同一道题的长短版本；作品按实际使用的版本展示。' : '所有作品使用的原始提示词。'}</p></div>
+      ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}">${esc(variant.label)}</button>`).join('')}</div>` : ''}
       <div class="prompt">
-        <div class="prompt-bar"><span>${esc(`完整提示词 · v${t.version ?? 1}`)}</span>
+        <div class="prompt-bar"><span data-prompt-label>${esc(selectedVariant(t)?.label ?? `完整提示词 · v${t.version ?? 1}`)}</span>
           <span class="prompt-tools"><button class="btn sm ghost" data-copy>复制</button></span></div>
-        <pre>${esc(t.prompt)}</pre>
+        <pre>${esc(selectedPrompt(t))}</pre>
       </div>
     </section>
 
@@ -627,6 +638,22 @@ function renderTask(t) {
     applySort(t);
   };
   root.onclick = (e) => {
+    const promptVariant = e.target.closest('[data-prompt-variant]');
+    if (promptVariant) {
+      taskState.promptVariant = promptVariant.dataset.promptVariant;
+      $$('[data-prompt-variant]').forEach((button) => button.setAttribute('aria-pressed', String(button === promptVariant)));
+      $('#prompt pre').textContent = selectedPrompt(t);
+      $('[data-prompt-label]').textContent = selectedVariant(t).label;
+    }
+    const resultVariant = e.target.closest('[data-result-variant]');
+    if (resultVariant && resultVariant.dataset.variantResult) {
+      const card = resultVariant.closest('.result'), previousId = card.dataset.id;
+      const result = t.results.find((item) => item.id === resultVariant.dataset.variantResult);
+      taskState.variants.set(variantKey(result), result.id);
+      taskState.picks = taskState.picks.map((id) => id === previousId ? result.id : id);
+      card.outerHTML = resultCard(t, result);
+      applySort(t); filterResults(t); syncPicks(t); settleImages(); updateResultPreviews(t);
+    }
     const preview = e.target.closest('[data-preview-mode]');
     if (preview && preview.dataset.previewMode !== previewMode) {
       previewMode = preview.dataset.previewMode;
@@ -659,7 +686,7 @@ function renderTask(t) {
     }
     const copy = e.target.closest('[data-copy]');
     if (copy) {
-      navigator.clipboard?.writeText(t.prompt).then(() => {
+      navigator.clipboard?.writeText(selectedPrompt(t)).then(() => {
         copy.textContent = '已复制';
         setTimeout(() => { copy.textContent = '复制'; }, 1500);
       }, () => { copy.textContent = '复制失败'; });
@@ -669,13 +696,13 @@ function renderTask(t) {
 
 function applySort(t) {
   const cards = new Map($$('.result').map((el) => [el.dataset.id, el]));
-  const sorted = sortedResults(t);
+  const sorted = displayedResults(t);
   $$('.result-grid[data-group]').forEach((grid) => grid.append(...sorted.filter((r) => r.status === grid.dataset.group).map((r) => cards.get(r.id)).filter(Boolean)));
   resultPreviews?.refresh();
 }
 
 function filterResults(t) {
-  const shown = t.results.filter((r) => (!taskState.vendor || vendorOf(r) === taskState.vendor)
+  const shown = displayedResults(t).filter((r) => (!taskState.vendor || vendorOf(r) === taskState.vendor)
     && (!taskState.harness || sourceKey(r, 'harness', 'harnessName') === taskState.harness)
     && (!taskState.provider || sourceKey(r, 'provider', 'providerName') === taskState.provider)
     && [label(r), r.title, r.summary, vendorOf(r), harnessOf(r)?.name, providerOf(r)?.name].join(' ').toLowerCase().includes(taskState.query.toLowerCase()));
@@ -690,7 +717,7 @@ function filterResults(t) {
   $('[data-harness-filter]').value = taskState.harness;
   $('[data-provider-filter]').value = taskState.provider;
   $('#filter-heading').textContent = taskState.vendor || '全部作品';
-  $('#filter-count').textContent = `${shown.length} 件作品`;
+  $('#filter-count').textContent = variantsOf(t).length ? `${shown.length} 组结果 · ${t.results.length} 份作品` : `${shown.length} 件作品`;
   $('.filter-empty').hidden = shown.length > 0;
   resultPreviews?.refresh();
 }
@@ -867,7 +894,7 @@ function uploadFacts(r) {
 function createViewer(t, back = null) {
   const state = { panes: [], queries: [], active: 0, guide: store.get('guide') === '1' && wide() };
   const byId = (id) => t.results.find((r) => r.id === id);
-  const options = () => sortedResults(t).map((r) => `<option value="${esc(r.id)}">${esc(r.title)} · ${esc(label(r))}${r.status !== 'verified' ? ` · ${STATUS[r.status].label}` : ''}</option>`).join('');
+  const options = () => sortedResults(t).map((r) => `<option value="${esc(r.id)}">${esc(r.title)} · ${esc(label(r))}${r.promptVariant ? ` · ${esc(variantsOf(t).find((variant) => variant.id === r.promptVariant)?.label)}` : ''}${r.status !== 'verified' ? ` · ${STATUS[r.status].label}` : ''}</option>`).join('');
   const many = t.results.length > 1;
   document.title = `在线预览 · ${t.title}`;
 
@@ -909,6 +936,7 @@ function createViewer(t, back = null) {
         <select data-pane-pick="${i}" aria-label="${i === 0 ? '左' : '右'}栏的作品">${options()}</select>
         <button class="pane-close" data-close="${i}" title="关闭这一栏" aria-label="关闭这一栏">${icon('close')}</button>
       </div>
+      <div class="pane-variants"></div>
       <div class="pane-body"></div>
     </section>`;
   }
@@ -918,6 +946,8 @@ function createViewer(t, back = null) {
     const pane = $(`[data-pane="${i}"]`, stage);
     const body = $('.pane-body', pane);
     $('select', pane).value = r.id;
+    $('.pane-variants', pane).innerHTML = resultVariantButtons(t, r, i);
+    $('.pane-variants', pane).hidden = !variantChoices(t, r).length;
     if (!r.scene) {
       body.innerHTML = `<div class="loader static"><b>${esc(r.title)}</b><span>该作品尚未构建，无法在线预览。</span></div>`;
       return;
@@ -1037,6 +1067,12 @@ function createViewer(t, back = null) {
   };
 
   el.addEventListener('click', (e) => {
+    const variant = e.target.closest('[data-pane-variant]');
+    if (variant && variant.dataset.variantResult) {
+      const i = Number(variant.dataset.paneVariant), panes = [...state.panes];
+      panes[i] = variant.dataset.variantResult;
+      return navigate(panes, i);
+    }
     const v = e.target.closest('[data-v]')?.dataset.v;
     if (v === 'exhibition') { location.hash = sandtableHref(t, state.panes); return; }
     if (v === 'guide') return toggleGuide();

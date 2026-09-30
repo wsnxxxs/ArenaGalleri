@@ -656,3 +656,8 @@ body[data-preview-mode="model"] .result-media > a:has(.result-model-poster) > im
   .footer-in { flex-direction: column; align-items: flex-start; }
 }
 @keyframes slide-up { from { opacity: 0; transform: translateY(16px); } }
+
+.result-variants { align-self: flex-start; margin-bottom: 10px; }
+.result-variants button:disabled { opacity: 0.45; cursor: default; }
+.pane-variants { flex: none; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.pane-variants .result-variants { margin: 0; }
