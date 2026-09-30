@@ -3,6 +3,7 @@
 import { $, $$, esc, icon } from './ui.js';
 import { compatibleBuild, fetchApi, resolveApiMedia, setDatapackVersion, staleBuild } from './platform-api.js';
 import { loadTurnstile, mountTurnstile } from './turnstile.js';
+import { CONTACT } from './legal.js';
 
 export const platform = {
   available: false,
@@ -154,6 +155,118 @@ export function confirmDialog({ title, message, confirm = '确认', danger = fal
 }
 
 // ---- accounts -----------------------------------------------------------------------------
+// The "send code" button of an email-code form: Turnstile when the API enables it (its token is
+// single-use, so it resets after each send) and a 60-second cooldown. request(token) sends the
+// code and returns the notice to show.
+export function codeSender(sheet, form, request) {
+  let widget = null;
+  let countdown = 0;
+  let timer = null;
+  const send = $('[data-send]', form);
+  const errorLine = $('.form-error', form);
+  const notice = $('.code-notice', form);
+  const challenge = $('.auth-turnstile', form);
+  const ready = api('auth/turnstile').then(async ({ siteKey }) => {
+    if (!siteKey || !sheet.el.open) return;
+    await loadTurnstile();
+    if (!sheet.el.open) return;
+    challenge.hidden = false;
+    widget = mountTurnstile(challenge, siteKey, (message) => { $('.auth-turnstile-status', form).textContent = message; });
+  }).catch((error) => { errorLine.textContent = error.message; });
+  const tick = () => {
+    send.disabled = countdown > 0;
+    send.textContent = countdown > 0 ? `${countdown} 秒后重发` : '发送验证码';
+  };
+  send.addEventListener('click', async () => {
+    if (send.disabled) return;
+    send.disabled = true;
+    errorLine.textContent = '';
+    notice.textContent = '';
+    await ready;
+    if (!sheet.el.open) return;
+    if (widget && !widget.token) { errorLine.textContent = '请先完成人机验证。'; send.disabled = false; return; }
+    try {
+      notice.textContent = await request(widget?.token);
+      countdown = 60;
+      tick();
+      timer = setInterval(() => { countdown--; tick(); if (!countdown) clearInterval(timer); }, 1000);
+      form.code.focus();
+    } catch (error) {
+      errorLine.textContent = error.message;
+      send.disabled = false;
+    } finally {
+      widget?.reset();
+    }
+  });
+  sheet.el.addEventListener('close', () => { widget?.remove(); clearInterval(timer); });
+}
+
+// Password recovery in two steps: the emailed code is checked first, then spent on the new
+// password. The server answers the same whether or not the account has an email.
+function openReset(account = '') {
+  return new Promise((resolve) => {
+    let done = null;
+    let verified = false;
+    const sheet = openDialog({
+      title: '找回密码',
+      className: 'auth-sheet code-sheet',
+      onClose: () => resolve(done),
+      body: `<form class="auth-form" novalidate>
+        <div data-reset-step="1">
+          <p class="sheet-text">输入账号，验证码会发到账号绑定的邮箱。没有绑定邮箱的账号，请发邮件至 <a href="mailto:${CONTACT}">${CONTACT}</a> 联系我们。</p>
+          <label class="field"><span class="field-label">账号</span><span class="code-row"><input class="input" name="account" autocomplete="username" maxlength="24" value="${esc(account)}"><button class="btn" type="button" data-send>发送验证码</button></span></label>
+          <div class="auth-turnstile" hidden></div>
+          <p class="auth-turnstile-status" role="status"></p>
+          <label class="field"><span class="field-label">验证码</span><input class="input" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字"></label>
+        </div>
+        <div data-reset-step="2" hidden>
+          <p class="sheet-text">验证通过，请设置新密码。重置后，所有设备都需要重新登录。</p>
+          <label class="field"><span class="field-label">新密码</span><input class="input" name="password" type="password" autocomplete="new-password" maxlength="128" placeholder="至少 8 位"></label>
+          <label class="field"><span class="field-label">确认新密码</span><input class="input" name="confirm" type="password" autocomplete="new-password" maxlength="128"></label>
+        </div>
+        <p class="form-error" role="alert"></p>
+        <p class="code-notice" role="status"></p>
+        <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit">验证，继续</button></div>
+      </form>`,
+    });
+    const form = $('form', sheet.el);
+    const errorLine = $('.form-error', form);
+    const username = () => form.account.value.trim();
+    codeSender(sheet, form, async (token) => {
+      if (!username()) throw new Error('请填写账号。');
+      await api('auth/email/send', { method: 'POST', body: { purpose: 'reset', username: username(), turnstileToken: token } });
+      return '如果该账号绑定了邮箱，验证码已发送到该邮箱。';
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submit = $('[type="submit"]', form);
+      errorLine.textContent = '';
+      if (verified && form.password.value !== form.confirm.value) { errorLine.textContent = '两次输入的密码不一致。'; return; }
+      submit.disabled = true;
+      try {
+        if (!verified) {
+          await api('auth/email/verify', { method: 'POST', body: { purpose: 'reset', username: username(), code: form.code.value.trim() } });
+          verified = true;
+          $('[data-reset-step="1"]', form).hidden = true;
+          $('[data-reset-step="2"]', form).hidden = false;
+          $('.code-notice', form).textContent = '';
+          submit.textContent = '重置密码';
+          form.password.focus();
+        } else {
+          await api('auth/password/reset', { method: 'POST', body: { username: username(), code: form.code.value.trim(), password: form.password.value } });
+          done = username();
+          sheet.close();
+          toast('密码已重置，请用新密码登录');
+        }
+      } catch (error) {
+        errorLine.textContent = error.message;
+      }
+      submit.disabled = false;
+    });
+    setTimeout(() => (account ? form.code : form.account).focus());
+  });
+}
+
 export function openAuth({ mode = 'login', reason = '' } = {}) {
   return new Promise((resolve) => {
     let user = null;
@@ -174,6 +287,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
         ${reason ? `<p class="auth-reason">${esc(reason)}</p>` : ''}
         <label class="field"><span class="field-label">用户名</span><input class="input" name="name" autocomplete="username" maxlength="24" required></label>
         <label class="field"><span class="field-label">密码</span><input class="input" name="password" type="password" maxlength="128" required></label>
+        <button class="auth-forgot" type="button" data-forgot>忘记密码？</button>
         <div class="auth-turnstile" hidden></div>
         <p class="auth-turnstile-status" role="status"></p>
         <p class="form-error" role="alert"></p>
@@ -218,6 +332,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       $('.auth-switch span', form).textContent = login ? '还没有账号？' : '已有账号？';
       $('[data-switch]', form).textContent = login ? '注册' : '登录';
       $('.auth-legal', form).hidden = login;
+      $('[data-forgot]', form).hidden = !login;
       $('.form-error', form).textContent = '';
       if (!login) {
         const generation = widgetGeneration + 1;
@@ -228,6 +343,15 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
     };
     setMode(mode);
     $('[data-switch]', form).addEventListener('click', () => { setMode(mode === 'login' ? 'register' : 'login'); form.name.focus(); });
+    // Recovery opens above the sign-in sheet and hands the account back to it.
+    $('[data-forgot]', form).addEventListener('click', async () => {
+      const account = await openReset(form.name.value.trim());
+      if (!account || !sheet.el.open) return;
+      form.name.value = account;
+      form.password.value = '';
+      $('.form-error', form).textContent = '';
+      form.password.focus();
+    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submit = $('[type="submit"]', form);

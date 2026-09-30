@@ -1,6 +1,6 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
-import { api, confirmDialog, openDialog, platform, refreshPlatform, requireUser, statusBadge, toast } from './platform.js';
+import { api, codeSender, confirmDialog, openDialog, platform, refreshPlatform, requireUser, statusBadge, toast } from './platform.js';
 
 const TABS = { unverified: '未验证', verified: '已验证', questioned: '存疑', log: '记录' };
 const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的题目' };
@@ -136,6 +136,13 @@ function profileOverview(state) {
       <p class="profile-account">登录账号 ${esc(user.name)}${state.joinedAt ? ` · ${formatDate(state.joinedAt)} 加入` : ''}</p>
     </div><button class="link profile-logout" type="button" data-logout>退出登录</button>
   </section>
+  <section class="profile-bindings" aria-labelledby="bindings-title">
+    <div class="profile-section-head"><h2 id="bindings-title">账号绑定</h2><p>用于找回密码与账号安全验证</p></div>
+    <div class="binding-list">
+      <div class="binding-row"><span class="binding-icon">${icon('mail')}</span><div class="binding-main"><b>邮箱</b><span>${state.email === undefined ? '正在载入…' : state.email ? esc(maskEmail(state.email)) : '未绑定'}</span></div>
+        <button class="btn sm" type="button" data-bind="email"${state.email === undefined ? ' disabled' : ''}>${state.email ? '更换' : '绑定'}</button></div>
+    </div>
+  </section>
   <section class="profile-activity" aria-labelledby="activity-title">
     <div class="profile-section-head"><h2 id="activity-title">活跃热力图</h2><p>近一年 <b>${activity ? activity.total : '—'}</b> 次参与 · <b>${activity ? activity.activeDays : '—'}</b> 天活跃</p></div>
     ${activity ? activityCalendar(activity) : `<p class="muted">${state.error ? '活跃记录暂时未能载入。' : '正在载入活跃记录…'}</p>`}
@@ -145,6 +152,52 @@ function profileOverview(state) {
     <div><h2 id="received-title">获得的表情</h2><p>作品收到了 <b>${received ? received.total : '—'}</b> 个回应</p></div>
     <div class="received-emojis">${platform.site.emojis.map((emoji) => `<div class="received-emoji"><span>${emoji}</span><b>${received ? received.counts[emoji] ?? 0 : '—'}</b></div>`).join('')}</div>
   </section>`;
+}
+
+// a***@example.com: the profile only shows a masked address.
+const maskEmail = (email) => {
+  const at = email.indexOf('@');
+  return at <= 0 ? email : `${email.slice(0, Math.min(2, at))}***${email.slice(at)}`;
+};
+
+// Account binding, email method: a code sent to the address confirms it.
+function bindEmail(onBound) {
+  const sheet = openDialog({
+    title: '账号绑定 · 邮箱',
+    className: 'auth-sheet code-sheet',
+    body: `<form class="auth-form" novalidate>
+      <p class="sheet-text">绑定后可用于找回密码。验证码 10 分钟内有效。</p>
+      <label class="field"><span class="field-label">邮箱</span><span class="code-row"><input class="input" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" required><button class="btn" type="button" data-send>发送验证码</button></span></label>
+      <div class="auth-turnstile" hidden></div>
+      <p class="auth-turnstile-status" role="status"></p>
+      <label class="field"><span class="field-label">验证码</span><input class="input" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字" required></label>
+      <p class="form-error" role="alert"></p>
+      <p class="code-notice" role="status"></p>
+      <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit">确认绑定</button></div>
+    </form>`,
+  });
+  const form = $('form', sheet.el);
+  const errorLine = $('.form-error', form);
+  codeSender(sheet, form, async (token) => {
+    const data = await api('auth/email/send', { method: 'POST', body: { purpose: 'bind', email: form.email.value.trim(), turnstileToken: token } });
+    return `验证码已发送至 ${data.email}。`;
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submit = $('[type="submit"]', form);
+    errorLine.textContent = '';
+    submit.disabled = true;
+    try {
+      await api('auth/email/bind', { method: 'POST', body: { email: form.email.value.trim(), code: form.code.value.trim() } });
+      sheet.close();
+      toast('账号绑定成功');
+      onBound();
+    } catch (error) {
+      errorLine.textContent = error.message;
+      submit.disabled = false;
+    }
+  });
+  setTimeout(() => form.email.focus());
 }
 
 // Uploads always belong to a question, so the personal center asks which one first.
@@ -162,7 +215,7 @@ function pickTask(ctx) {
 
 // ---- personal center: profile, activity, questions, works -------------------------------------
 function mine(root, ctx) {
-  const empty = { questions: null, works: null, votes: 0, activity: null, receivedReactions: null, joinedAt: null, error: '' };
+  const empty = { questions: null, works: null, votes: 0, activity: null, receivedReactions: null, joinedAt: null, email: undefined, error: '' };
   const state = { owner: null, editing: false, ...empty };
   let active = true, request = 0;
   async function load() {
@@ -173,9 +226,9 @@ function mine(root, ctx) {
     }
     if (!platform.user) return draw();
     try {
-      const data = await api('me');
+      const [data, account] = await Promise.all([api('me'), api('auth/me')]);
       if (!active || version !== request) return;
-      Object.assign(state, { questions: data.questions, works: data.works, votes: data.votes, activity: data.activity, receivedReactions: data.receivedReactions, joinedAt: data.joinedAt, error: '' });
+      Object.assign(state, { questions: data.questions, works: data.works, votes: data.votes, activity: data.activity, receivedReactions: data.receivedReactions, joinedAt: data.joinedAt, email: account.user?.email ?? null, error: '' });
     } catch (error) {
       if (!active || version !== request) return;
       state.error = error.message;
@@ -233,6 +286,7 @@ function mine(root, ctx) {
     }
   };
   root.onclick = async (e) => {
+    if (e.target.closest('[data-bind="email"]')) return bindEmail(load);
     const edit = e.target.closest('[data-edit-name], [data-edit-cancel]');
     if (edit) {
       state.editing = edit.matches('[data-edit-name]');

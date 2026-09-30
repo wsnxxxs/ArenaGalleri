@@ -172,6 +172,26 @@ a { text-decoration: none; }
 .profile-logout:hover { color: var(--ink); }
 .collection-heading .review-tabs { margin: 0; }
 .profile-activity { padding: 24px 0; border-bottom: 1px solid var(--line); }
+/* Account binding: one row per method; email is the first. */
+.profile-bindings { padding: 24px 0; border-bottom: 1px solid var(--line); }
+.profile-bindings .profile-section-head { margin-bottom: 10px; }
+.binding-list { border-top: 1px solid var(--line); }
+.binding-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.binding-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 1px solid var(--line-2); border-radius: 50%; color: var(--ink-2); }
+.binding-icon .i { width: 17px; height: 17px; }
+.binding-main { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.binding-main b { color: var(--ink); font-size: 13.5px; font-weight: 500; }
+.binding-main span { overflow: hidden; color: var(--muted); font: 12px/1.5 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+/* Email-code forms: account binding and password recovery. */
+.code-row { display: flex; gap: 8px; }
+.code-row .input { flex: 1; min-width: 0; }
+.code-row .btn { flex: none; min-width: 104px; }
+.code-notice { margin: 0; color: var(--ink-2); font-size: 12.5px; }
+.code-notice:empty { display: none; }
+.code-sheet .sheet-text a { color: var(--accent); }
+.auth-forgot { display: block; margin: -6px 0 14px auto; padding: 0; border: 0; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
+.auth-forgot:hover { color: var(--ink); }
+.auth-forgot[hidden] { display: none; }
 .profile-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
 .profile-section-head h2, .profile-reactions h2 { font: 600 15px/1.5 var(--sans); }
 .profile-section-head p, .profile-reactions p { color: var(--muted); font-size: 11px; }
