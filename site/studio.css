@@ -37,9 +37,6 @@ a { text-decoration: none; }
 .landing { width: 100%; max-width: 1800px; margin: 0 auto; padding: 0 var(--gutter); }
 .home-hero { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 56px; }
 .home-copy { align-self: center; padding: 40px 0; }
-.home-eyebrow { display: flex; align-items: center; gap: 8px; margin: 0 0 20px; color: var(--muted); font-size: 12px; letter-spacing: .06em; }
-.home-eyebrow > span:not(.home-live-dot) { padding: 0 4px; color: var(--line-2); }
-.home-live-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
 /* The couplet rotates, so its box keeps the height of the largest setting and the type shrinks to fit the longer line. */
 .home-copy { container-type: inline-size; }
 .home-verse { --top: clamp(32px, 3.5vw, 54px); display: flex; flex-direction: column; justify-content: flex-end; min-height: calc(var(--top) * 2.8 + 30px); transition: opacity .32s var(--ease), transform .32s var(--ease), filter .32s var(--ease); }
@@ -50,7 +47,7 @@ a { text-decoration: none; }
 .home-verse-b { color: var(--muted); }
 .home-hero h1 em { padding: 0 .06em; color: var(--ink); font-style: normal; }
 .home-stop { color: var(--accent); }
-.home-cite { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; color: var(--muted); font: 13px/1.5 "Verse Kai", "Kaiti SC", KaiTi, var(--serif); letter-spacing: .1em; }
+.home-cite { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; color: var(--muted); opacity: .75; font: 13px/1.5 "Verse Kai", "Kaiti SC", KaiTi, var(--serif); letter-spacing: .1em; }
 .home-cite::before { content: ""; width: 22px; height: 1px; background: var(--accent); opacity: .7; }
 /* One typeface per register: Song for classics, Kai for the stories, XiaoWei for Western art, Smiley for sayings. */
 .home-verse[data-face="song"] h1 { --face: "Verse Song", var(--serif); font-weight: 600; }
@@ -64,7 +61,8 @@ a { text-decoration: none; }
 @font-face { font-family: "Verse Kai"; src: url("assets/fonts/verse-kai.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Verse Wei"; src: url("assets/fonts/verse-wei.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Verse Hei"; src: url("assets/fonts/verse-hei.woff2") format("woff2"); font-display: swap; }
-.home-lede { max-width: 27em; margin: 20px 0 0; color: var(--ink-2); font-size: 15px; line-height: 1.85; }
+.home-lede { max-width: 30em; margin: 20px 0 0; color: var(--ink-2); font-size: 15px; line-height: 1.85; }
+.home-lede span { white-space: nowrap; }
 .home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 26px; margin-top: 32px; }
 .home-actions .btn { min-width: 190px; height: 46px; justify-content: space-between; gap: 18px; padding-inline: 20px; font-size: 13.5px; }
 .home-actions .btn .i, .home-link .i { width: 16px; height: 16px; transition: transform .2s; }
@@ -119,7 +117,7 @@ a { text-decoration: none; }
 .home-motion:hover { color: var(--ink); }
 .home-motion span { font-size: 15px; }
 /* Scroll cue: a pill resting on the fold line, a dot sliding down its track toward the next section. */
-.home-scroll { position: absolute; left: 50%; top: 0; z-index: 2; display: none; align-items: center; gap: 9px; padding: 6px 14px 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); font: 11.5px var(--sans); letter-spacing: .04em; text-decoration: none; transform: translate(-50%, -50%); transition: opacity .35s var(--ease), transform .35s var(--ease), color .2s, border-color .2s; }
+.home-scroll { position: absolute; left: 50%; top: 0; z-index: 2; display: none; align-items: center; gap: 9px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); font: 11.5px var(--sans); letter-spacing: .04em; text-decoration: none; transform: translate(-50%, -50%); transition: opacity .35s var(--ease), transform .35s var(--ease), color .2s, border-color .2s; }
 .home-scroll:hover { color: var(--ink); border-color: var(--muted); transform: translate(-50%, -50%) translateY(2px); }
 .home-scroll.is-gone { opacity: 0; pointer-events: none; transform: translate(-50%, -20%); }
 .home-scroll-track { position: relative; width: 11px; height: 17px; overflow: hidden; border: 1px solid currentColor; border-radius: 6px; opacity: .8; }
@@ -573,7 +571,6 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
 @media (max-width: 760px) {
   .home-hero { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
   .home-copy { padding: 28px 0 4px; }
-  .home-eyebrow { font-size: 11px; margin-bottom: 12px; }
   .home-verse { --top: clamp(27px, 7.4vw, 36px); }
   .home-cite { margin-top: 8px; font-size: 11.5px; }
   .home-lede { margin-top: 12px; font-size: 13.5px; }

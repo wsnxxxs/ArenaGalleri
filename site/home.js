@@ -93,26 +93,25 @@ export function mount(root, ctx) {
   root.innerHTML = `${ctx.header()}<main class="landing page">
     <section class="home-hero" aria-labelledby="home-title">
       <div class="home-copy">
-        <p class="home-eyebrow"><span class="home-live-dot" aria-hidden="true"></span>同一份提示词 <span>/</span> 不同模型的网页作品</p>
         <div class="home-verse${decks.length ? ' is-turning' : ''}">
           <h1 id="home-title"><span class="home-verse-a">回字有四样写法，</span><span class="home-verse-b">这道题有<em>${hanzi(firstCount)}</em>种<span class="home-stop">。</span></span></h1>
           <p class="home-cite">鲁迅《孔乙己》</p>
         </div>
-        <p class="home-lede">把同一份提示词交给不同的 AI 模型，每一个都交出一张能运行的网页。并排打开，差距一眼可见。</p>
+        <p class="home-lede">同一份提示词交给不同的 AI 模型，并排打开，<span>差距一眼可见。</span></p>
         <div class="home-actions">
           ${first ? `<a class="btn home-enter" data-home-cta href="${ctx.taskHref(first)}"><span>看看这<span data-home-n>${hanzi(firstCount)}</span>种</span>${icon('right')}</a>` : ''}
           <a class="home-link" href="#/questions">浏览全部题目${icon('right')}</a>
         </div>
-        <p class="home-proof"><span class="home-proof-marks" aria-hidden="true">${vendorMarks.map(({ m }) => brandMark(m, 'home-proof-mark')).join('')}</span><span>${vendorCount} 家厂商的 ${ctx.DATA.models.length} 个模型，已交出 ${totalWorks} 份解答</span></p>
+        <p class="home-proof"><span class="home-proof-marks" aria-hidden="true">${vendorMarks.map(({ m }) => brandMark(m, 'home-proof-mark')).join('')}</span><span>${vendorCount} 家厂商 · ${ctx.DATA.models.length} 个模型 · ${totalWorks} 份解答</span></p>
       </div>
       <div class="home-stage">
         <div class="home-deck-frame">
           <div class="home-deck"></div>
-          <a class="home-slip" href="#"><span class="home-slip-kicker">这道题 · 同一份提示词</span><b></b><span class="home-slip-text"></span></a>
+          <a class="home-slip" href="#"><span class="home-slip-kicker">提示词</span><b></b><span class="home-slip-text"></span></a>
         </div>
       </div>
       <div class="home-foot">
-        <a class="home-scroll" href="#" data-scroll-next aria-label="向下查看最近收录"><span class="home-scroll-track" aria-hidden="true"><i></i></span>往下看 · 最近收录</a>
+        <a class="home-scroll" href="#" data-scroll-next aria-label="向下查看最近收录"><span class="home-scroll-track" aria-hidden="true"><i></i></span></a>
         <div class="home-tabs" role="tablist" aria-label="选择题目">${decks.map((t, i) => `<button class="home-tab" role="tab" aria-selected="${i === 0}" data-home-tab="${i}"><small>${String(i + 1).padStart(2, '0')}</small>${esc(shortTitle(t))}<span class="home-tab-count">${answersOf(t).length}</span></button>`).join('')}</div>
         <button class="home-motion" type="button" data-autoplay aria-pressed="false">暂停轮播 <span aria-hidden="true">Ⅱ</span></button>
       </div>
