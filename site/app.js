@@ -420,7 +420,7 @@ async function updateResultPreviews(t) {
   try {
     const { createResultPreviews } = await import('./result-previews.js');
     if (version !== previewVersion) return;
-    resultPreviews = createResultPreviews(root, curatedTask(t));
+    resultPreviews = createResultPreviews(root, { ...t, results: displayedResults(curatedTask(t)) });
     resultPreviews.setPaused($('#results').hidden);
   } catch (error) {
     console.error('Model previews unavailable:', error);
