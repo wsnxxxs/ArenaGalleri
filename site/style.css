@@ -661,3 +661,6 @@ body[data-preview-mode="model"] .result-media > a:has(.result-model-poster) > im
 .result-variants button:disabled { opacity: 0.45; cursor: default; }
 .pane-variants { flex: none; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .pane-variants .result-variants { margin: 0; }
+
+/* 发起题目审核状态：作者在个人中心看到自己题目的当前状态 */
+.question-status { margin-left: 8px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 400; vertical-align: 2px; }

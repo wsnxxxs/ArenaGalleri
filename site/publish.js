@@ -86,7 +86,11 @@ export function mount(root, ctx) {
         title: data.get('title'), summary: data.get('summary'), prompt: data.get('prompt'), tags: [...tags], templates: data.getAll('templates'),
       } });
       await refreshPlatform('question');
-      if (active) { toast('题目已发起'); location.hash = `#/${question.id}`; }
+      // 新题目先进入审核队列；后端未带 status 时保持原行为。
+      if (active) {
+        if (question.status === 'pending') { toast('题目已提交，审核通过后公开'); location.hash = '#/me/questions'; }
+        else { toast('题目已发起'); location.hash = `#/${question.id}`; }
+      }
     } catch (cause) {
       if (active) error.textContent = cause.message;
     } finally {

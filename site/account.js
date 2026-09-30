@@ -85,12 +85,15 @@ function signedOut(root, ctx, text) {
   </section>${ctx.pageEnd()}`;
 }
 
+const QUESTION_STATUS = { pending: '待审核', removed: '已下架' };
+
 function questionRow(ctx, question) {
   const task = ctx.DATA.tasks.find((item) => item.id === question.id);
   const works = task?.results.filter(ctx.interactive).length ?? 0;
+  const status = QUESTION_STATUS[question.status];
   return `<article class="submission-question">
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
-    <div class="submission-question-body"><h3><a href="#/${esc(question.id)}">${esc(question.title)}</a></h3>
+    <div class="submission-question-body"><h3><a href="#/${esc(question.id)}">${esc(question.title)}</a>${status ? `<span class="question-status">${status}</span>` : ''}</h3>
       <p class="summary">${esc(question.summary)}</p>
       <p class="work-meta">${question.tags.map((tag) => `#${esc(tag)}`).join(' · ')}<span>${esc(question.date)} · ${works} 件作品</span></p>
     </div><a class="btn sm" href="#/${esc(question.id)}">查看题目${icon('next')}</a>
