@@ -40,10 +40,30 @@ a { text-decoration: none; }
 .home-eyebrow { display: flex; align-items: center; gap: 8px; margin: 0 0 20px; color: var(--muted); font-size: 12px; letter-spacing: .06em; }
 .home-eyebrow > span:not(.home-live-dot) { padding: 0 4px; color: var(--line-2); }
 .home-live-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
-.home-hero h1 { font: 500 clamp(32px, 3.5vw, 54px)/1.4 var(--serif); letter-spacing: -.02em; }
-.home-hero h1 > span:not(.home-stop) { color: var(--muted); }
+/* The couplet rotates, so its box keeps the height of the largest setting and the type shrinks to fit the longer line. */
+.home-copy { container-type: inline-size; }
+.home-verse { --top: clamp(32px, 3.5vw, 54px); display: flex; flex-direction: column; justify-content: flex-end; min-height: calc(var(--top) * 2.8 + 30px); transition: opacity .32s var(--ease), transform .32s var(--ease), filter .32s var(--ease); }
+.home-verse.is-turning { opacity: 0; transform: translateY(-6px); filter: blur(3px); }
+/* --adv is the typeface's character width and --ls the tracking, both in em without the unit; the fit divides by their sum. */
+.home-hero h1 { --adv: 1; --ls: .01; --face: var(--serif); font: 500 min(var(--top), 100cqi / (var(--len, 9) * (var(--adv) + var(--ls)) + .4))/1.4 var(--face); letter-spacing: calc(var(--ls) * 1em); font-synthesis: none; }
+.home-hero h1 > span { display: block; white-space: nowrap; }
+.home-verse-b { color: var(--muted); }
 .home-hero h1 em { padding: 0 .06em; color: var(--ink); font-style: normal; }
 .home-stop { color: var(--accent); }
+.home-cite { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; color: var(--muted); font: 13px/1.5 "Verse Kai", "Kaiti SC", KaiTi, var(--serif); letter-spacing: .1em; }
+.home-cite::before { content: ""; width: 22px; height: 1px; background: var(--accent); opacity: .7; }
+/* One typeface per register: Song for classics, Kai for the stories, XiaoWei for Western art, Smiley for sayings. */
+.home-verse[data-face="song"] h1 { --face: "Verse Song", var(--serif); font-weight: 600; }
+.home-verse[data-face="song"] .home-verse-b { font-weight: 400; }
+.home-verse[data-face="song"] h1 em { font-weight: 800; }
+.home-verse[data-face="kai"] h1 { --ls: .05; --face: "Verse Kai", "Kaiti SC", KaiTi, var(--serif); font-weight: 400; }
+.home-verse[data-face="wei"] h1 { --adv: 1.02; --ls: .03; --face: "Verse Wei", var(--serif); font-weight: 400; }
+.home-verse[data-face="hei"] h1 { --adv: .8; --ls: .02; --face: "Verse Hei", var(--sans); font-weight: 400; }
+.home-verse[data-face="hei"] h1 em { color: var(--accent); }
+@font-face { font-family: "Verse Song"; src: url("assets/fonts/verse-song.woff2") format("woff2"); font-weight: 200 900; font-display: swap; }
+@font-face { font-family: "Verse Kai"; src: url("assets/fonts/verse-kai.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Verse Wei"; src: url("assets/fonts/verse-wei.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Verse Hei"; src: url("assets/fonts/verse-hei.woff2") format("woff2"); font-display: swap; }
 .home-lede { max-width: 27em; margin: 20px 0 0; color: var(--ink-2); font-size: 15px; line-height: 1.85; }
 .home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 26px; margin-top: 32px; }
 .home-actions .btn { min-width: 190px; height: 46px; justify-content: space-between; gap: 18px; padding-inline: 20px; font-size: 13.5px; }
@@ -489,7 +509,8 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
   .home-hero { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
   .home-copy { padding: 28px 0 4px; }
   .home-eyebrow { font-size: 11px; margin-bottom: 12px; }
-  .home-hero h1 { font-size: clamp(27px, 7.4vw, 36px); }
+  .home-verse { --top: clamp(27px, 7.4vw, 36px); }
+  .home-cite { margin-top: 8px; font-size: 11.5px; }
   .home-lede { margin-top: 12px; font-size: 13.5px; }
   .home-actions { gap: 12px 20px; margin-top: 22px; }
   .home-actions .btn { height: 44px; font-size: 13px; }

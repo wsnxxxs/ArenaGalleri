@@ -20,11 +20,54 @@ const SLOTS = [
 ];
 const SHUFFLE = 3200;
 const QUESTION = SHUFFLE * 4;
+// Headline couplets: an old story of one thing done many ways, then this question's answer count at {n}.
+// Each line stays short enough to sit on one line; the font shrinks to the longer of the two.
+// The last field picks the typeface: song for classics and poetry, kai for the painting and anecdote stories,
+// wei for Western art, hei for sayings. Their woff2 subsets hold only this file's characters, so after
+// adding a character, rerun scripts/verse-fonts.py.
+const VERSES = [
+  ['回字有四样写法，', '这道题有{n}种', '鲁迅《孔乙己》', 'song'],
+  ['一月在天，万川各映其影；', '一题在此，{n}份各成其页', '朱熹 · 月印万川', 'song'],
+  ['同一阵风，吹过万窍；', '同一道题，吹出{n}种声音', '《庄子·齐物论》夫吹万不同', 'song'],
+  ['君子和而不同，', '这道题，{n}份各不相同', '《论语·子路》', 'song'],
+  ['《兰亭》满纸「之」字，笔笔不同；', '这道题{n}份答卷，亦然', '王羲之《兰亭集序》', 'kai'],
+  ['同临一本《兰亭》，虞褚各异；', '同接一道题，{n}份各异', '唐摹《兰亭》诸本', 'kai'],
+  ['同一个词牌，千家填出千种词；', '同一道题，写出{n}张网页', '词牌与填词', 'song'],
+  ['《璇玑图》八百余字，读出七千余首；', '一道题，写出{n}张网页', '苏蕙《璇玑图》', 'song'],
+  ['李白说，眼前有景道不得；', '这道题，{n}份都道了', '相传李白题黄鹤楼', 'song'],
+  ['谢安问雪，得两答：撒盐、柳絮；', '这一问，得{n}答', '《世说新语·言语》', 'kai'],
+  ['嘉陵三百里，吴一日，李数月；', '同一道题，{n}份各有快慢', '朱景玄《唐朝名画录》', 'kai'],
+  ['夫子问：盍各言尔志？', '一道题，{n}份各言其志', '《论语·公冶长》', 'song'],
+  ['野水无人渡，众工只画空舟；', '{n}份答卷，看谁画出那支笛', '邓椿《画继》', 'kai'],
+  ['旗亭画壁，三位诗人听曲较高下；', '这道题，{n}份同台较高下', '薛用弱《集异记》', 'kai'],
+  ['贾岛为一个字，推敲了半日；', '这道题，{n}份各落其笔', '《刘公嘉话》', 'kai'],
+  ['盲人摸象，各执一端；', '{n}份答卷，摸同一头象', '《大般涅槃经》', 'kai'],
+  ['一段咏叹调，巴赫写出三十段变奏；', '一道题，写出{n}种解法', '巴赫《哥德堡变奏曲》', 'wei'],
+  ['一件小事，格诺写了九十九遍；', '这道题，被写了{n}遍', '雷蒙·格诺《风格练习》', 'wei'],
+  ['一座教堂，莫奈画了三十余次；', '一道题，交出{n}份', '莫奈《鲁昂大教堂》', 'wei'],
+  ['一座富士山，画成三十六景；', '一道题，写成{n}张网页', '葛饰北斋《富岳三十六景》', 'wei'],
+  ['一千个读者，一千个哈姆雷特；', '一道题，{n}张网页', '西谚', 'wei'],
+  ['横看成岭侧成峰，', '同一道题，{n}种网页', '苏轼《题西林壁》', 'song'],
+  ['八仙过海，各显神通；', '这回过海的，有{n}份', '俗语', 'hei'],
+  ['龙生九子，各有不同；', '这道题，生了{n}个', '俗语', 'hei'],
+  ['照葫芦画瓢，', '一个葫芦，画出{n}只瓢', '俗语', 'hei'],
+  ['一样米养百样人，', '一道题，养出{n}张网页', '俗语', 'hei'],
+  ['标准答案只有一个，', '这道题有{n}个', '考场', 'hei'],
+  ['一题多解是数学课上的事，', '这道题，解出{n}种', '课堂', 'hei'],
+  ['殊途同归？这里是同途殊归：', '一个起点，{n}个终点', '反用《周易·系辞》', 'song'],
+  ['百家争鸣在两千年前，', '今天，{n}份同题争鸣', '先秦诸子', 'song'],
+];
+const FACES = { song: 'Verse Song', kai: 'Verse Kai', wei: 'Verse Wei', hei: 'Verse Hei' };
+// A random item of the list, leaving out the ones in `recent`.
+const pick = (list, recent = []) => {
+  const pool = list.filter((item) => !recent.includes(item));
+  return pool[Math.floor(Math.random() * pool.length)];
+};
 
 export function mount(root, ctx) {
   const answersOf = (t) => t.results.filter((r) => ctx.interactive(r) && ctx.cover(r))
     .sort((a, b) => (a.status === 'verified' ? 0 : 1) - (b.status === 'verified' ? 0 : 1) || time(b) - time(a));
-  // The headline promises more answers than 回 has ways to be written, so only such questions lead.
+  // Each couplet sets a handful of old variants against the answers, so only questions with more than four lead.
   const decks = ctx.DATA.tasks.filter((t) => answersOf(t).length > 4).sort((a, b) => answersOf(b).length - answersOf(a).length);
   const recent = ctx.DATA.tasks.flatMap((task) => answersOf(task).map((work) => ({ task, work })))
     .sort((a, b) => time(b.work) - time(a.work)).slice(0, 12);
@@ -51,7 +94,10 @@ export function mount(root, ctx) {
     <section class="home-hero" aria-labelledby="home-title">
       <div class="home-copy">
         <p class="home-eyebrow"><span class="home-live-dot" aria-hidden="true"></span>同一份提示词 <span>/</span> 不同模型的网页作品</p>
-        <h1 id="home-title">回字有四样写法，<br><span>这道题有<em data-home-n>${hanzi(firstCount)}</em>种</span><span class="home-stop">。</span></h1>
+        <div class="home-verse${decks.length ? ' is-turning' : ''}">
+          <h1 id="home-title"><span class="home-verse-a">回字有四样写法，</span><span class="home-verse-b">这道题有<em>${hanzi(firstCount)}</em>种<span class="home-stop">。</span></span></h1>
+          <p class="home-cite">鲁迅《孔乙己》</p>
+        </div>
         <p class="home-lede">把同一份提示词交给不同的 AI 模型，每一个都交出一张能运行的网页。并排打开，差距一眼可见。</p>
         <div class="home-actions">
           ${first ? `<a class="btn home-enter" data-home-cta href="${ctx.taskHref(first)}"><span>看看这<span data-home-n>${hanzi(firstCount)}</span>种</span>${icon('right')}</a>` : ''}
@@ -84,7 +130,34 @@ export function mount(root, ctx) {
 
   const deck = root.querySelector('.home-deck'), slip = root.querySelector('.home-slip'), hero = root.querySelector('.home-hero');
   const cta = root.querySelector('[data-home-cta]'), autoplay = root.querySelector('[data-autoplay]');
+  const verse = root.querySelector('.home-verse'), tabList = root.querySelector('.home-tabs');
   let current = 0, cards = [], elapsed = 0, sinceShuffle = 0, playing = !reducedMotion(), autoQuestion = playing, hovering = false;
+  let turning = 0;
+  const sung = [];
+
+  // A random couplet, not one of the last eight, set in its own typeface.
+  // --len is the longer line in characters, which sizes the type.
+  const sing = (n, [a, b, source, face]) => {
+    const [pre, post] = b.split('{n}'), count = hanzi(n);
+    verse.dataset.face = face;
+    verse.querySelector('h1').innerHTML = `<span class="home-verse-a">${esc(a)}</span><span class="home-verse-b">${esc(pre)}<em>${count}</em>${esc(post)}<span class="home-stop">。</span></span>`;
+    verse.querySelector('.home-cite').textContent = source;
+    verse.style.setProperty('--len', String(Math.max([...a].length, [...`${pre}${count}${post}。`].length)));
+  };
+  // The next couplet fades in once its typeface has loaded (or after 1.2s), so it never flashes in a fallback font.
+  const turn = (n) => {
+    const next = pick(VERSES, sung);
+    sung.push(next);
+    if (sung.length > 8) sung.shift();
+    const id = ++turning, wait = (ms) => new Promise((done) => setTimeout(done, ms));
+    const loaded = Promise.race([document.fonts.load(`1em "${FACES[next[3]]}"`).catch(() => {}), wait(1200)]);
+    verse.classList.add('is-turning');
+    Promise.all([loaded, wait(reducedMotion() || !verse.dataset.face ? 0 : 320)]).then(() => {
+      if (id !== turning) return;
+      sing(n, next);
+      verse.classList.remove('is-turning');
+    });
+  };
 
   const place = () => cards.forEach((card, k) => {
     card.style.transform = SLOTS[Math.min(k, SLOTS.length - 1)];
@@ -100,8 +173,11 @@ export function mount(root, ctx) {
       tab.setAttribute('aria-selected', String(k === i));
       tab.style.setProperty('--progress', k === i && autoQuestion ? '0' : '1');
     });
-    // The number in the headline and the button follow the question in the deck.
-    $$('[data-home-n]', root).forEach((el) => { el.textContent = hanzi(works.length); });
+    // The headline and the number in the button follow the question in the deck.
+    turn(works.length);
+    cta.querySelector('[data-home-n]').textContent = hanzi(works.length);
+    const selected = tabList.children[i];
+    tabList.scrollTo({ left: selected.offsetLeft - tabList.offsetLeft - 24, behavior: reducedMotion() ? 'auto' : 'smooth' });
     cta.href = ctx.taskHref(t);
     slip.href = ctx.taskHref(t);
     slip.querySelector('b').textContent = t.title;
@@ -124,7 +200,7 @@ export function mount(root, ctx) {
     autoplay.innerHTML = on ? '暂停轮播 <span aria-hidden="true">Ⅱ</span>' : '继续轮播 <span aria-hidden="true">▷</span>';
   };
 
-  // Cards shuffle and questions advance on their own, pausing while the pointer or focus is on the hero.
+  // Cards shuffle and a random other question comes up on its own, pausing while the pointer or focus is on the hero.
   const TICK = 100;
   const timer = setInterval(() => {
     if (!root.contains(deck)) return clearInterval(timer);
@@ -134,7 +210,7 @@ export function mount(root, ctx) {
     if (!autoQuestion) return;
     elapsed += TICK;
     root.querySelector('[data-home-tab][aria-selected="true"]')?.style.setProperty('--progress', String(Math.min(elapsed / QUESTION, 1)));
-    if (elapsed >= QUESTION) show((current + 1) % decks.length);
+    if (elapsed >= QUESTION) show(decks.length > 1 ? pick([...decks.keys()], [current]) : current);
   }, TICK);
   const stage = root.querySelector('.home-stage');
   stage.addEventListener('pointerenter', () => { hovering = true; });
@@ -177,7 +253,8 @@ export function mount(root, ctx) {
     autoQuestion = false; show(i); tabs[i].focus();
   };
   if (reducedMotion()) setPlaying(false);
-  if (decks.length) show(0);
+  // Each visit opens on a different question.
+  if (decks.length) show(pick([...decks.keys()]));
   else hero.classList.add('is-empty');
   document.title = `${ctx.DATA.title} · ${ctx.DATA.subtitle}`;
 }
