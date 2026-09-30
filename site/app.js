@@ -364,7 +364,7 @@ function renderLibrary() {
   document.title = `题库 · ${DATA.title}`;
   async function loadPreviews() {
     if (platform.available) {
-      await Promise.all(choices.map(async (choice) => {
+      await Promise.all(choices.filter(({ task }) => counted(task).length).map(async (choice) => {
         try {
           const board = await api(`leaderboard?task=${encodeURIComponent(choice.task.id)}&by=config`, { signal: controller.signal });
           if (destroyed) return;
