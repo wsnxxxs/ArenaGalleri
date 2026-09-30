@@ -177,6 +177,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
         <div class="auth-turnstile" hidden></div>
         <p class="auth-turnstile-status" role="status"></p>
         <p class="form-error" role="alert"></p>
+        <p class="auth-legal" hidden>注册即表示你已阅读并同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a></p>
         <button class="btn primary full" type="submit"></button>
         <p class="auth-switch"><span></span><button type="button" data-switch></button></p>
       </form>`,
@@ -216,6 +217,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       $('[type="submit"]', form).textContent = login ? '登录' : '注册并登录';
       $('.auth-switch span', form).textContent = login ? '还没有账号？' : '已有账号？';
       $('[data-switch]', form).textContent = login ? '注册' : '登录';
+      $('.auth-legal', form).hidden = login;
       $('.form-error', form).textContent = '';
       if (!login) {
         const generation = widgetGeneration + 1;

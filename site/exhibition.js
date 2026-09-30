@@ -1,3 +1,5 @@
+import { aigcLabel } from './legal.js';
+
 const $ = (selector, root) => root.querySelector(selector);
 const escape = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const CARD_W = 720, CARD_H = 510, GAP = 42;
@@ -127,7 +129,7 @@ export function createExhibition(root, task, { label, vendorOf, cover, header, i
     const result = task.results.find((r) => r.id === id); if (!result) return;
     const card = document.createElement('article'); card.className = 'exhibition-card'; card.dataset.card = id;
     card.setAttribute('aria-label', `${label(result)} 的完整原作`);
-    card.innerHTML = `<header class="exhibition-card-head"><span class="exhibition-number"></span><div><strong>${escape(label(result))}</strong><span>${escape(result.title)}</span></div><span class="exhibition-live"><i></i> LIVE</span><button data-remove="${id}" aria-label="移出展厅：${escape(label(result))}">×</button></header>
+    card.innerHTML = `<header class="exhibition-card-head"><span class="exhibition-number"></span><div><strong>${escape(label(result))}</strong><span>${escape(result.title)}</span></div>${aigcLabel()}<span class="exhibition-live"><i></i> LIVE</span><button data-remove="${id}" aria-label="移出展厅：${escape(label(result))}">×</button></header>
       <div class="exhibition-viewport"><button class="exhibition-glass" data-focus="${id}" aria-label="操作原作：${escape(label(result))}"><span>操作原作 ↗</span></button></div>
       <footer class="exhibition-card-foot"><span class="exhibition-page-state" role="status"></span><span><button data-reload="${id}">重新打开</button><button data-focus="${id}">操作原作 ↗</button></span></footer>`;
     world.append(card);

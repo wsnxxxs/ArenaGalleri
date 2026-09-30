@@ -10,9 +10,11 @@
 //   #/new                    publish a question          (platform)
 //   #/submit/<task>           upload to this task         (platform)
 //   #/me · #/review           personal center · review queue (platform)
+//   #/terms · #/privacy       terms of use and disclaimer · privacy policy
 import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, store, syncThemeUi, themeButton } from './ui.js';
 import { STATUS, accountControl, api, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, statusBadge } from './platform.js';
 import { mount as renderLanding } from './home.js';
+import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { questionPreview } from './question-preview.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 
@@ -144,7 +146,8 @@ function buildVersion() {
 }
 const footer = () => `<footer class="footer"><div class="wrap footer-in">
   <p class="footer-brand">${LOGO}<span>${esc(DATA.title)}</span><span class="muted">前端作品档案</span></p>
-  <div class="footer-links">${platform.available ? '<a href="#/new">发起题目</a><a href="#/leaderboard">榜单</a>' : ''}<a href="${esc(DATA.repo)}" target="_blank" rel="noopener">项目仓库</a><a href="${esc(DATA.repo)}#readme" target="_blank" rel="noopener">参与贡献</a>${buildVersion()}</div>
+  <div class="footer-links">${platform.available ? '<a href="#/new">发起题目</a><a href="#/leaderboard">榜单</a>' : ''}<a href="${esc(DATA.repo)}" target="_blank" rel="noopener">项目仓库</a><a href="${esc(DATA.repo)}#readme" target="_blank" rel="noopener">参与贡献</a><a href="#/terms">使用条款</a><a href="#/privacy">隐私政策</a><a href="mailto:${CONTACT}">联系我们</a>${buildVersion()}</div>
+  <p class="footer-legal">© ${new Date().getFullYear()} ${esc(DATA.title)} · 站内作品由 AI 模型生成，仅供比较与学习参考 · 引用或转载请<a href="#/terms#cite">注明来源</a> · <a href="mailto:${CONTACT}">${CONTACT}</a>${beianLink() ? ` · ${beianLink()}` : ''}</p>
 </div></footer>`;
 
 // A shared two-column shell keeps every platform page in the same exhibition. The top bar is the
@@ -578,7 +581,7 @@ function renderTask(t) {
     </aside>
     <main class="workspace page">
     <section id="results" data-panel="results" class="collection-panel">
-      <div class="collection-heading"><div class="collection-title"><h2 id="filter-heading">全部作品</h2><span id="filter-count">${t.results.length} 件作品</span></div>${searchControl('work', '搜索模型或作品', taskState.query)}</div>
+      <div class="collection-heading"><div class="collection-title"><h2 id="filter-heading">全部作品</h2><span id="filter-count">${t.results.length} 件作品</span>${aigcLabel()}</div>${searchControl('work', '搜索模型或作品', taskState.query)}</div>
       <div class="collection-toolbar"><span>已验证作品优先展示</span><div class="toolbar-actions">${previewControl()}<label class="result-sort">厂商<select data-vendor-filter aria-label="按模型厂商筛选">
         <option value="">全部厂商（${t.results.length}）</option>
         ${vendors.map((v) => `<option value="${esc(v)}"${v === taskState.vendor ? ' selected' : ''}>${esc(v)}（${vendorCounts.get(v)}）</option>`).join('')}
@@ -910,6 +913,7 @@ function createViewer(t, back = null) {
       </div>
       <span class="split-context">并排对比 · 点击一栏以选中</span>
       <div class="vtools">
+        ${aigcLabel()}
         ${hasExhibition(t) ? `<button class="vtool" data-v="exhibition" title="将当前作品加入三维沙盘">${icon('full')}<span class="vtool-text">沙盘</span></button>` : ''}
         <button class="vtool" data-v="guide" aria-label="操作指南" aria-pressed="false" title="操作指南（G）">${icon('guide')}<span class="vtool-text">指南</span></button>
         ${many ? `<button class="vtool" data-v="split" aria-label="并排对比" aria-pressed="false" title="并排对比（S）">${icon('split')}<span class="vtool-text">并排</span></button>` : ''}
@@ -1274,6 +1278,8 @@ async function route({ keepScroll = false } = {}) {
     renderLanding(root, context());
   } else if (taskId === 'questions') {
     page = renderLibrary();
+  } else if (taskId === 'terms' || taskId === 'privacy') {
+    page = renderLegal(root, context(), taskId);
   } else if (platformPage) {
     if (!platform.available) platformOffline(platformPage);
     else {

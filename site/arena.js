@@ -3,6 +3,7 @@
 // knows which work is which until the vote comes back with the reveal.
 import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
 import { api, platform, reactionBar, toast } from './platform.js';
+import { aigcLabel } from './legal.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', skip: '你跳过了这一组' };
@@ -107,7 +108,7 @@ function match(root, ctx, task) {
   const letter = (side) => side.toUpperCase();
   function blindHead(side) {
     const ready = state.ready[side];
-    return `<span class="pane-letter">${letter(side)}</span><span class="arena-who">匿名作品</span>
+    return `<span class="pane-letter">${letter(side)}</span><span class="arena-who">匿名作品</span>${aigcLabel()}
       <span class="arena-state${ready ? ' is-ready' : ''}">${ready ? '已就绪' : '载入中'}</span>
       <button class="pane-close" data-a="reload" data-side="${side}" title="重新载入作品 ${letter(side)}" aria-label="重新载入作品 ${letter(side)}">${icon('reload')}</button>`;
   }

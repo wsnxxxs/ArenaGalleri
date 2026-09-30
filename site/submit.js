@@ -173,7 +173,7 @@ export function mount(root, ctx) {
         ${coverPick()}
         <p class="field-hint">选填，PNG / JPEG / WebP，不超过 ${formatBytes(platform.site.limits.coverBytes)}。${platform.site.capture ? '提交后平台还会自动截取桌面与手机首屏，用作统一截图。' : '不上传时，展厅显示文字封面。'}</p>
       </div>
-      <label class="confirm"><input type="checkbox" name="attest" required><span>我确认作品由所选模型按本题提示词生成；如有人工修改，已在说明中写明。</span></label>
+      <label class="confirm"><input type="checkbox" name="attest" required><span>我确认作品由所选模型按本题提示词生成；如有人工修改，已在说明中写明。我有权提交该作品，并同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></label>
       <p class="form-error" role="alert"></p>
       <div class="form-actions"><button class="btn primary" type="submit">${icon('upload')}提交作品</button><span class="fine">提交后为「未验证」，可以被浏览和贴表情；核验通过后进入盲评。</span></div>
     </form>`;

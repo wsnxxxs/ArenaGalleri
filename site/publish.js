@@ -28,7 +28,7 @@ export function mount(root, ctx) {
           <label><input type="checkbox" name="templates" value="vite" checked>Vite 静态网页</label>
         </div><p class="fine">Vite 项目需要包含构建后的 dist/ 目录。</p></div>
         <p class="form-error" role="alert"></p>
-        <div class="form-actions"><button class="btn primary" type="submit">${icon('plus')}发起题目</button><a class="btn" href="#/questions">取消</a></div>
+        <div class="form-actions"><button class="btn primary" type="submit">${icon('plus')}发起题目</button><a class="btn" href="#/questions">取消</a><span class="fine">发起即表示你同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></div>
       </form>
       <aside class="publish-note"><h3>一道可比较的题目</h3><p>简述说明测试目标。<br>提示词作为所有作品的共同依据。<br>标签帮助其他人发现这道题。</p><p>发布后可在题目内上传作品。<br>每份作品会固定关联这道题。</p></aside>
     </section>${ctx.pageEnd()}`;
