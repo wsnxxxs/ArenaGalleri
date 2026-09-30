@@ -225,6 +225,16 @@ export function mount(root, ctx) {
   };
   addEventListener('scroll', onScroll, { passive: true });
 
+  // The strip moves by transform, so lazy shots past its right edge would only start loading as they slide in.
+  // Fetch them all once the section comes near.
+  const recentSection = root.querySelector('.home-recent');
+  const near = new IntersectionObserver(([entry]) => {
+    if (!entry.isIntersecting) return;
+    near.disconnect();
+    $$('img[loading="lazy"]', recentSection).forEach((image) => { image.loading = 'eager'; });
+  }, { rootMargin: '0px 0px 800px 0px' });
+  near.observe(recentSection);
+
   root.onclick = (event) => {
     if (event.target.closest('[data-scroll-next]')) {
       event.preventDefault();
