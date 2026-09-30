@@ -10,9 +10,10 @@ export function publicCatalog(data, buildInfo) {
     providers: (data.providers ?? []).map(item => pick(item, ['id', 'name', 'kind', 'operator', 'url', 'logo', 'aliases', 'listed'])),
     tasks: data.tasks.map(task => ({
       ...pick(task, ['id', 'title', 'summary', 'date', 'tags', 'sandtable', 'sceneProfile', 'prompt', 'promptPending', 'version', 'owner']),
+      promptVariants: (task.promptVariants ?? []).map(variant => pick(variant, ['id', 'label', 'prompt'])),
       conditions: (task.conditions ?? []).map(condition => pick(condition, ['id', 'label', 'note', 'mobile'])),
       results: task.results.map(result => ({
-        ...pick(result, ['id', 'model', 'effort', 'harness', 'harnessVersion', 'provider', 'sourceLabel',
+        ...pick(result, ['id', 'model', 'effort', 'harness', 'harnessVersion', 'provider', 'sourceLabel', 'promptVariant',
           'title', 'summary', 'scene', 'previewModel', 'previewPoster', 'previewLoader', 'addedAt',
           'captureNote', 'modelVersion', 'generationMode', 'humanIntervention', 'generatedOn', 'evidenceUrl']),
         guide: {
