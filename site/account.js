@@ -59,7 +59,8 @@ function heldNote(kind, item) {
   return `<p class="result-reason">${icon(status === 'rejected' ? 'alert' : 'clock')}<span>${esc(hint + reason)}</span></p>`;
 }
 
-function workRow(ctx, w, { admin = false } = {}) {
+// questions: unpublished community questions, which are not in the public catalogue yet.
+function workRow(ctx, w, { admin = false, questions = [] } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task);
   const model = ctx.MODELS.get(w.model) ?? { name: w.modelName };
   const hidden = held(w);
@@ -71,7 +72,7 @@ function workRow(ctx, w, { admin = false } = {}) {
     <div class="work-main">
       <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(w.modelName)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}${moderationBadge(w.moderation, HELD.work[w.moderation?.status])}${statusBadge(w.status, { always: true, reason: w.reason })}</p>
       <h3><a href="${href}"${hidden ? ' target="_blank" rel="noopener"' : ''}>${esc(w.title)}</a></h3>
-      <p class="work-meta">${esc(task?.title ?? w.task)}${variant ? ` · ${esc(variant.label)}` : ''}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
+      <p class="work-meta">${esc(task?.title ?? questions.find((q) => q.id === w.task)?.title ?? w.task)}${variant ? ` · ${esc(variant.label)}` : ''}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
       ${heldNote('work', w)}
       ${w.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(w.reason)}</span></p>` : ''}
     </div>
@@ -378,7 +379,7 @@ function mine(root, ctx) {
     const body = !signedIn ? `<div class="notice submissions-login">${icon('user')}<p>登录后查看你发起的题目与上传的作品。</p><button class="btn primary sm" data-auth="login">登录 / 注册</button></div>`
       : tab === 'overview' ? profileOverview(state)
       : tab === 'works' ? `<section class="submission-section">${state.works === null ? `<p class="muted">${state.error ? '作品暂时未能载入。' : '正在载入作品…'}</p>` : works.length
-          ? `<p class="submission-summary">${works.length} 件作品${works.some(held) ? ` · ${works.filter(held).length} 件未通过或正在内容审核` : ''} · ${count('unverified')} 件等待核验${count('questioned') ? ` · ${count('questioned')} 件存疑` : ''}</p><div class="work-list">${works.map((w) => workRow(ctx, w)).join('')}</div>`
+          ? `<p class="submission-summary">${works.length} 件作品${works.some(held) ? ` · ${works.filter(held).length} 件未通过或正在内容审核` : ''} · ${count('unverified')} 件等待核验${count('questioned') ? ` · ${count('questioned')} 件存疑` : ''}</p><div class="work-list">${works.map((w) => workRow(ctx, w, { questions: state.questions ?? [] })).join('')}</div>`
           : '<div class="submission-empty"><b>还没有上传作品</b><p>选一道题，上传你让模型生成的答案。</p><button class="btn sm" type="button" data-upload>上传作品</button></div>'}</section>`
       : `<section class="submission-section">${state.questions === null ? `<p class="muted">${state.error ? '题目暂时未能载入。' : '正在载入题目…'}</p>` : questions.length
           ? `<div class="submission-questions">${questions.map((question) => questionRow(ctx, question)).join('')}</div>`
@@ -761,7 +762,7 @@ function review(root, ctx) {
       })()
       : (() => {
         const rows = works.filter((w) => w.status === tab).sort((a, b) => (tab === 'unverified' ? Date.parse(a.addedAt) - Date.parse(b.addedAt) : Date.parse(b.addedAt) - Date.parse(a.addedAt)));
-        return rows.length ? `<div class="work-list">${rows.map((w) => workRow(ctx, w, { admin: true })).join('')}</div>`
+        return rows.length ? `<div class="work-list">${rows.map((w) => workRow(ctx, w, { admin: true, questions })).join('')}</div>`
           : `<div class="board-empty"><p class="board-empty-title">${tab === 'unverified' ? '没有等待核验的作品' : `没有${TABS[tab]}的投稿`}</p><p>${tab === 'unverified' ? '新的投稿会按提交顺序出现在这里。' : '馆藏作品由仓库收录流程管理，不在这里审核。'}</p></div>`;
       })();
     root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '审核', nav: accountNav(ctx, 'review'),
