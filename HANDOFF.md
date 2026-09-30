@@ -1,6 +1,6 @@
 # HANDOFF.md · 当前状态
 
-更新：2026-09-30。接手时先读本文件，再按任务查阅专题文档；已完成轮次保存在 `docs/archive/`。
+更新：2026-10-01。接手时先读本文件，再按任务查阅专题文档；已完成轮次保存在 `docs/archive/`。
 
 ## 当前状态
 
@@ -9,6 +9,41 @@
 - 已删除合并完成的远端 `codex/shared-question-intake` 分支，当前无开放 PR。本地同名分支仍由已有 worktree 使用，保留该 worktree 与本地分支。
 - 最近一次已记录的正式部署是 `ccfd11d`（2026-09-30）：20 道题、83 件既有作品。SupernovAI 与云山巨城各有长短两份原文、当时各 0 件作品。原文与复制已验收，生产同模型长短结果配对仍无样本。这是当轮发布记录，本轮文档整理未重新部署或做线上验收。
 - 正式站已记录安装 Gallery/API/作品域名私有文件规则和共享读取、模型包及并发限制。部署、回滚与验证边界见发布归档；备份具体路径及回滚步骤保留在独立后台运维交接。
+
+## 已提交：使用条款、隐私政策、备案、AI 标识与头像库（2026-10-01，未推送、未部署）
+
+- `site/legal.js` 提供 `#/terms`（使用条款与免责声明）和 `#/privacy`（隐私政策），都可以用 `#/<页>#<节>` 定位。运营者写为「ArenaGalleri 运营团队」，联系邮箱常量 `CONTACT` 也在这里。正文要和 Show1 逐字一致，改动时两边一起改。隐私政策按后端实际实现撰写（密码哈希、30 天会话 Cookie、每日加盐 IP 哈希、Turnstile、邮件、AI 审核只发送作品内容、作品 CDN；按用户要求不写审核服务所在地），后端数据处理有变化时要同步修改。
+- 页脚：使用条款、隐私政策、联系我们，以及一行版权 / AI 生成 / 注明来源说明。ICP 备案号按域名显示：`闽ICP备2026019671号-2` 只在 arenaofbias.icu 及其子域出现。迁到 gallery.arenagalleri.com 前，要在 `legal.js` 的 `BEIAN` 里加上新域名对应的备案号。
+- 同意入口：注册弹窗（隐式同意文字）、投稿确认勾选框、发起题目按钮旁都链接了条款和隐私政策。
+- 账号绑定：个人中心新增「账号绑定」区块，一种方式一行，目前只有邮箱（`site/account.js` 的 `bindEmail`），沿用后端已有的 `/api/auth/email/send|bind` 与 Turnstile；邮箱状态读 `/api/auth/me`，显示打码地址。用户要求界面只说「账号绑定」，不写「邮箱绑定」，以后可以在同一区块加其他方式。本地用假 SMTP 走完了发码、错码提示、绑定成功、打码显示，无 console error。
+- 忘记密码：登录框新增「忘记密码？」，打开两步找回弹窗（`site/platform.js` 的 `openReset`）：先发码并核对验证码，再设置新密码，走 `/api/auth/email/send|verify` 与 `/api/auth/password/reset`。成功后回到登录框并填好账号。发码按钮（Turnstile、60 秒冷却）抽成 `codeSender`，账号绑定弹窗也改用它。本地用假 SMTP 走完了发码、错码、两次密码不一致、重置、用新密码登录，无 console error。
+- AI 显式标识「AI 生成」：题目作品列表标题旁、在线预览顶栏、原作展厅卡片头、盲评匿名作品栏头。盲评标识只做了代码检查，本地没有可配对作品，未在浏览器中看到。
+- 头像：`site/assets/avatars/` 共 16 个 SVG，由后端 `site.avatars` 下发 id；顶栏、菜单、社区题目发布者显示头像，个人中心点击头像可更换。后端未提供头像时退回首字母。依赖后端头像改动（arenaofbias-server，同样未提交），两边需一起发布。
+- 验证：check 40 文件、test 14/14。用本地后端 + dist 副本做了无头 Chrome 验收：换头像流程、条款页和隐私政策页、注册弹窗、深浅色、手机宽度（无横向滚动）、题目页 / 预览 / 展厅的 AI 标识均正常，无 console error；备案号按主机名匹配用函数直接验证。未运行完整 build / intake。
+
+## 已提交：首页标题轮换（2026-10-01，未推送、未部署）
+
+- `site/home.js` 的 `VERSES` 收录 30 组「典故上句 + 本题作品数下句」对句（含原「回字有四样写法」），附出处小字。进入首页随机选题；自动换题也随机选另一道；每次换题随机抽对句，不重复最近 8 组。等字体加载完（最多 1.2 秒）再淡入，减少动态效果时直接替换。
+- 按风格用四款 OFL 字体：song 思源宋体（古典哲思、诗词），kai 霞鹜文楷（书画、故事，出处小字也用它），wei 站酷小薇（西方艺术），hei 得意黑（俗语、考场）。`site/assets/fonts/` 里是只含 home.js 字符的 woff2 子集（共约 390 KB，按需加载）和各自许可文件；子集改名为 Verse Song/Kai/Wei/Hei，避开 OFL 保留名。改文案新增字符后要重跑 `python scripts/verse-fonts.py <字体原件目录>`（需 fonttools、brotli；原件在 Google Fonts / 各字体 GitHub 发布页，不进仓库）。
+- `site/studio.css`：`.home-copy` 设为尺寸容器，标题字号按较长一行的字数、字体字宽（`--adv`）和字距（`--ls`）收缩，不折行；`.home-verse` 保留最大字号时的高度，切换时下方内容不跳动。
+- 验证：check 40 文件、test 14/14、build、check:intake（83 件、0 错、3 条既有 warning）。脚本核对 30 组文案字符在各自字体子集里全部存在。浏览器 1440 宽度随机出 29 组、375 手机宽度出齐 30 组，都没有溢出，手机无横向滚动，无 console error；四种字体都已加载并截图目检，浅色主题手机宽度看过一组宋体。未在真实 Windows/iOS 设备上检查。
+
+## 前轮审查：提交就绪检查（2026-10-01，问题已由本轮修复）
+
+- 仅审查现有改动，未修改功能、提交、推送或部署。首页标题轮换，以及条款 / 隐私页面、备案与 AI 标识可作为优先提交范围；`site/studio.css`、`site/app.js`、`site/platform.js` 混有其他功能，拆分提交必须按差异块选择，不能直接按整文件纳入。
+- 账号绑定 / 找回密码依赖的邮箱接口已存在于后端 HEAD；但 `site/platform.js` 的 `codeSender` 在 `await ready` 之后才禁用按钮。用模拟的 300ms 初始化与发送回调复现：连续点击两次触发两次发送回调；成功路径还会创建两个共享倒计时的 interval。建议提交这组功能前先修正点击互斥。本轮没有发送真实邮件。
+- 头像依赖相邻后端未提交的 avatar / DTO 改动，前端源码可保存为提交，完整功能发布需协调后端。作品资源仍在独立私有 data 仓库；新增头像和标题字体是前端界面资源。
+- 本轮 check 40 文件、test 14/14、build、CI intake 全部通过（83 件、0 错、3 条既有 warning）。浏览器复查桌面首页、375px 首页 / 条款 / 隐私页及条款节定位，已目检截图，无页面横向溢出。使用纯静态服务，唯一 console error 为预期的 `/api/bootstrap` 404；未重新执行真实账号联调、生产或全部作品交互验收。
+- 审查记录：[commit-readiness-review](docs/archive/2026-10-01-commit-readiness-review-wsnxxxs.md)。
+
+## 本轮完成：验证码修复与分功能提交（2026-10-01）
+
+- 用户授权修复、按功能提交，并明确先不推送。按要求使用 GPT-6.1 Sol / high 子 agent，仅负责 `codeSender` 修复，父 agent 负责验证、拆分和提交。
+- `codeSender` 在等待初始化前立即锁定发送按钮，阻止重复进入；初始化后如果弹窗已关闭则不发送，未完成人机验证或发送失败时恢复按钮。子 agent 模拟双击仅一次发送、一个 interval；父 agent 浏览器模拟 300ms 初始化再次确认双击只调用一次发送回调。未发送真实邮件。
+- `0dc5224`：首页标题轮换与字体；`d25b4fc`：条款 / 隐私、备案与 AI 标识；`2719fa9`：账号绑定 / 找回密码及验证码修复；`4e50a6b`：头像库。混合文件按差异拆分，均使用 wsnxxxs 的 GitHub noreply 身份。交接与两轮归档另作记录提交。
+- 修复后 check 40 文件、test 14/14、build、CI intake 通过（83 件、0 错、3 条既有 warning）；浏览器已目检首页，纯静态服务仅有预期 `/api/bootstrap` 404。既有完整账号与头像联调结果沿用上轮记录，本轮未重新验收真实后端、生产或全部作品交互。
+- 所有上述提交仅在本地。未推送、未部署、未修改相邻仓库。头像功能发布仍需协调后端未提交的 avatar / DTO 改动；`dist/` 为修复后、功能提交前的本地验证构建，正式发布需从确定的提交重新构建。
+- 完成记录：[feature-commits](docs/archive/2026-10-01-feature-commits-wsnxxxs.md)。
 
 ## 待办与验证边界
 
@@ -28,6 +63,8 @@
 
 | 轮次 | 记录内容 |
 | --- | --- |
+| [feature-commits](docs/archive/2026-10-01-feature-commits-wsnxxxs.md) | 验证码发送修复、四组功能本地提交与验证边界 |
+| [commit-readiness-review](docs/archive/2026-10-01-commit-readiness-review-wsnxxxs.md) | 未提交功能审查、验证码按钮并发问题与可提交范围 |
 | [repository-cleanup](docs/archive/2026-09-30-repository-cleanup-wsnxxxs.md) | 文档整理、已合并远端分支清理与本轮验证范围 |
 | [shared-question-release](docs/archive/2026-09-30-shared-question-release-wsnxxxs.md) | 版本切换合并、20 题正式发布、空题榜单修正、验证边界 |
 | [protection-deploy](docs/archive/2026-09-30-protection-deploy-wsnxxxs.md) | 独立 Gallery 部署、私有文件与共享限流验收、备份位置说明 |
