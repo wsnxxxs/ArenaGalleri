@@ -1,16 +1,13 @@
 // Submitting to a fixed task (#/submit/<task>): 01 choose file → 02 trial load in the
 // platform sandbox → 03 describe the work and submit. The staged draft runs from its own
 // origin with a small probe that reports load time, errors and blocked requests.
-import { $, $$, byName, esc, formatBytes, icon } from './ui.js';
+import { $, $$, esc, formatBytes, formatTime, icon } from './ui.js';
 import { api, platform, refreshPlatform, toast } from './platform.js';
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
+import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VIEWS = { desktop: { width: 1440, height: 900, label: '桌面 1440×900' }, phone: { width: 390, height: 844, label: '手机 390×844' } };
-const HARNESS_KINDS = [
-  ['cli-agent', '命令行智能体'], ['ide', 'IDE'], ['desktop-app', '桌面应用'],
-  ['web-chat', '网页对话'], ['api', 'API'], ['arena', '对战平台'], ['other', '其他'],
-];
 const TRIAL_TIMEOUT = 30000;
 
 const freshTrial = () => ({ booted: false, loaded: false, loadMs: null, errors: [], failed: [], blocked: [], paint: null, timedOut: false });
@@ -38,7 +35,9 @@ export function mount(root, ctx) {
     progress: 0, uploading: false, draft: null, error: '',
     trial: freshTrial(), view: 'desktop', confirmed: false, cover: null,
     submitting: false, work: null, xhr: null, timer: 0,
+    resumable: null, peek: task.promptVariants?.[0]?.id ?? null,
   };
+  const moderated = () => Boolean(platform.site.contentModeration);
 
   const pendingFull = () => (platform.me?.pending ?? 0) >= (platform.site.limits.pendingPerUser ?? 5);
 
@@ -57,7 +56,8 @@ export function mount(root, ctx) {
     }
     return `<div class="step-body">${taskLabel}
       ${templates.length > 1 ? `<label class="field"><span class="field-label">提交格式</span><select class="input" data-template${state.uploading ? ' disabled' : ''}>${templates.map((value) => `<option value="${value}"${value === state.template ? ' selected' : ''}>${templateLabel(value)}</option>`).join('')}</select></label>` : `<p class="fine">提交格式：${templateLabel(state.template)}</p>`}
-      ${task ? `<details class="prompt-peek"><summary>${icon('guide')}查看本题提示词 · 作品需按它生成</summary><pre>${esc(task.prompt)}</pre></details>` : ''}
+      ${promptPeek()}
+      ${state.resumable && !state.uploading ? `<div class="notice resume-draft">${icon('clock')}<p>你之前上传过「${esc(state.resumable.sourceName)}」，试加载保留到 ${esc(formatTime(state.resumable.expiresAt))}。</p><button class="btn primary sm" type="button" data-act="resume">继续试加载</button><button class="btn sm" type="button" data-act="drop-draft">丢弃</button></div>` : ''}
       ${pendingFull() ? `<div class="notice">${icon('clock')}<p>你已有 ${platform.me.pending} 件作品在等待核验。核验之后再上传新的作品吧。</p></div>` : `
       <div class="dropzone${task ? '' : ' is-disabled'}${state.uploading ? ' is-busy' : ''}" data-drop tabindex="${task ? 0 : -1}" role="button" aria-label="选择或拖入作品文件">
         ${state.uploading
@@ -67,6 +67,14 @@ export function mount(root, ctx) {
       </div>`}
       ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ''}
     </div>`;
+  }
+
+  function promptPeek() {
+    const variants = task.promptVariants ?? [];
+    const current = variants.find((v) => v.id === state.peek);
+    return `<details class="prompt-peek"><summary>${icon('guide')}查看本题提示词 · 作品需按它生成${variants.length ? ` · 共 ${variants.length} 个版本，任选其一` : ''}</summary>
+      ${variants.length ? `<div class="seg" role="group" aria-label="提示词版本">${variants.map((v) => `<button type="button" data-peek="${esc(v.id)}" aria-pressed="${v.id === state.peek}">${esc(v.label)}</button>`).join('')}</div>` : ''}
+      <pre>${esc(current?.prompt ?? task.prompt)}</pre></details>`;
   }
 
   function trialChecks() {
@@ -95,7 +103,8 @@ export function mount(root, ctx) {
 
   const confirmText = () => {
     const t = state.trial;
-    return `我已在上方体验了作品，确认它加载正常、与题目相符${t.errors.length || t.failed.length || t.blocked.length ? '，也看过了上面的提示' : ''}`;
+    const warned = t.errors.length || t.failed.length || t.blocked.length || state.draft?.checks.some((c) => c.state === 'warn');
+    return `我已在上方体验了作品，确认它加载正常、与题目相符${warned ? '，也看过了上面的提示' : ''}`;
   };
 
   function stepTwo() {
@@ -120,29 +129,6 @@ export function mount(root, ctx) {
     </div>`;
   }
 
-  function modelOptions() {
-    const byVendor = new Map();
-    for (const model of ctx.DATA.models) {
-      if (!byVendor.has(model.vendor)) byVendor.set(model.vendor, []);
-      byVendor.get(model.vendor).push(model);
-    }
-    return [...byVendor].sort(([a], [b]) => byName(a, b)).map(([vendor, models]) => `<optgroup label="${esc(vendor)}">${models.sort((a, b) => byName(a.name, b.name)).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</optgroup>`).join('');
-  }
-
-  function harnessOptions() {
-    const listed = [...ctx.HARNESSES.values()].filter((h) => h.listed);
-    return HARNESS_KINDS.map(([kind, label]) => {
-      const entries = listed.filter((h) => h.kind === kind);
-      return entries.length ? `<optgroup label="${label}">${entries.map((h) => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</optgroup>` : '';
-    }).join('');
-  }
-
-  function providerOptions() {
-    return [...ctx.PROVIDERS.values()].filter((p) => p.listed)
-      .sort((a, b) => byName(a.name, b.name))
-      .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
-  }
-
   const coverPick = () => `<div class="cover-pick">${state.cover
     ? `<img src="${esc(state.cover)}" alt="封面预览"><button class="link" type="button" data-act="drop-cover">移除</button>`
     : `<button class="btn sm" type="button" data-act="pick-cover">${icon('image')}选择图片</button>`}<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-cover-input></div>`;
@@ -150,42 +136,29 @@ export function mount(root, ctx) {
   function stepThree() {
     if (!state.confirmed) return '<p class="step-placeholder">确认试加载结果后，在这里填写作品信息。</p>';
     return `<form class="step-body submit-form" novalidate>
-      <label class="field"><span class="field-label">作品标题<i>*</i></span><input class="input" name="title" maxlength="40" required placeholder="例如：云山古刹"></label>
-      <label class="field"><span class="field-label">简介</span><textarea class="input" name="summary" maxlength="200" rows="2" placeholder="一两句话介绍作品的看点"></textarea></label>
-      <div class="field-row">
-        <label class="field"><span class="field-label">模型<i>*</i></span><select class="input" name="modelId" required><option value="">选择模型</option>${modelOptions()}<option value="__other">其他模型（手动填写）</option></select></label>
-        <label class="field"><span class="field-label">推理档位</span><select class="input" name="effort"><option value="">默认 / 未设置</option>${platform.site.efforts.map((e) => `<option>${esc(e)}</option>`).join('')}<option value="__other">其他…</option></select></label>
-      </div>
-      <div class="field-row" data-other-model hidden>
-        <label class="field"><span class="field-label">模型名称<i>*</i></span><input class="input" name="modelName" maxlength="60" placeholder="按官方写法，例如 GPT-6 Sol"></label>
-        <label class="field"><span class="field-label">厂商</span><input class="input" name="vendor" maxlength="40" placeholder="例如 OpenAI"></label>
-      </div>
-      <label class="field" data-other-effort hidden><span class="field-label">档位名称</span><input class="input" name="effortOther" maxlength="20" placeholder="例如 Extra"></label>
-      <div class="field-row">
-        <label class="field"><span class="field-label">Harness<i>*</i></span><select class="input" name="harnessId" required><option value="">选择 Harness</option>${harnessOptions()}<option value="__other">其他（手动填写）</option></select><span class="field-hint">用什么工具或环境生成，例如 Claude Code、Cursor、官方网页对话。</span></label>
-        <label class="field"><span class="field-label">Harness 版本</span><input class="input" name="harnessVersion" maxlength="40" placeholder="选填，例如 2.1.3" disabled><span class="field-hint">选择 Harness 后可填写，最多 40 字。</span></label>
-      </div>
-      <label class="field" data-other-harness hidden><span class="field-label">其他 Harness<i>*</i></span><input class="input" name="harnessOther" maxlength="40" placeholder="填写工具或环境名称"></label>
-      <label class="field"><span class="field-label">服务商</span><select class="input" name="providerId"><option value="">未注明</option>${providerOptions()}<option value="__other">其他（手动填写）</option></select><span class="field-hint">模型经由谁调用；「官方」指模型厂商自己的 API、网页或 App。不确定就留「未注明」。</span></label>
-      <label class="field" data-other-provider hidden><span class="field-label">其他服务商</span><input class="input" name="providerOther" maxlength="40" placeholder="填写服务商名称"></label>
-      <label class="field"><span class="field-label">生成说明</span><textarea class="input" name="note" maxlength="1000" rows="3" placeholder="对话轮次、是否人工修改、可供核验的记录链接等。说明越完整，核验越快。"></textarea></label>
+      ${workFieldsHtml(ctx, task)}
       <div class="field"><span class="field-label">封面图片</span>
         ${coverPick()}
         <p class="field-hint">选填，PNG / JPEG / WebP，不超过 ${formatBytes(platform.site.limits.coverBytes)}。${platform.site.capture ? '提交后平台还会自动截取桌面与手机首屏，用作统一截图。' : '不上传时，展厅显示文字封面。'}</p>
       </div>
-      <label class="confirm"><input type="checkbox" name="attest" required><span>我确认作品由所选模型按本题提示词生成；如有人工修改，已在说明中写明。我有权提交该作品，并同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></label>
+      <label class="confirm"><input type="checkbox" name="attest" required><span>我确认作品由所选模型按本题提示词生成，人工介入情况如实填写。我有权提交该作品，并同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></label>
       <p class="form-error" role="alert"></p>
-      <div class="form-actions"><button class="btn primary" type="submit">${icon('upload')}提交作品</button><span class="fine">提交后为「未验证」，可以被浏览和贴表情；核验通过后进入盲评。</span></div>
+      <div class="form-actions"><button class="btn primary" type="submit">${icon('upload')}提交作品</button><span class="fine">${moderated() ? '提交后先做内容审核，通过后公开为「未验证」。' : '提交后公开为「未验证」，可以被浏览和贴表情。'}核验前可以在个人中心修改信息。</span></div>
     </form>`;
   }
 
   function done() {
     const w = state.work;
+    const pending = ['pending', 'review'].includes(w.moderation?.status);
     return `<section class="submit-done">
-      <p class="kicker"><span class="num">已提交</span><span>未验证</span></p>
-      <h2>「${esc(w.title)}」已经进入展厅</h2>
-      <p>现在所有人都可以浏览它、给它贴表情。管理员核验通过后，它会进入盲评并排在前面；如果核验存疑，你会在「个人中心」里看到原因，也可以随时删除它。</p>
-      <div class="actions"><a class="btn primary" href="#/${esc(w.task)}/${esc(w.id)}">在展厅中查看${icon('right')}</a><a class="btn" href="#/me">个人中心</a><button class="btn" data-act="another">再上传一件</button></div>
+      <p class="kicker"><span class="num">已提交</span><span>${pending ? '内容审核中' : '未验证'}</span></p>
+      <h2>「${esc(w.title)}」${pending ? '正在做内容审核' : '已经进入展厅'}</h2>
+      <p>${pending
+        ? '审核通常几分钟内完成。通过之前只有你能看到它，结果会显示在「个人中心 · 我的作品」。通过后它会出现在题目页，所有人都可以浏览、贴表情。'
+        : '现在所有人都可以浏览它、给它贴表情。'}管理员核对生成信息后会把它标为已验证并排在前面，是否加入盲评由管理员决定；如果核验存疑，你会在个人中心看到原因。核验之前，你可以随时修改作品信息或删除它。</p>
+      <div class="actions">${pending
+        ? `<a class="btn primary" href="#/me/works">查看审核进度${icon('right')}</a><a class="btn" href="${esc(w.scene)}" target="_blank" rel="noopener">预览作品${icon('arrow')}</a>`
+        : `<a class="btn primary" href="#/${esc(w.task)}/${esc(w.id)}">在展厅中查看${icon('right')}</a><a class="btn" href="#/me/works">我的作品</a>`}<button class="btn" data-act="another">再上传一件</button></div>
     </section>`;
   }
 
@@ -212,8 +185,9 @@ export function mount(root, ctx) {
           <div class="aside-block">
             <h3>之后会发生什么</h3>
             <ol class="timeline">
-              <li><b>未验证</b><span>提交后立即出现在题目页，可以被浏览、贴表情，暂不参与盲评。</span></li>
-              <li><b>已验证</b><span>管理员核对作品与生成信息后通过：进入盲评、计入榜单，并排在前面。</span></li>
+              ${moderated() ? '<li><b>内容审核</b><span>提交后先自动检查页面内容，通常几分钟。通过前只有你能看到。</span></li>' : ''}
+              <li><b>未验证</b><span>${moderated() ? '审核通过后' : '提交后立即'}出现在题目页，可以被浏览、贴表情；这时你仍可修改作品信息。</span></li>
+              <li><b>已验证</b><span>管理员核对作品与生成信息后通过，排在前面；由管理员决定是否加入盲评、计入榜单。</span></li>
               <li><b>存疑</b><span>无法核实时标记存疑并写明原因：作品保留作参考，不再接受互动；你可以删除它。</span></li>
             </ol>
           </div>
@@ -354,43 +328,21 @@ export function mount(root, ctx) {
   }
 
   async function submit(form) {
-    const error = $('.form-error', form);
-    const data = Object.fromEntries(new FormData(form));
-    const other = data.modelId === '__other';
+    const error = $('.form-error:not(.field-error)', form);
     error.textContent = '';
-    if (!data.title.trim()) return void (error.textContent = '请填写作品标题');
-    if (!data.modelId) return void (error.textContent = '请选择模型');
-    if (other && !data.modelName.trim()) return void (error.textContent = '请填写模型名称');
-    if (!data.harnessId || (data.harnessId === '__other' && !data.harnessOther.trim())) return void (error.textContent = '请选择或填写 Harness');
-    if (data.providerId === '__other' && !data.providerOther.trim()) return void (error.textContent = '请填写服务商');
+    const { body, error: problem } = readWorkFields(form, task);
+    if (!body) return void (error.textContent = problem);
     if (!form.attest.checked) return void (error.textContent = '请勾选确认生成信息真实');
-    const harnessOther = data.harnessOther?.trim();
-    const providerOther = data.providerOther?.trim();
-    const harnessName = data.harnessId === '__other' ? harnessOther : ctx.HARNESSES.get(data.harnessId).name;
     const button = $('[type="submit"]', form);
     button.disabled = true;
     try {
       const { work } = await api('works', {
         method: 'POST',
-        body: {
-          draftId: state.draft.id,
-          confirmed: true,
-          title: data.title,
-          summary: data.summary,
-          ...(other ? { modelName: data.modelName, vendor: data.vendor } : { modelId: data.modelId }),
-          effort: data.effort === '__other' ? data.effortOther : data.effort,
-          ...(data.harnessId === '__other' ? { harnessOther } : { harnessId: data.harnessId }),
-          ...(data.harnessVersion?.trim() ? { harnessVersion: data.harnessVersion.trim() } : {}),
-          ...(data.providerId === '__other' ? { providerOther } : data.providerId ? { providerId: data.providerId } : {}),
-          tool: harnessName,
-          note: data.note,
-          cover: state.cover,
-          trial: trialSummary(),
-        },
+        body: { ...body, draftId: state.draft.id, confirmed: true, cover: state.cover, trial: trialSummary() },
       });
       state.work = work;
       clearTimeout(state.timer);
-      toast('作品已提交，等待核验');
+      toast(['pending', 'review'].includes(work.moderation?.status) ? '作品已提交，正在做内容审核' : '作品已提交，等待核验');
       await refreshPlatform('upload');
       if (!active) return;
       draw();
@@ -399,6 +351,15 @@ export function mount(root, ctx) {
       error.textContent = e.message;
       button.disabled = false;
     }
+  }
+
+  // A draft survives leaving the page for its 24-hour lifetime; offer to pick it up again.
+  async function findDraft() {
+    if (!platform.user) return;
+    try {
+      const { draft } = await api(`drafts?task=${encodeURIComponent(task.id)}`);
+      if (active && draft && !state.draft && !state.uploading) { state.resumable = draft; draw(); }
+    } catch { /* an older API has no draft lookup */ }
   }
 
   root.onclick = (e) => {
@@ -415,8 +376,23 @@ export function mount(root, ctx) {
       fitTrial();
       return;
     }
+    const peek = e.target.closest('[data-peek]');
+    if (peek) {
+      state.peek = peek.dataset.peek;
+      $$('[data-peek]', root).forEach((b) => b.setAttribute('aria-pressed', String(b === peek)));
+      $('.prompt-peek pre', root).textContent = task.promptVariants.find((v) => v.id === state.peek).prompt;
+      return;
+    }
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'restart') restart();
+    if (act === 'resume') {
+      Object.assign(state, { draft: resolveApiMedia(state.resumable, 'draft'), resumable: null, error: '' });
+      startTrial();
+      draw();
+    } else if (act === 'drop-draft') {
+      api(`drafts/${state.resumable.id}`, { method: 'DELETE' }).catch(() => {});
+      state.resumable = null;
+      draw();
+    } else if (act === 'restart') restart();
     else if (act === 'another') restart();
     else if (act === 'reload') { startTrial(); drawTrial(); const frame = $('.trial iframe', root); frame.src = state.draft.preview; }
     else if (act === 'pick-cover') $('[data-cover-input]', root).click();
@@ -438,16 +414,12 @@ export function mount(root, ctx) {
       const three = $('[data-step="3"]', root);
       three.outerHTML = step(3, '作品信息', '核验时会对照这些信息', stepThree(), { locked: !state.confirmed });
       $('[data-step="2"]', root).classList.toggle('is-done', state.confirmed);
+      $$('.side-steps li', root).forEach((li, i) => (i === (state.confirmed ? 2 : 1) ? li.setAttribute('aria-current', 'step') : li.removeAttribute('aria-current')));
       if (state.confirmed) $('[data-step="3"]', root).scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-    if (e.target.name === 'modelId') $('[data-other-model]', root).hidden = e.target.value !== '__other';
-    if (e.target.name === 'effort') $('[data-other-effort]', root).hidden = e.target.value !== '__other';
-    if (e.target.name === 'harnessId') {
-      $('[data-other-harness]', root).hidden = e.target.value !== '__other';
-      $('[name="harnessVersion"]', root).disabled = !e.target.value;
-    }
-    if (e.target.name === 'providerId') $('[data-other-provider]', root).hidden = e.target.value !== '__other';
+    const form = e.target.closest('.submit-form');
+    if (form) onWorkFieldChange(form, e.target);
     if (e.target.matches('[data-cover-input]')) {
       const file = e.target.files[0];
       if (!file) return;
@@ -472,11 +444,12 @@ export function mount(root, ctx) {
   for (const type of ['dragover', 'dragleave', 'drop']) root.addEventListener(type, onDrag);
 
   draw();
+  findDraft();
   return {
     onPlatformChange(reason) {
       if (reason === 'upload') return;
       if (!platform.user) restart();
-      else draw();
+      else { draw(); findDraft(); }
     },
     destroy() {
       active = false;
@@ -487,7 +460,6 @@ export function mount(root, ctx) {
       for (const type of ['dragover', 'dragleave', 'drop']) root.removeEventListener(type, onDrag);
       root.onkeydown = null;
       root.onsubmit = null;
-      discard();
     },
   };
 }

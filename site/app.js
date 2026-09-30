@@ -1201,6 +1201,7 @@ function uploadResult(w) {
     harnessVersion: w.harnessVersion,
     provider: w.provider,
     providerName: w.providerName,
+    ...(w.promptVariant ? { promptVariant: w.promptVariant } : {}),
     note: w.note,
     title: w.title,
     summary: w.summary,

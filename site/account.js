@@ -1,6 +1,7 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
 import { api, avatarFace, codeSender, confirmDialog, openDialog, platform, refreshPlatform, requireUser, statusBadge, toast } from './platform.js';
+import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 
 const TABS = { unverified: '未验证', verified: '已验证', questioned: '存疑', log: '记录' };
 const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的题目' };
@@ -35,15 +36,28 @@ function reactionSummary(w) {
   return entries.length ? `<span class="reaction-sum">${entries.map(([emoji, n]) => `<span>${emoji}<b>${n}</b></span>`).join('')}</span>` : '';
 }
 
+// Content moderation runs before an upload goes public; only its author and admins see it.
+const MODERATION = {
+  pending: { label: '内容审核中', hint: '内容审核通过前只有你能看到这件作品，通常几分钟内完成。' },
+  review: { label: '等待人工复核', hint: '自动审核没能确定结果，管理员会人工复核；通过前只有你能看到。' },
+  rejected: { label: '内容未通过', hint: '内容审核未通过，作品不会公开。' },
+};
+const hiddenByModeration = (w) => Boolean(MODERATION[w.moderation?.status]);
+
 function workRow(ctx, w, { admin = false } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task);
   const model = ctx.MODELS.get(w.model) ?? { name: w.modelName };
+  const moderation = MODERATION[w.moderation?.status];
+  const variant = task?.promptVariants?.find((v) => v.id === w.promptVariant);
+  // A work still under moderation is missing from the public gallery; open its private preview.
+  const href = moderation ? esc(w.scene) : `#/${esc(w.task)}/${esc(w.id)}`;
   return `<article class="work-row" data-status="${w.status}">
     ${thumb(ctx, w, { link: false })}
     <div class="work-main">
-      <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(w.modelName)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}${statusBadge(w.status, { always: true, reason: w.reason })}</p>
-      <h3><a href="#/${esc(w.task)}/${esc(w.id)}">${esc(w.title)}</a></h3>
-      <p class="work-meta">${esc(task?.title ?? w.task)}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
+      <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(w.modelName)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}${moderation ? `<span class="status ${w.moderation.status === 'rejected' ? 'status-questioned' : 'status-unverified'}" title="${esc(moderation.hint)}">${icon(w.moderation.status === 'rejected' ? 'alert' : 'clock')}${moderation.label}</span>` : ''}${statusBadge(w.status, { always: true, reason: w.reason })}</p>
+      <h3><a href="${href}"${moderation ? ' target="_blank" rel="noopener"' : ''}>${esc(w.title)}</a></h3>
+      <p class="work-meta">${esc(task?.title ?? w.task)}${variant ? ` · ${esc(variant.label)}` : ''}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
+      ${moderation ? `<p class="result-reason">${icon(w.moderation.status === 'rejected' ? 'alert' : 'clock')}<span>${esc(w.moderation.status === 'rejected' && w.moderation.reason ? `${moderation.hint}原因：${w.moderation.reason}` : moderation.hint)}</span></p>` : ''}
       ${w.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(w.reason)}</span></p>` : ''}
     </div>
     <div class="work-side">
@@ -51,10 +65,45 @@ function workRow(ctx, w, { admin = false } = {}) {
       <div class="actions">
         ${admin
           ? `<button class="btn sm primary" data-review="${esc(w.id)}">审核</button>`
-          : `<button class="icon-btn" data-delete="${esc(w.id)}" title="删除作品" aria-label="删除「${esc(w.title)}」">${icon('trash')}</button>`}
+          : `${w.status === 'unverified' && task ? `<button class="btn sm" data-edit-work="${esc(w.id)}">编辑信息</button>` : ''}<button class="icon-btn" data-delete="${esc(w.id)}" title="删除作品" aria-label="删除「${esc(w.title)}」">${icon('trash')}</button>`}
       </div>
     </div>
   </article>`;
+}
+
+// Authors correct their own description until an admin has reviewed the work.
+function editWork(ctx, w) {
+  const task = ctx.DATA.tasks.find((t) => t.id === w.task);
+  const sheet = openDialog({
+    title: '编辑作品信息',
+    className: 'edit-work-sheet',
+    body: `<form class="submit-form" data-edit-form novalidate>
+      <p class="sheet-text">核验通过前可以修改。${platform.site.contentModeration ? '改动文字后会重新做内容审核，审核期间作品暂不公开。' : ''}</p>
+      ${workFieldsHtml(ctx, task, w)}
+      <p class="form-error" role="alert"></p>
+      <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit">保存</button></div>
+    </form>`,
+  });
+  const form = $('[data-edit-form]', sheet.el);
+  form.addEventListener('change', (e) => onWorkFieldChange(form, e.target));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const error = $('.form-error:not(.field-error)', form);
+    error.textContent = '';
+    const { body, error: problem } = readWorkFields(form, task);
+    if (!body) return void (error.textContent = problem);
+    const button = $('[type="submit"]', form);
+    button.disabled = true;
+    try {
+      await api(`works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}`, { method: 'PATCH', body });
+      sheet.close();
+      toast('作品信息已保存');
+      await refreshPlatform('edit');
+    } catch (err) {
+      error.textContent = err.message;
+      button.disabled = false;
+    }
+  });
 }
 
 async function removeWork(w, { admin }) {
@@ -292,7 +341,7 @@ function mine(root, ctx) {
     const body = !signedIn ? `<div class="notice submissions-login">${icon('user')}<p>登录后查看你发起的题目与上传的作品。</p><button class="btn primary sm" data-auth="login">登录 / 注册</button></div>`
       : tab === 'overview' ? profileOverview(state)
       : tab === 'works' ? `<section class="submission-section">${state.works === null ? `<p class="muted">${state.error ? '作品暂时未能载入。' : '正在载入作品…'}</p>` : works.length
-          ? `<p class="submission-summary">${works.length} 件作品 · ${count('unverified')} 件等待核验${count('questioned') ? ` · ${count('questioned')} 件存疑` : ''}</p><div class="work-list">${works.map((w) => workRow(ctx, w)).join('')}</div>`
+          ? `<p class="submission-summary">${works.length} 件作品${works.some(hiddenByModeration) ? ` · ${works.filter(hiddenByModeration).length} 件未通过或正在内容审核` : ''} · ${count('unverified')} 件等待核验${count('questioned') ? ` · ${count('questioned')} 件存疑` : ''}</p><div class="work-list">${works.map((w) => workRow(ctx, w)).join('')}</div>`
           : '<div class="submission-empty"><b>还没有上传作品</b><p>选一道题，上传你让模型生成的答案。</p><button class="btn sm" type="button" data-upload>上传作品</button></div>'}</section>`
       : `<section class="submission-section">${state.questions === null ? `<p class="muted">${state.error ? '题目暂时未能载入。' : '正在载入题目…'}</p>` : questions.length
           ? `<div class="submission-questions">${questions.map((question) => questionRow(ctx, question)).join('')}</div>`
@@ -340,6 +389,12 @@ function mine(root, ctx) {
     }
     if (e.target.closest('[data-upload]')) {
       if (await requireUser('登录后上传作品，并在这里跟进核验结果。')) pickTask(ctx);
+      return;
+    }
+    const editButton = e.target.closest('[data-edit-work]');
+    if (editButton) {
+      const work = state.works?.find((w) => w.id === editButton.dataset.editWork);
+      if (work) editWork(ctx, work);
       return;
     }
     const button = e.target.closest('[data-delete]');
