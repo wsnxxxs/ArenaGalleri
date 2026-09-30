@@ -12,7 +12,7 @@
 //   #/me · #/review           personal center · review queue (platform)
 //   #/terms · #/privacy       terms of use and disclaimer · privacy policy
 import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, store, syncThemeUi, themeButton } from './ui.js';
-import { STATUS, accountControl, api, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, statusBadge } from './platform.js';
+import { STATUS, accountControl, api, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, statusBadge } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { questionPreview } from './question-preview.js';
@@ -226,7 +226,7 @@ function renderLibrary() {
       </a>
       <div class="task-body">
         <div class="question-byline"><ul class="tag-line">${t.tags.slice(0, 3).map((g) => `<li>#${esc(g)}</li>`).join('')}${t.tags.length > 3 ? `<li class="tag-more" title="${esc(t.tags.slice(3).join(' · '))}">+${t.tags.length - 3}</li>` : ''}</ul>
-          <span class="avatar question-avatar" role="img" aria-label="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}" title="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}">${t.owner ? esc([...t.owner][0].toUpperCase()) : icon('user')}</span>
+          <span class="avatar question-avatar" role="img" aria-label="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}" title="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}">${t.owner ? avatarFace(t.ownerAvatar, t.owner) : icon('user')}</span>
         </div>
         <h3><a href="${taskHref(t)}">${esc(t.title)}</a></h3>
         <p class="summary">${esc(t.summary)}</p>

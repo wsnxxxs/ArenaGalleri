@@ -161,6 +161,21 @@ a { text-decoration: none; }
 .profile-name b { font: 600 20px/1.4 var(--sans); color: var(--ink); overflow-wrap: anywhere; }
 .profile-name .btn { min-height: 28px; font-size: 12px; color: var(--muted); }
 .avatar.profile-avatar { flex: none; width: 70px; height: 70px; font: 500 29px var(--serif); color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+/* Library avatars carry their own round backdrop. */
+.avatar:has(> img), .avatar.profile-avatar:has(> img) { overflow: hidden; background: none; border-color: transparent; }
+.avatar > img { display: block; width: 100%; height: 100%; }
+button.avatar.profile-avatar { position: relative; padding: 0; cursor: pointer; }
+button.avatar.profile-avatar:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.avatar-change { position: absolute; inset: auto 0 0; padding: 4px 0 7px; background: rgb(18 18 17 / 62%); color: #ecebe6; font: 500 11px/1 var(--sans); letter-spacing: 0.1em; text-align: center; opacity: 0; transition: opacity 0.2s; }
+.profile-avatar:hover .avatar-change, .profile-avatar:focus-visible .avatar-change { opacity: 1; }
+@media (hover: none) { .avatar-change { opacity: 1; } }
+dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
+.avatar-picks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.avatar-pick { aspect-ratio: 1; padding: 3px; border: 2px solid transparent; border-radius: 50%; background: none; cursor: pointer; transition: border-color 0.15s, transform 0.2s var(--ease); }
+.avatar-pick img { display: block; width: 100%; height: 100%; }
+.avatar-pick:hover { transform: translateY(-2px); }
+.avatar-pick[aria-pressed="true"] { border-color: var(--accent); }
+.avatar-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .profile-form { width: 370px; max-width: 100%; min-width: 0; }
 .profile-form .field-label { font-size: 11px; margin-bottom: 6px; }
 .profile-name-row { display: flex; gap: 8px; }

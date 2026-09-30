@@ -1,6 +1,6 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
-import { api, codeSender, confirmDialog, openDialog, platform, refreshPlatform, requireUser, statusBadge, toast } from './platform.js';
+import { api, avatarFace, codeSender, confirmDialog, openDialog, platform, refreshPlatform, requireUser, statusBadge, toast } from './platform.js';
 
 const TABS = { unverified: '未验证', verified: '已验证', questioned: '存疑', log: '记录' };
 const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的题目' };
@@ -127,7 +127,9 @@ function profileOverview(state) {
   const activity = state.activity;
   const received = state.receivedReactions;
   return `<section class="profile-settings" aria-label="个人资料">
-    <span class="avatar profile-avatar" role="img" aria-label="${esc(name)}的头像">${esc([...name][0].toUpperCase())}</span>
+    ${platform.site?.avatars?.length
+      ? `<button class="avatar profile-avatar" type="button" data-edit-avatar aria-label="更换头像" title="更换头像">${avatarFace(user.avatar, name)}<span class="avatar-change" aria-hidden="true">更换</span></button>`
+      : `<span class="avatar profile-avatar" role="img" aria-label="${esc(name)}的头像">${avatarFace(user.avatar, name)}</span>`}
     <div class="profile-main">${state.editing ? `<form class="profile-form" data-profile-form>
         <label class="field-label" for="profile-nickname">昵称</label>
         <div class="profile-name-row"><input class="input" id="profile-nickname" name="nickname" value="${esc(name)}" required maxlength="24" autocomplete="nickname"><button class="btn primary" type="submit">保存</button><button class="btn" type="button" data-edit-cancel>取消</button></div>
@@ -152,6 +154,47 @@ function profileOverview(state) {
     <div><h2 id="received-title">获得的表情</h2><p>作品收到了 <b>${received ? received.total : '—'}</b> 个回应</p></div>
     <div class="received-emojis">${platform.site.emojis.map((emoji) => `<div class="received-emoji"><span>${emoji}</span><b>${received ? received.counts[emoji] ?? 0 : '—'}</b></div>`).join('')}</div>
   </section>`;
+}
+
+const AVATAR_NAMES = { teapot: '茶壶', bunny: '兔子', cube: '立方体', cursor: '光标', ghost: '小幽灵', donut: '甜甜圈', brackets: '代码括号', frame: '画框',
+  seal: '印章', moon: '月亮', robot: '机器人', cat: '猫', plant: '盆栽', bulb: '灯泡', dice: '骰子', planet: '行星' };
+
+// The avatar library opens from the profile picture; a pick is saved to the account.
+function pickAvatar() {
+  let chosen = platform.user.avatar;
+  const sheet = openDialog({
+    title: '更换头像',
+    className: 'avatar-sheet',
+    body: `<p class="sheet-text">从展馆的小住客里挑一位，它会代替你出现在菜单、个人中心和你发起的题目上。</p>
+      <div class="avatar-picks">${platform.site.avatars.map((id) => `<button class="avatar-pick" type="button" data-avatar="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(AVATAR_NAMES[id] ?? id)}" title="${esc(AVATAR_NAMES[id] ?? id)}">${avatarFace(id)}</button>`).join('')}</div>
+      <p class="form-error" data-avatar-error role="alert" hidden></p>
+      <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="button" data-avatar-save>使用这个头像</button></div>`,
+  });
+  sheet.el.addEventListener('click', async (e) => {
+    const pick = e.target.closest('[data-avatar]');
+    if (pick) {
+      chosen = pick.dataset.avatar;
+      $$('[data-avatar]', sheet.el).forEach((button) => button.setAttribute('aria-pressed', String(button === pick)));
+      return;
+    }
+    const save = e.target.closest('[data-avatar-save]');
+    if (!save) return;
+    if (chosen === platform.user?.avatar) return sheet.close();
+    save.disabled = true;
+    save.textContent = '保存中…';
+    try {
+      await api('me', { method: 'PATCH', body: { avatar: chosen } });
+      sheet.close();
+      await refreshPlatform('profile');
+      toast('头像已更换');
+    } catch (error) {
+      const line = $('[data-avatar-error]', sheet.el);
+      line.textContent = error.message;
+      line.hidden = false;
+      save.disabled = false;
+      save.textContent = '使用这个头像';
+    }
+  });
 }
 
 // a***@example.com: the profile only shows a masked address.
@@ -286,6 +329,7 @@ function mine(root, ctx) {
     }
   };
   root.onclick = async (e) => {
+    if (e.target.closest('[data-edit-avatar]')) return pickAvatar();
     if (e.target.closest('[data-bind="email"]')) return bindEmail(load);
     const edit = e.target.closest('[data-edit-name], [data-edit-cancel]');
     if (edit) {
