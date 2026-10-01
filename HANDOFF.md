@@ -7,7 +7,8 @@
 - 浏览器验收发现盲评分支仍从 `leaderboard.js` 引用已迁移的 `tracksOf`，现改为 `categories.js`；重新载入作品后即时刷新投票门槛，规则同步说明绑定邮箱的计票条件。题目分类、邮箱门槛、页脚版本删除与配对预览均保留。
 - 现有源码 check 42/0、test 14/14；使用合并后的本地数据包 build 182 件 / 56 个 site 文件、严格 CI intake 0 错 / 9 条既有提示，跨仓真实隔离 integration smoke 通过。之前 121 张海报过期的缓存错误在匹配当前数据包后消失。
 - 本轮本地真实 API 的盲评大厅加载、文学筛选、搜索空状态和 1280px / 390px 截图目检通过，无横向溢出或控制台错误；浏览器使用独立空数据库，没有验证真实作品对战、投票、SMTP / Cloudflare 或生产交互。截图和测试数据库在忽略的 housekeeping 输出目录。
-- 四个已合并的 Gallery 次级工作树，在推送确认后清理；配置、截图、邮箱测试 SQLite/WAL/SHM 和预览本地数据包已逐文件校验归档。生产固定包未变，未来部署前仍需先升级消费者 pin 并重新按发布流程验收。当前归档：[repository-housekeeping](docs/archive/2026-10-01-repository-housekeeping-wsnxxxs.md)。下面“未合并 / 未推送 / 待确认”均为历史轮次状态。
+- Gallery 功能源码 `4fd619e` 已推送且 GitHub CI 成功。已删除 UI、oct01 预览、旧共享题库三个工作树及对应已合并本地分支；邮箱工作树及分支干净且已进入 main，但自动审批以 `blocked by policy` 拒绝依赖 junction 删除，因此保留，主目录依赖未受影响。
+- 四个工作树的配置、截图、邮箱测试 SQLite/WAL/SHM 和预览本地数据包已逐文件校验归档。生产固定包未变，未来部署前仍需先升级消费者 pin 并重新按发布流程验收。当前归档：[repository-housekeeping](docs/archive/2026-10-01-repository-housekeeping-wsnxxxs.md)。下面“未合并 / 未推送 / 待确认”均为历史轮次状态。
 
 ## 本轮：去掉页脚「版本」诊断（2026-10-01，已本地提交，未推送、未部署）
 
