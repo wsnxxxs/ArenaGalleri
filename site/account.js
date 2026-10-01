@@ -1,6 +1,6 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
-import { api, avatarFace, codeSender, confirmDialog, moderationBadge, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, statusBadge, toast } from './platform.js';
+import { api, avatarFace, confirmDialog, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { CATEGORIES, tagsOf } from './categories.js';
 
@@ -227,9 +227,9 @@ function profileOverview(state) {
     </div><button class="link profile-logout" type="button" data-logout>退出登录</button>
   </section>
   <section class="profile-bindings" aria-labelledby="bindings-title">
-    <div class="profile-section-head"><h2 id="bindings-title">账号绑定</h2><p>用于找回密码与账号安全验证</p></div>
+    <div class="profile-section-head"><h2 id="bindings-title">账号绑定</h2><p>注册时绑定，用于找回密码与账号安全验证，可随时更换</p></div>
     <div class="binding-list">
-      <div class="binding-row"><span class="binding-icon">${icon('mail')}</span><div class="binding-main"><b>邮箱</b><span>${state.email === undefined ? '正在载入…' : state.email ? esc(maskEmail(state.email)) : '未绑定'}</span></div>
+      <div class="binding-row"><span class="binding-icon">${icon('mail')}</span><div class="binding-main"><b>邮箱</b><span>${state.email === undefined ? '正在载入…' : state.email ? esc(maskEmail(state.email)) : '未绑定 · 绑定后才能上传、发起题目和投票'}</span></div>
         <button class="btn sm" type="button" data-bind="email"${state.email === undefined ? ' disabled' : ''}>${state.email ? '更换' : '绑定'}</button></div>
     </div>
   </section>
@@ -290,46 +290,6 @@ const maskEmail = (email) => {
   const at = email.indexOf('@');
   return at <= 0 ? email : `${email.slice(0, Math.min(2, at))}***${email.slice(at)}`;
 };
-
-// Account binding, email method: a code sent to the address confirms it.
-function bindEmail(onBound) {
-  const sheet = openDialog({
-    title: '账号绑定 · 邮箱',
-    className: 'auth-sheet code-sheet',
-    body: `<form class="auth-form" novalidate>
-      <p class="sheet-text">绑定后可用于找回密码。验证码 10 分钟内有效。</p>
-      <label class="field"><span class="field-label">邮箱</span><span class="code-row"><input class="input" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" required><button class="btn" type="button" data-send>发送验证码</button></span></label>
-      <div class="auth-turnstile" hidden></div>
-      <p class="auth-turnstile-status" role="status"></p>
-      <label class="field"><span class="field-label">验证码</span><input class="input" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字" required></label>
-      <p class="form-error" role="alert"></p>
-      <p class="code-notice" role="status"></p>
-      <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit">确认绑定</button></div>
-    </form>`,
-  });
-  const form = $('form', sheet.el);
-  const errorLine = $('.form-error', form);
-  codeSender(sheet, form, async (token) => {
-    const data = await api('auth/email/send', { method: 'POST', body: { purpose: 'bind', email: form.email.value.trim(), turnstileToken: token } });
-    return `验证码已发送至 ${data.email}。`;
-  });
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const submit = $('[type="submit"]', form);
-    errorLine.textContent = '';
-    submit.disabled = true;
-    try {
-      await api('auth/email/bind', { method: 'POST', body: { email: form.email.value.trim(), code: form.code.value.trim() } });
-      sheet.close();
-      toast('账号绑定成功');
-      onBound();
-    } catch (error) {
-      errorLine.textContent = error.message;
-      submit.disabled = false;
-    }
-  });
-  setTimeout(() => form.email.focus());
-}
 
 // Uploads always belong to a question, so the personal center asks which one first.
 function pickTask(ctx) {
@@ -418,7 +378,7 @@ function mine(root, ctx) {
   };
   root.onclick = async (e) => {
     if (e.target.closest('[data-edit-avatar]')) return pickAvatar();
-    if (e.target.closest('[data-bind="email"]')) return bindEmail(load);
+    if (e.target.closest('[data-bind="email"]')) return openBindEmail({ change: Boolean(state.email) });
     const edit = e.target.closest('[data-edit-name], [data-edit-cancel]');
     if (edit) {
       state.editing = edit.matches('[data-edit-name]');

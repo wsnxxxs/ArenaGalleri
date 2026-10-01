@@ -56,7 +56,8 @@ try {
   content = createServer((req, res) => platform.handleContent(req, res));
   await listen(content);
   config.contentTemplate = `http://{token}.localhost:${content.address().port}`;
-  platform = createPlatform({ config, limits });
+  const mails = [];
+  platform = createPlatform({ config, limits, mailer: { ready: () => true, send: async (mail) => { mails.push(mail); } } });
   site = createServer(platform.handleSite);
   await listen(site);
   const base = `http://127.0.0.1:${site.address().port}`;
@@ -80,7 +81,24 @@ try {
   assert.equal(compatibleBuild({ datapack: packageCommit, catalogDigest }, boot.data), true);
   assert.equal(resolveApiMedia(boot.data, 'bootstrap').questions.length, 0);
 
-  const login = await call('auth/register', { method: 'POST', body: { name: 'smoke-user', password: 'correct horse' } });
+  // Registration binds an email: the code is sent first, then spent on the new account.
+  const register = async (name) => {
+    const email = `${name}@example.test`;
+    const sent = await call('auth/email/send', { method: 'POST', body: { purpose: 'register', email } });
+    assert.equal(sent.status, 200, JSON.stringify(sent.data));
+    assert.deepEqual(sent.data, { sent: true, email });
+    const code = mails.findLast((mail) => mail.to === email && mail.purpose === 'register')?.code;
+    assert.ok(code, 'registration code not delivered');
+    const registered = await call('auth/register', { method: 'POST', body: { name, password: 'correct horse', email, code } });
+    assert.equal(registered.status, 200, JSON.stringify(registered.data));
+    const session = registered.headers.get('set-cookie')?.split(';')[0];
+    assert.ok(session, 'session cookie missing');
+    const sessionBoot = await call('bootstrap', { cookie: session });
+    assert.equal(sessionBoot.status, 200);
+    assert.equal(sessionBoot.data.user.emailBound, true);
+    return registered;
+  };
+  const login = await register('smoke-user');
   assert.equal(login.status, 200);
   const cookie = login.headers.get('set-cookie')?.split(';')[0];
   assert.ok(cookie, 'session cookie missing');
@@ -160,7 +178,7 @@ try {
   assert.equal(vote.data.counted, true);
   const revealed = resolveApiMedia(vote.data, 'reveal');
   assert.ok(revealed.a?.title && revealed.b?.title);
-  const secondLogin = await call('auth/register', { method: 'POST', body: { name: 'stale-user', password: 'correct horse' } });
+  const secondLogin = await register('stale-user');
   assert.equal(secondLogin.status, 200);
   const secondCookie = secondLogin.headers.get('set-cookie')?.split(';')[0];
   const mismatch = await call('arena/matches', { method: 'POST', cookie: secondCookie, version: 'f'.repeat(40), body: { task: task.id } });

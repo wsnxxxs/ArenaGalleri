@@ -2,7 +2,7 @@
 // platform sandbox → 03 describe the work and submit. The staged draft runs from its own
 // origin with a small probe that reports load time, errors and blocked requests.
 import { $, $$, esc, formatBytes, formatTime, icon } from './ui.js';
-import { api, platform, refreshPlatform, toast } from './platform.js';
+import { api, needsEmail, platform, refreshPlatform, toast } from './platform.js';
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { TEMPLATE_LABELS, templatesOf } from './categories.js';
@@ -63,6 +63,9 @@ export function uploadFlow(root, ctx, options) {
     const taskLabel = options.lead ? '' : `<div class="upload-task"><span>当前题目 · 固定关联</span><a href="${ctx.taskHref(task)}">${esc(task.title)}${icon('arrow')}</a></div>`;
     if (!platform.user) {
       return `<div class="step-body">${taskLabel}<div class="notice">${icon('user')}<p>登录后上传到这道题，并在「个人中心」里跟进核验结果。</p><button class="btn primary sm" data-auth="login">登录 / 注册</button></div></div>`;
+    }
+    if (needsEmail()) {
+      return `<div class="step-body">${taskLabel}<div class="notice">${icon('mail')}<p>账号需要先绑定邮箱，才能上传作品。</p><button class="btn primary sm" data-bind-email>绑定邮箱</button></div></div>`;
     }
     if (state.draft) {
       const d = state.draft;

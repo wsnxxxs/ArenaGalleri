@@ -2,7 +2,7 @@
 // The server picks every pair and hands out opaque frame addresses; nothing on this page
 // knows which work is which until the vote comes back with the reveal.
 import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
-import { api, platform, reactionBar, toast } from './platform.js';
+import { api, needsEmail, platform, reactionBar, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
@@ -10,6 +10,7 @@ const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认
 const REASON = {
   counted: '已计入榜单',
   anonymous: '未登录，这一票没有计入榜单',
+  unbound: '账号未绑定邮箱，这一票没有计入榜单',
   duplicate: '这一对作品你评过了，这次不重复计入',
   changed: '作品的核验状态刚刚变化，这一票没有计入',
   own: '其中有你上传的作品，不计入',
@@ -133,6 +134,7 @@ function match(root, ctx, task) {
       return state.slow ? `载入较慢（${parts}）：可以继续等待，或跳过这一组` : `等待两件作品载入 · ${parts}`;
     }
     if (mobile() && !(state.seen.a && state.seen.b)) return `请先切换到作品 ${state.seen.a ? 'B' : 'A'} 看一看`;
+    if (needsEmail()) return '账号未绑定邮箱：可以体验，但这一组的选择不会计入榜单';
     return platform.user ? '体验过两件作品后，选出你更认可的一件' : '未登录：可以体验，但这一组的选择不会计入榜单';
   }
 
@@ -145,7 +147,7 @@ function match(root, ctx, task) {
     if (state.result) {
       const { choice, counted, reason } = state.result;
       bar.innerHTML = `<div class="vote-in is-result">
-        <p class="vote-verdict"><b>${VERDICT[choice]}</b><span>${REASON[counted ? 'counted' : reason] ?? ''}${state.counted ? ` · 本次已计入 ${state.counted} 组` : ''}${!counted && reason === 'anonymous' ? ' <button class="link" data-auth="login">登录</button>' : ''}</span></p>
+        <p class="vote-verdict"><b>${VERDICT[choice]}</b><span>${REASON[counted ? 'counted' : reason] ?? ''}${state.counted ? ` · 本次已计入 ${state.counted} 组` : ''}${!counted && reason === 'anonymous' ? ' <button class="link" data-auth="login">登录</button>' : ''}${!counted && reason === 'unbound' ? ' <button class="link" data-bind-email>绑定邮箱</button>' : ''}</span></p>
         <div class="vote-actions"><a class="btn" href="#/leaderboard/${esc(task.id)}">${icon('rank')}查看榜单</a><button class="btn primary" data-a="next">下一组<kbd>N</kbd></button></div>
       </div>`;
       return;
@@ -153,7 +155,7 @@ function match(root, ctx, task) {
     const ready = canVote();
     const disabled = ready && !state.busy ? '' : ' disabled';
     bar.innerHTML = `<div class="vote-in">
-      <p class="vote-status">${status()}${!platform.user && state.match ? ' <button class="link" data-auth="login">登录</button>' : ''}</p>
+      <p class="vote-status">${status()}${!platform.user && state.match ? ' <button class="link" data-auth="login">登录</button>' : ''}${needsEmail() && state.match ? ' <button class="link" data-bind-email>绑定邮箱</button>' : ''}</p>
       <div class="vote-actions">
         <button class="btn vote" data-vote="a"${disabled}><kbd>A</kbd>A 更好</button>
         <button class="btn vote vote-tie" data-vote="tie"${disabled}><kbd>S</kbd>不分伯仲</button>

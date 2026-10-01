@@ -5,6 +5,17 @@
 - 访客用不到页脚右侧的「版本」折叠项，它还会暴露部署信息，所以删掉了：`site/app.js` 的 `buildVersion`/`shortSha` 和调用、`site/style.css` 的 `.build-info`、`docs/DESIGN.md` 的对应条目。`DATA.buildInfo` 保留，写请求版本校验仍在用。`platform.serverVersion` 不再显示；`platform.js` 有他人未提交改动，这次没动。
 - 本轮重新运行 check：42 个文件、0 错误；test：14/14 通过。提交范围仅含三处删除及本轮记录，其他未提交改动保留。未运行 build、intake，未做浏览器目检，本轮仅核对和提交现有修改。归档：[footer-version-removal](docs/archive/2026-10-01-footer-version-removal-wsnxxxs.md)。
 
+## 本轮：注册时强制绑定邮箱（2026-10-01，分支 `register-email-binding`，已本地提交，未推送、未部署）
+
+- 前端：注册表单增加邮箱和验证码。Turnstile 前移到「发送验证码」(`purpose: 'register'`)，注册请求改为发送 `{ name, password, email, code }`，不再携带 turnstileToken。绑定弹窗移到 `platform.js` 的 `openBindEmail`，个人中心用它换绑（标题和按钮按「更换」区分）。
+- 门槛：`requireUser` 遇到 `user.emailBound === false` 的旧账号，先弹出绑定，绑定后才继续发起题目、上传或贴表情。上传第一步对未绑定账号显示绑定提示；双盲提示「未绑定邮箱不计入」，新增 `reason: 'unbound'` 文案。浏览不需要登录，这点不变。隐私政策同步写明注册收集邮箱，日期改为 10-01。
+- 收尾修复：发码前挑战配置加载失败时停止发送；注册、登录和绑定成功先更新本地绑定状态，避免后续 bootstrap 刷新失败让旧账号继续卡在绑定门槛。PRODUCT 同步产品行为。
+- 依赖共享后端本地提交 `55e3288`：register 发码与事务注册、会话 `emailBound`、旧账号写操作 403 `email_required`、投票 `unbound`；Show1 两个兼容接口也已限制。Show1 前端本地提交 `f1a7d0e` 已补齐注册、未计票绑定入口、表态门禁与被拒队列清理。两站与后端需配套发布，新注册前端不能搭配旧后端。
+- `scripts/integration-smoke.mjs` 注入仅在进程内捕获邮件的测试 mailer，两账号均先发码再注册，并断言发码响应、会话 cookie 与 bootstrap `emailBound: true`；不增加公开读取验证码的接口。原共享目录的忽略配置 pin 与缓存 sourceCommit 不一致，已在独立 worktree 的配置副本中对齐；原配置与原目录七个未提交文件均保留。
+- 验证：check 42/0、test 14/14、`npm run build` 121 件 + 56 site 文件通过；对后端 `55e3288` 的完整 integration smoke 通过。CI intake 仍为 121 个海报指纹过期错误 / 4 条既有提示，属于现有缓存包与渲染版本不一致，发布前需升级对应数据包。
+- 本地真实浏览器通过注册发码与提交（无注册 Turnstile token）、旧账号上传前绑定、绑定后 bootstrap 503 时恢复上传入口、挑战配置 503 时不发送验证码；注册页截图目检通过。未验证 Gallery 手机端、真实 SMTP/Cloudflare 或生产写操作。归档：[register-email-binding](docs/archive/2026-10-01-register-email-binding-wsnxxxs.md)。
+- 本轮在独立 worktree 完成，共享目录仍在 main，未切分支、清理原未提交文件或改动 `.claude/`。用户只授权本地提交，未推送、未部署。
+
 ## 本轮：题目分类与按分类的提交格式（2026-10-01，已本地提交，未推送、未部署）
 
 - 联调后修复：审核对话框保存成功即刷新列表；后端 `e81cb4e` 去掉文本投稿的 README 检查项，均已复测。上线顺序：Gallery 与后端（`14a0dbf`、`e81cb4e`）、数据仓（`a2f8f95`）推送 → 发布数据包并升级两端 pin → 前后端一起部署，均待用户授权。

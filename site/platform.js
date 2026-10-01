@@ -171,22 +171,14 @@ export function confirmDialog({ title, message, confirm = '确认', danger = fal
 // ---- accounts -----------------------------------------------------------------------------
 // The "send code" button of an email-code form: Turnstile when the API enables it (its token is
 // single-use, so it resets after each send) and a 60-second cooldown. request(token) sends the
-// code and returns the notice to show.
-export function codeSender(sheet, form, request) {
-  let widget = null;
+// code and returns the notice to show. widgetFor() resolves the challenge; by default the form
+// mounts its own.
+export function codeSender(sheet, form, request, widgetFor = formWidget(sheet, form)) {
   let countdown = 0;
   let timer = null;
   const send = $('[data-send]', form);
   const errorLine = $('.form-error', form);
   const notice = $('.code-notice', form);
-  const challenge = $('.auth-turnstile', form);
-  const ready = api('auth/turnstile').then(async ({ siteKey }) => {
-    if (!siteKey || !sheet.el.open) return;
-    await loadTurnstile();
-    if (!sheet.el.open) return;
-    challenge.hidden = false;
-    widget = mountTurnstile(challenge, siteKey, (message) => { $('.auth-turnstile-status', form).textContent = message; });
-  }).catch((error) => { errorLine.textContent = error.message; });
   const tick = () => {
     send.disabled = countdown > 0;
     send.textContent = countdown > 0 ? `${countdown} 秒后重发` : '发送验证码';
@@ -196,10 +188,11 @@ export function codeSender(sheet, form, request) {
     send.disabled = true;
     errorLine.textContent = '';
     notice.textContent = '';
-    await ready;
-    if (!sheet.el.open) return;
-    if (widget && !widget.token) { errorLine.textContent = '请先完成人机验证。'; send.disabled = false; return; }
+    let widget = null;
     try {
+      widget = await widgetFor();
+      if (!sheet.el.open) return;
+      if (widget && !widget.token) { errorLine.textContent = '请先完成人机验证。'; send.disabled = false; return; }
       notice.textContent = await request(widget?.token);
       countdown = 60;
       tick();
@@ -212,8 +205,77 @@ export function codeSender(sheet, form, request) {
       widget?.reset();
     }
   });
-  sheet.el.addEventListener('close', () => { widget?.remove(); clearInterval(timer); });
+  sheet.el.addEventListener('close', () => clearInterval(timer));
 }
+
+function formWidget(sheet, form) {
+  let widget = null;
+  const challenge = $('.auth-turnstile', form);
+  const ready = api('auth/turnstile').then(async ({ siteKey }) => {
+    if (!siteKey || !sheet.el.open) return null;
+    await loadTurnstile();
+    if (!sheet.el.open) return null;
+    challenge.hidden = false;
+    widget = mountTurnstile(challenge, siteKey, (message) => { $('.auth-turnstile-status', form).textContent = message; });
+    return widget;
+  });
+  ready.catch((error) => { $('.form-error', form).textContent = error.message; });
+  sheet.el.addEventListener('close', () => widget?.remove());
+  return () => ready;
+}
+
+const EMAIL_FIELD = `<label class="field"><span class="field-label">邮箱</span><span class="code-row"><input class="input" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254"><button class="btn" type="button" data-send>发送验证码</button></span></label>`;
+const CODE_FIELD = `<label class="field"><span class="field-label">验证码</span><input class="input" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字"></label>`;
+
+// Accounts bind an email when they register; this sheet changes it, or binds one for an account
+// made before that. Resolves true once the address is bound.
+export function openBindEmail({ change = false, reason = '' } = {}) {
+  return new Promise((resolve) => {
+    let bound = false;
+    const sheet = openDialog({
+      title: change ? '更换绑定邮箱' : '绑定邮箱',
+      className: 'auth-sheet code-sheet',
+      onClose: () => resolve(bound),
+      body: `<form class="auth-form" novalidate>
+        <p class="sheet-text">${esc(reason || (change ? '验证新邮箱后，原邮箱自动解除绑定。' : '邮箱用于找回密码与账号安全验证。'))}验证码 10 分钟内有效。</p>
+        ${EMAIL_FIELD}
+        <div class="auth-turnstile" hidden></div>
+        <p class="auth-turnstile-status" role="status"></p>
+        ${CODE_FIELD}
+        <p class="form-error" role="alert"></p>
+        <p class="code-notice" role="status"></p>
+        <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit">${change ? '确认更换' : '确认绑定'}</button></div>
+      </form>`,
+    });
+    const form = $('form', sheet.el);
+    const errorLine = $('.form-error', form);
+    codeSender(sheet, form, async (token) => {
+      const data = await api('auth/email/send', { method: 'POST', body: { purpose: 'bind', email: form.email.value.trim(), turnstileToken: token } });
+      return `验证码已发送至 ${data.email}。`;
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submit = $('[type="submit"]', form);
+      errorLine.textContent = '';
+      submit.disabled = true;
+      try {
+        const result = await api('auth/email/bind', { method: 'POST', body: { email: form.email.value.trim(), code: form.code.value.trim() } });
+        platform.user = { ...platform.user, emailBound: Boolean(result.user.email) };
+        bound = true;
+        await refreshPlatform('profile');
+        sheet.close();
+        toast(change ? '绑定邮箱已更换' : '邮箱绑定成功');
+      } catch (error) {
+        errorLine.textContent = error.message;
+        submit.disabled = false;
+      }
+    });
+    setTimeout(() => form.email.focus());
+  });
+}
+
+// Accounts made before registration required an email have none; the session says so.
+export const needsEmail = () => platform.user?.emailBound === false;
 
 // Password recovery in two steps: the emailed code is checked first, then spent on the new
 // password. The server answers the same whether or not the account has an email.
@@ -302,9 +364,12 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
         <label class="field"><span class="field-label">用户名</span><input class="input" name="name" autocomplete="username" maxlength="24" required></label>
         <label class="field"><span class="field-label">密码</span><input class="input" name="password" type="password" maxlength="128" required></label>
         <button class="auth-forgot" type="button" data-forgot>忘记密码？</button>
+        <div data-register hidden>${EMAIL_FIELD}</div>
         <div class="auth-turnstile" hidden></div>
         <p class="auth-turnstile-status" role="status"></p>
+        <div data-register hidden>${CODE_FIELD}</div>
         <p class="form-error" role="alert"></p>
+        <p class="code-notice" role="status"></p>
         <p class="auth-legal" hidden>注册即表示你已阅读并同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a></p>
         <button class="btn primary full" type="submit"></button>
         <p class="auth-switch"><span></span><button type="button" data-switch></button></p>
@@ -347,6 +412,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       $('[data-switch]', form).textContent = login ? '注册' : '登录';
       $('.auth-legal', form).hidden = login;
       $('[data-forgot]', form).hidden = !login;
+      $$('[data-register]', form).forEach((el) => { el.hidden = login; });
       $('.form-error', form).textContent = '';
       if (!login) {
         const generation = widgetGeneration + 1;
@@ -356,6 +422,12 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       }
     };
     setMode(mode);
+    // Registration binds the email up front: the challenge guards the code, and the code
+    // proves the address when the account is created.
+    codeSender(sheet, form, async (token) => {
+      const data = await api('auth/email/send', { method: 'POST', body: { purpose: 'register', email: form.email.value.trim(), turnstileToken: token } });
+      return `验证码已发送至 ${data.email}。`;
+    }, () => widgetTask ?? prepareWidget());
     $('[data-switch]', form).addEventListener('click', () => { setMode(mode === 'login' ? 'register' : 'login'); form.name.focus(); });
     // Recovery opens above the sign-in sheet and hands the account back to it.
     $('[data-forgot]', form).addEventListener('click', async () => {
@@ -373,21 +445,21 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       submit.disabled = true;
       switchButton.disabled = true;
       try {
-        const challengeWidget = mode === 'register' ? await (widgetTask ?? prepareWidget()) : null;
-        if (!sheet.el.open) return;
-        if (challengeWidget && !challengeWidget.token) {
-          throw new Error('请先完成人机验证，再注册账号。');
-        }
         const body = { name: form.name.value, password: form.password.value };
-        if (challengeWidget) body.turnstileToken = challengeWidget.token;
+        if (mode === 'register') {
+          Object.assign(body, { email: form.email.value.trim(), code: form.code.value.trim() });
+          if (!body.email) throw new Error('请填写邮箱，注册需要绑定邮箱。');
+          if (!body.code) throw new Error('请先发送并填写邮箱验证码。');
+        }
         const result = await api(`auth/${mode}`, { method: 'POST', body });
         user = result.user;
+        platform.user = { ...user, emailBound: Boolean(user.email) };
         await refreshPlatform('session');
         sheet.close();
-        toast(mode === 'login' ? `欢迎回来，${user.nickname || user.name}` : `账号已创建，欢迎你，${user.nickname || user.name}`);
+        toast(mode === 'register' ? `账号已创建，欢迎你，${user.nickname || user.name}`
+          : needsEmail() ? '欢迎回来。账号还未绑定邮箱，上传和投票前需要先绑定' : `欢迎回来，${user.nickname || user.name}`);
       } catch (error) {
         $('.form-error', form).textContent = error.message;
-        if (mode === 'register' && widget?.token) widget.reset();
         submit.disabled = false;
         switchButton.disabled = false;
       }
@@ -396,9 +468,11 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
   });
 }
 
+// Uploading, publishing, voting and reactions need an account with a bound email.
 export async function requireUser(reason) {
-  if (platform.user) return platform.user;
-  return openAuth({ reason });
+  const user = platform.user ?? await openAuth({ reason });
+  if (!user || !needsEmail()) return user;
+  return (await openBindEmail({ reason: '账号需要先绑定邮箱，才能上传、发起题目和投票。' })) ? platform.user : null;
 }
 
 async function logout() {
@@ -526,6 +600,7 @@ document.addEventListener('click', (e) => {
   }
   const auth = e.target.closest('[data-auth]');
   if (auth) { closeMenus(); openAuth({ mode: auth.dataset.auth }); return; }
+  if (e.target.closest('[data-bind-email]')) { closeMenus(); openBindEmail(); return; }
   // Signed out, the personal center has nothing to show yet: sign in first, then open it.
   if (!platform.user && platform.available && e.target.closest('a[href="#/me"]')) {
     e.preventDefault();
