@@ -3,14 +3,9 @@
 import { $, $$, byName, esc, icon } from './ui.js';
 import { platform } from './platform.js';
 
-const HARNESS_KINDS = [
-  ['cli-agent', '命令行智能体'], ['ide', 'IDE'], ['desktop-app', '桌面应用'],
-  ['web-chat', '网页对话'], ['api', 'API'], ['arena', '对战平台'], ['other', '其他'],
-];
 const GENERATION_MODES = [
-  ['single-turn', '单轮对话：一次提示直接产出'],
-  ['multi-turn', '多轮对话：来回交流后产出'],
-  ['agent', '智能体执行：自主读写文件、运行命令'],
+  ['single-turn', '一轮'],
+  ['multi-turn', '多轮'],
 ];
 const INTERVENTIONS = [
   ['none', '只给了题目提示词，没有改代码'],
@@ -32,10 +27,7 @@ function modelOptions(ctx, selected) {
 
 function harnessOptions(ctx, selected) {
   const listed = [...ctx.HARNESSES.values()].filter((h) => h.listed || h.id === selected);
-  return HARNESS_KINDS.map(([kind, label]) => {
-    const entries = listed.filter((h) => h.kind === kind);
-    return entries.length ? `<optgroup label="${label}">${entries.map((h) => option(h.id, h.name, h.id === selected)).join('')}</optgroup>` : '';
-  }).join('');
+  return listed.sort((a, b) => byName(a.name, b.name)).map((h) => option(h.id, h.name, h.id === selected)).join('');
 }
 
 function providerOptions(ctx, selected) {
@@ -49,7 +41,7 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '' } = {}) {
   const w = work ?? {};
   const variants = task.promptVariants ?? [];
   const model = w.model && ctx.MODELS.has(w.model) ? w.model : w.modelName ? '__other' : '';
-  const efforts = platform.site.efforts;
+  const efforts = ['Default', ...platform.site.efforts];
   const effort = !w.effort ? '' : efforts.includes(w.effort) ? w.effort : '__other';
   const harness = w.harness ?? (w.harnessName ? '__other' : '');
   const provider = ctx.providerOf(w)?.id ?? '';
@@ -59,16 +51,16 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '' } = {}) {
     ${variants.length ? `<label class="field"><span class="field-label">提示词版本<i>*</i></span><select class="input" name="promptVariant" required><option value="">选择生成时用的版本</option>${variants.map((v) => option(v.id, v.label, v.id === w.promptVariant)).join('')}</select><span class="field-hint">展厅会把同一模型的各版本合成一张卡片，可切换对比。</span></label>` : ''}
     <div class="field-row">
       <label class="field"><span class="field-label">模型<i>*</i></span><select class="input" name="modelId" required><option value="">选择模型</option>${modelOptions(ctx, w.model)}${option('__other', '其他模型（手动填写）', model === '__other')}</select></label>
-      <label class="field"><span class="field-label">推理档位</span><select class="input" name="effort"><option value="">默认 / 未设置</option>${efforts.map((e) => option(e, e, e === w.effort)).join('')}${option('__other', '其他…', effort === '__other')}</select></label>
+      <label class="field"><span class="field-label">推理档位<i>*</i></span><select class="input" name="effort" required><option value="">选择推理档位</option>${efforts.map((e) => option(e, e === 'Default' ? '默认（Default）' : e, e === w.effort)).join('')}${option('__other', '其他…', effort === '__other')}</select></label>
     </div>
     <div class="field-row" data-other-model${model === '__other' ? '' : ' hidden'}>
       <label class="field"><span class="field-label">模型名称<i>*</i></span><input class="input" name="modelName" maxlength="60" placeholder="按官方写法，例如 GPT-6 Sol" value="${esc(model === '__other' ? w.modelName : '')}"></label>
       <label class="field"><span class="field-label">厂商</span><input class="input" name="vendor" maxlength="40" placeholder="例如 OpenAI"></label>
     </div>
-    <label class="field" data-other-effort${effort === '__other' ? '' : ' hidden'}><span class="field-label">档位名称</span><input class="input" name="effortOther" maxlength="20" placeholder="例如 Extra" value="${esc(effort === '__other' ? w.effort : '')}"></label>
+    <label class="field" data-other-effort${effort === '__other' ? '' : ' hidden'}><span class="field-label">档位名称<i>*</i></span><input class="input" name="effortOther" maxlength="20" placeholder="例如 Extra" value="${esc(effort === '__other' ? w.effort : '')}"></label>
     <div class="field-row">
       <label class="field"><span class="field-label">Harness<i>*</i></span><select class="input" name="harnessId" required><option value="">选择 Harness</option>${harnessOptions(ctx, w.harness)}${option('__other', '其他（手动填写）', harness === '__other')}</select><span class="field-hint">生成用的工具或环境，例如 Claude Code、Cursor、官方网页对话。</span></label>
-      <label class="field"><span class="field-label">服务商</span><select class="input" name="providerId"><option value="">未注明</option>${providerOptions(ctx, provider)}</select><span class="field-hint">「官方」指模型厂商自己的 API、网页或 App。</span></label>
+      <label class="field"><span class="field-label">服务商<i>*</i></span><select class="input" name="providerId" required><option value="">选择服务商</option>${providerOptions(ctx, provider)}</select><span class="field-hint">「官方」指模型厂商自己的 API、网页或 App。</span></label>
     </div>
     <label class="field" data-other-harness${harness === '__other' ? '' : ' hidden'}><span class="field-label">其他 Harness<i>*</i></span><input class="input" name="harnessOther" maxlength="40" placeholder="填写工具或环境名称" value="${esc(harness === '__other' ? w.harnessName : '')}"></label>
     <div class="field-row">
@@ -114,8 +106,11 @@ export function readWorkFields(form, task) {
   if ((task.promptVariants ?? []).length && !data.promptVariant) return fail(form, 'promptVariant', '请选择生成时用的提示词版本');
   if (!data.modelId) return fail(form, 'modelId', '请选择模型');
   if (other && !text('modelName')) return fail(form, 'modelName', '请填写模型名称');
+  if (!data.effort) return fail(form, 'effort', '请选择推理档位');
+  if (data.effort === '__other' && !text('effortOther')) return fail(form, 'effortOther', '请填写档位名称');
   if (!data.harnessId) return fail(form, 'harnessId', '请选择 Harness');
   if (data.harnessId === '__other' && !text('harnessOther')) return fail(form, 'harnessOther', '请填写 Harness 名称');
+  if (!['official', 'unofficial'].includes(data.providerId)) return fail(form, 'providerId', '请选择服务商');
   if (!data.generationMode) return fail(form, 'generationMode', '请选择生成方式');
   if (!data.humanIntervention) return fail(form, 'humanIntervention', '请选择人工介入程度');
   if (text('evidenceUrl') && !/^https?:\/\//i.test(text('evidenceUrl'))) return fail(form, 'evidenceUrl', '请填写以 http:// 或 https:// 开头的链接');

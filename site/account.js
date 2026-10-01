@@ -443,10 +443,10 @@ function mine(root, ctx) {
 function provenanceSelect(ctx, type, work) {
   const harness = type === 'harness';
   if (!harness) {
-    const selected = ctx.providerOf(work)?.id ?? 'unset';
-    return `<div class="provenance-field"><label class="field"><span class="field-label">服务商</span>
-    <select class="input" name="providerChoice">
-      <option value="unset"${selected === 'unset' ? ' selected' : ''}>未注明</option>
+    const selected = ctx.providerOf(work)?.id ?? '';
+    return `<div class="provenance-field"><label class="field"><span class="field-label">服务商<i>*</i></span>
+    <select class="input" name="providerChoice" required>
+      <option value=""${selected === '' ? ' selected' : ''}>选择服务商</option>
       ${[...ctx.PROVIDERS.values()].map((entry) => `<option value="${esc(entry.id)}"${selected === entry.id ? ' selected' : ''}>${esc(entry.name)}</option>`).join('')}
     </select></label></div>`;
   }
@@ -517,7 +517,8 @@ function changedProvenance(form, work, ctx) {
     }
   }
   const provider = form.elements.namedItem('providerChoice').value;
-  if (provider !== (ctx.providerOf(work)?.id ?? 'unset')) body.providerId = provider === 'unset' ? null : provider;
+  if (!['official', 'unofficial'].includes(provider)) throw new Error('请选择服务商');
+  if (provider !== ctx.providerOf(work)?.id) body.providerId = provider;
   return body;
 }
 
@@ -574,7 +575,7 @@ function openReview(ctx, w, { onDecided } = {}) {
         <p class="fine">清单只是提醒，不会随结果保存。</p>
         <div class="field-row">
           <label class="field"><span class="field-label">登记为模型</span><select class="input" name="modelId"><option value="">保持声明：${esc(w.modelName)}</option>${options}</select></label>
-          <label class="field"><span class="field-label">推理档位</span><input class="input" name="effort" maxlength="20" value="${esc(w.effort)}" placeholder="默认 / 未设置"></label>
+          <label class="field"><span class="field-label">推理档位<i>*</i></span><input class="input" name="effort" maxlength="20" required value="${esc(w.effort)}" placeholder="例如 High、Default"></label>
         </div>
         <div class="field-row provenance-fields">
           ${provenanceSelect(ctx, 'harness', w)}
@@ -623,6 +624,7 @@ function openReview(ctx, w, { onDecided } = {}) {
     if (!decide) return;
     let body;
     try {
+      if (!form.effort.value.trim()) throw new Error('请填写推理档位');
       body = { status: decide.dataset.decide, reason: form.reason.value, ...changedProvenance(form, w, ctx) };
     } catch (error) {
       $('.form-error', form).textContent = error.message;

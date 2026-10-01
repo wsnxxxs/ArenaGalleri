@@ -1,5 +1,13 @@
 # HANDOFF.md · 当前状态
 
+## 简化投稿选项并补齐必填校验（2026-10-01，本地实现并提交）
+
+- site/work-fields.js 移除 Harness optgroup，平铺按名称排序。生成方式仅一轮 / 多轮。推理档位必填，Default 为明确选择，不作为缺省；其他档位必填文本。服务商必填，仅官方 / 非官方。作者编辑共用表单；管理员核验补相同必填提示。更新文档和现有联调请求 fixture。
+- check 43/0、test 14/14；本地扩充数据包 build 182 件 / 57 site 文件，CI=1 intake 0 错 / 9 既有提示。真实隔离后端 integration smoke 通过。Browser 运行实际 work-fields 模块的本地验收页：空档位、空手填档位、空服务商逐项阻止；填完整成功；Harness 0 个 optgroup、27 选项；模型 45 项、Qwen 全归 Alibaba、六个品牌图均有 naturalWidth，console error 0。截图 output/submission-options/form.png。未通过实际上传页重新做 ZIP、SMTP、付费审核或真机验证。
+- 其它会话正在修改 scripts/public-catalog.mjs、site/app.js、site/home.js、site/studio.css、site/style.css；未操作或纳入本轮提交。私有 pin 未改，忽略的 .datapack 为通过安装器加载的本地开发包。
+- 本轮未推送、部署或切换生产 pin；详见 [本轮归档](docs/archive/2026-10-01-submission-options-wsnxxxs.md)。
+
+
 ## 注册验证码粘贴问题分析（2026-10-01，仅检查）
 
 - 用户要求检查 Gallery 与 Show1 的注册验证码粘贴报格式错误原因；本轮未修改功能、相邻仓库、配置或生产。

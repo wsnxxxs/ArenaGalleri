@@ -120,7 +120,7 @@ try {
   const cover = `data:image/png;base64,${readFileSync(join(datapackRoot, 'assets', 'brands', 'qwen.png')).toString('base64')}`;
   const submitted = await call('works', { method: 'POST', cookie, body: {
     draftId: draft.data.draft.id, title: 'Smoke work', modelName: 'Smoke model', vendor: 'Smoke vendor',
-    effort: 'High', tool: 'CLI', confirmed: true, trial: { loaded: true, loadMs: 1 }, cover,
+    effort: 'High', providerId: 'official', tool: 'CLI', confirmed: true, trial: { loaded: true, loadMs: 1 }, cover,
   } });
   assert.equal(submitted.status, 200);
   const resolvedWork = resolveApiMedia(submitted.data, 'work').work;
