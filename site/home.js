@@ -165,7 +165,7 @@ export function mount(root, ctx) {
     ${platform.available ? `<section class="home-blind" aria-labelledby="home-blind-title">
       <p class="home-blind-ab" aria-hidden="true"><i>A</i><span>vs</span><i>B</i></p>
       <div><h2 id="home-blind-title">先别看名字，只看作品。</h2><p>同一道题的两份解答匿名并排，选出更好的那一个，投票后揭晓模型并汇入排行榜。</p></div>
-      <a class="btn" href="#/arena">开始双盲测试${icon('right')}</a>
+      <a class="btn" href="#/arena">开始盲评${icon('right')}</a>
     </section>` : ''}
   </main>${ctx.footer()}`;
 

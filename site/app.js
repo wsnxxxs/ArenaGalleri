@@ -91,7 +91,7 @@ const previewControl = () => `<div class="preview-setting" role="group" aria-lab
   <button data-preview-mode="screenshot" aria-pressed="${previewMode === 'screenshot'}" title="截图预览 · 减少设备负担">截图</button>
   <button data-preview-mode="model" aria-pressed="${previewMode === 'model'}" title="小模型预览 · 可随鼠标转动">小模型</button>
 </div>`;
-const SITE_NAV = [['questions', '题库'], ['arena', '双盲测试'], ['leaderboard', '排行榜'], ['new', '发起题目']];
+const SITE_NAV = [['questions', '题库'], ['arena', '盲评'], ['leaderboard', '排行榜'], ['new', '发起题目']];
 // Breadcrumbs follow the real hierarchy: each section is its own root.
 const LIBRARY = { text: '题库', href: '#/questions' };
 function breadcrumbTrail(crumbs = []) {

@@ -435,7 +435,7 @@ function menuHtml() {
   const user = platform.user;
   const nav = `<nav class="menu-nav" aria-label="平台">
     <a href="#/questions" role="menuitem">${icon('grid')}题库</a>
-    <a href="#/arena" role="menuitem">${icon('blind')}双盲测试</a>
+    <a href="#/arena" role="menuitem">${icon('blind')}盲评</a>
     <a href="#/leaderboard" role="menuitem">${icon('rank')}排行榜</a>
     <a href="#/new" role="menuitem">${icon('plus')}发起题目</a>
   </nav>`;
