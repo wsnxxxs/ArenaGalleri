@@ -133,21 +133,9 @@ function galleryStageHeader(t, mode) {
     <div class="sandbar-tools"><span class="sand-count">已选择 <b data-count>0</b> 件</span><button class="btn sm" data-action="panel" aria-expanded="true" aria-controls="${mode === 'sandtable' ? 'sand-library' : 'exhibition-library'}">选择模型</button>${themeButton()}</div>
   </div></header>`;
 }
-// Public site diagnostics do not link or display the private data repository.
-const shortSha = (sha) => (/^[a-f0-9]{40}$/.test(sha ?? '') ? sha.slice(0, 7) : null);
-function buildVersion() {
-  const info = DATA.buildInfo;
-  if (!info) return '';
-  const rows = [
-    ['前端', shortSha(info.frontendCommit) ?? '开发构建', info.frontendCommit],
-    ['数据格式', `v${info.schemaVersion ?? 1}`],
-    ...(platform.serverVersion ? [['服务', shortSha(platform.serverVersion) ?? platform.serverVersion, platform.serverVersion]] : []),
-  ];
-  return `<details class="build-info"><summary>版本</summary><dl>${rows.map(([name, value, full]) => `<dt>${name}</dt><dd${full && full !== value ? ` title="${esc(full)}"` : ''}>${esc(value)}</dd>`).join('')}</dl></details>`;
-}
 const footer = () => `<footer class="footer"><div class="wrap footer-in">
   <p class="footer-brand">${LOGO}<span>${esc(DATA.title)}</span><span class="muted">前端作品档案</span></p>
-  <div class="footer-links">${platform.available ? '<a href="#/new">发起题目</a><a href="#/leaderboard">榜单</a>' : ''}<a href="${esc(DATA.repo)}" target="_blank" rel="noopener">项目仓库</a><a href="${esc(DATA.repo)}#readme" target="_blank" rel="noopener">参与贡献</a><a href="#/terms">使用条款</a><a href="#/privacy">隐私政策</a><a href="mailto:${CONTACT}">联系我们</a>${buildVersion()}</div>
+  <div class="footer-links">${platform.available ? '<a href="#/new">发起题目</a><a href="#/leaderboard">榜单</a>' : ''}<a href="${esc(DATA.repo)}" target="_blank" rel="noopener">项目仓库</a><a href="${esc(DATA.repo)}#readme" target="_blank" rel="noopener">参与贡献</a><a href="#/terms">使用条款</a><a href="#/privacy">隐私政策</a><a href="mailto:${CONTACT}">联系我们</a></div>
   <p class="footer-legal">© ${new Date().getFullYear()} ${esc(DATA.title)} · 站内作品由 AI 模型生成，仅供比较与学习参考 · 引用或转载请<a href="#/terms#cite">注明来源</a> · <a href="mailto:${CONTACT}">${CONTACT}</a>${beianLink() ? ` · ${beianLink()}` : ''}</p>
 </div></footer>`;
 

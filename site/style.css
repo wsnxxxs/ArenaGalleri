@@ -273,18 +273,6 @@ a.brand-mark:hover { border-color: var(--ink-2); transform: translateY(-1px); }
 .platform-notice p { flex: 1; min-width: 0; margin: 0; }
 .platform-notice strong { margin-right: 8px; color: var(--ink); font-weight: 600; }
 .platform-notice .link { flex: none; color: var(--ink); font-size: 13px; line-height: 1.6; }
-.build-info { position: relative; }
-.build-info summary { color: var(--muted); list-style: none; cursor: pointer; transition: color 0.2s; }
-.build-info summary::-webkit-details-marker { display: none; }
-.build-info summary:hover, .build-info[open] summary { color: var(--ink); }
-.build-info dl {
-  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 25;
-  display: grid; grid-template-columns: auto auto; gap: 4px 16px; margin: 0; padding: 10px 12px;
-  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); box-shadow: var(--shadow-lg);
-  font-size: 12px; white-space: nowrap;
-}
-.build-info dt { color: var(--muted); }
-.build-info dd { margin: 0; color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .empty-page h1 { font: 600 40px var(--serif); margin-bottom: 12px; }
 .empty-page p { color: var(--ink-2); }
 

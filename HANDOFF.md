@@ -1,5 +1,10 @@
 # HANDOFF.md · 当前状态
 
+## 本轮：去掉页脚「版本」诊断（2026-10-01，已本地提交，未推送、未部署）
+
+- 访客用不到页脚右侧的「版本」折叠项，它还会暴露部署信息，所以删掉了：`site/app.js` 的 `buildVersion`/`shortSha` 和调用、`site/style.css` 的 `.build-info`、`docs/DESIGN.md` 的对应条目。`DATA.buildInfo` 保留，写请求版本校验仍在用。`platform.serverVersion` 不再显示；`platform.js` 有他人未提交改动，这次没动。
+- 本轮重新运行 check：42 个文件、0 错误；test：14/14 通过。提交范围仅含三处删除及本轮记录，其他未提交改动保留。未运行 build、intake，未做浏览器目检，本轮仅核对和提交现有修改。归档：[footer-version-removal](docs/archive/2026-10-01-footer-version-removal-wsnxxxs.md)。
+
 ## 本轮：题目分类与按分类的提交格式（2026-10-01，已本地提交，未推送、未部署）
 
 - 联调后修复：审核对话框保存成功即刷新列表；后端 `e81cb4e` 去掉文本投稿的 README 检查项，均已复测。上线顺序：Gallery 与后端（`14a0dbf`、`e81cb4e`）、数据仓（`a2f8f95`）推送 → 发布数据包并升级两端 pin → 前后端一起部署，均待用户授权。
