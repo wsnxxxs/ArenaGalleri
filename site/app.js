@@ -15,7 +15,7 @@ import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon
 import { STATUS, accountControl, api, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, statusBadge } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
-import { questionPreview } from './question-preview.js';
+import { representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { tagsOf, tracksOf } from './categories.js';
 
@@ -38,10 +38,15 @@ const sourceLine = (r) => {
 };
 const sourceKey = (r, field, nameField) => r[field] ? `id:${r[field]}` : r[nameField] ? `name:${r[nameField]}` : 'unset';
 const label = (r) => (r.effort ? `${modelOf(r).name} · ${r.effort}` : modelOf(r).name);
-const resultBadges = (r) => `${r.effort ? `<span class="badge">${esc(r.effort)}</span>` : ''}${r.sourceLabel ? `<span class="badge source-badge">${esc(r.sourceLabel)}</span>` : ''}`;
+// Works outside the blind test (multi-turn or with human help) say so on their card.
+const INTERVENTION_TEXT = { 'prompt-guided': '人工提示与指导', 'code-edited': '人工修改了代码' };
+const generationBadges = (r) => standard(r) ? '' : `${r.generationMode === 'multi-turn' ? '<span class="badge" title="多轮生成 · 只展示，不参与盲评">多轮</span>' : ''}${INTERVENTION_TEXT[r.humanIntervention] ? `<span class="badge" title="${INTERVENTION_TEXT[r.humanIntervention]} · 只展示，不参与盲评">人工介入</span>` : ''}`;
+const resultBadges = (r) => `${r.effort ? `<span class="badge">${esc(r.effort)}</span>` : ''}${r.sourceLabel ? `<span class="badge source-badge">${esc(r.sourceLabel)}</span>` : ''}${generationBadges(r)}`;
 // Leaderboard entry of a work (model + effort), the same key the server ranks by.
 const normal = (s) => String(s ?? '').normalize('NFKC').trim().toLowerCase();
-const entryKey = (r) => `${MODELS.has(r.model) ? r.model : `x:${normal(r.modelName ?? r.model)}`}|${normal(r.effort)}`;
+const modelKey = (r) => (MODELS.has(r.model) ? r.model : `x:${normal(r.modelName ?? r.model)}`);
+const entryKey = (r) => `${modelKey(r)}|${normal(r.effort)}`;
+const modelCount = (results) => new Set(results.map(modelKey)).size;
 const sortModes = { added: '加入时间（最新在前）', vendor: '模型厂商（A–Z）', name: '模型名字（A–Z）', score: '榜单评分（高到低）' };
 const sortChoices = () => Object.entries(sortModes).filter(([value]) => value !== 'score' || platform.available);
 let resultSort = Object.hasOwn(sortModes, store.get('result-sort')) ? store.get('result-sort') : 'added';
@@ -204,7 +209,7 @@ function renderLibrary(category) {
   homeState.category = category ?? '';
   const controller = new AbortController();
   let previews = null, destroyed = false;
-  const choices = DATA.tasks.map((task) => ({ task, result: questionPreview(task, [], entryKey) }));
+  const choices = DATA.tasks.map((task) => ({ task, result: taskCover(task, platform.featured?.[task.id]?.cover) }));
   const artworkFor = (t, shown, eager = false) => shown?.previewMode === 'screenshot'
     ? img(shown.captures?.first ?? shown.gallery?.[0]?.src ?? '', shown.title, 'question-screenshot-preview', eager)
     : shown?.previewModel || shown?.previewLoader
@@ -229,7 +234,7 @@ function renderLibrary(category) {
         <p class="summary">${esc(t.summary)}</p>
         <div class="question-meta">
           <span class="question-date">${esc(t.date ?? '')}</span>
-          <a href="${taskHref(t)}">${works.length} 件作品${icon('next')}</a>
+          <a href="${taskHref(t)}">${modelCount(works)} 个模型 · ${works.length} 件作品${icon('next')}</a>
         </div>
       </div>
     </article>`;
@@ -366,24 +371,6 @@ function renderLibrary(category) {
   filter();
   document.title = `题库 · ${DATA.title}`;
   async function loadPreviews() {
-    if (platform.available) {
-      await Promise.all(choices.filter(({ task }) => counted(task).length).map(async (choice) => {
-        try {
-          const board = await api(`leaderboard?task=${encodeURIComponent(choice.task.id)}&by=config`, { signal: controller.signal });
-          if (destroyed) return;
-          choice.result = questionPreview(choice.task, board.rows, entryKey);
-          const visual = $(`[data-task-card="${choice.task.id}"] .question-visual`, root);
-          visual.innerHTML = artworkFor(choice.task, choice.result);
-          visual.classList.toggle('model-thumb', Boolean(choice.result?.previewMode !== 'screenshot' && (choice.result?.previewModel || choice.result?.previewLoader)));
-          visual.classList.toggle('screenshot-thumb', choice.result?.previewMode === 'screenshot');
-          if (choice.result) visual.dataset.previewId = choice.result.id;
-          else delete visual.dataset.previewId;
-          settleImages();
-        } catch (error) {
-          if (error.name !== 'AbortError') console.error('Question leaderboard unavailable:', choice.task.id, error);
-        }
-      }));
-    }
     if (destroyed || !choices.some(({ result }) => result?.previewMode !== 'screenshot' && (result?.previewModel || result?.previewLoader))) return;
     try {
       const { createQuestionPreviews } = await import('./result-previews.js');
@@ -402,10 +389,20 @@ function renderLibrary(category) {
 }
 
 // ---- task -----------------------------------------------------------------------------
-const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, variants: new Map() };
+const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, variants: new Map(), open: new Set() };
 const selectedVariant = (t) => variantsOf(t).find((variant) => variant.id === taskState.promptVariant);
 const selectedPrompt = (t) => selectedVariant(t)?.prompt ?? t.prompt;
-const displayedResults = (t) => groupVariantResults(t, sortedResults(t), taskState.variants);
+// Each model leads with one work (per review group); its other works follow, folded until opened.
+const foldKey = (r) => `${r.status}|${modelKey(r)}`;
+function foldOrder(t, results) {
+  const leads = new Set();
+  for (const status of new Set(results.map((r) => r.status))) {
+    const picks = representatives(results.filter((r) => r.status === status), modelKey, platform.featured?.[t.id]?.models);
+    picks.forEach((r) => leads.add(r));
+  }
+  return results.filter((r) => leads.has(r)).flatMap((lead) => [lead, ...results.filter((r) => r !== lead && !leads.has(r) && foldKey(r) === foldKey(lead))]);
+}
+const displayedResults = (t) => foldOrder(t, groupVariantResults(t, sortedResults(t), taskState.variants));
 function resultVariantButtons(t, r, pane = null) {
   const choices = variantChoices(t, r);
   if (!choices.length) return '';
@@ -494,7 +491,7 @@ function resultCard(t, r) {
     </div>
     <div class="result-body">
       ${resultVariantButtons(t, r)}
-      <p class="result-model">${brandMark(m, 'brand-mark sm')}<b>${esc(m.name)}</b>${resultBadges(r)}${statusBadge(r.status, { reason: r.reason })}</p>
+      <p class="result-model">${brandMark(m, 'brand-mark sm')}<b>${esc(m.name)}</b>${resultBadges(r)}${platform.featured?.[t.id]?.models?.[modelKey(r)] === r.id ? '<span class="badge featured-badge" title="盲评票选出的代表作">代表作</span>' : ''}${statusBadge(r.status, { reason: r.reason })}</p>
       <h3><a href="${viewHref(t, r.id)}">${esc(r.title)}${icon('arrow')}</a></h3>
       ${r.summary ? `<p class="summary">${esc(r.summary)}</p>` : ''}
       ${r.upload ? `<p class="result-by">投稿 · ${esc(r.owner ?? '已注销的用户')}${sourceLine(r) || r.tool ? ` · ${esc(sourceLine(r) || r.tool)}` : ''} · ${formatDate(r.addedAt)}</p>` : ''}
@@ -510,7 +507,7 @@ function resultCard(t, r) {
 // With uploads present the list splits by review state: verified works lead, unverified
 // ones follow, questioned ones stay folded away as reference.
 const GROUPS = [
-  { status: 'verified', title: '已验证', note: '馆藏作品与核验通过的投稿 · 参与盲评' },
+  { status: 'verified', title: '已验证', note: '馆藏作品与核验通过的投稿' },
   { status: 'unverified', title: '未验证', note: '等待管理员核验 · 可以浏览和贴表情，暂不参与盲评' },
   { status: 'questioned', title: '存疑', note: '核验存疑 · 仅供参考，不参与互动与盲评' },
 ];
@@ -542,7 +539,7 @@ function sourceChoices(results, field, nameField, resolve) {
 
 function renderTask(t) {
   if (taskState.task !== t.id) {
-    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, variants: new Map() });
+    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, variants: new Map(), open: new Set() });
     taskScores = new Map();
   }
   taskBoard?.destroy?.();
@@ -586,7 +583,7 @@ function renderTask(t) {
     <main class="workspace page">
     <section id="results" data-panel="results" class="collection-panel">
       <div class="collection-heading"><div class="collection-title"><h2 id="filter-heading">全部作品</h2><span id="filter-count">${t.results.length} 件作品</span>${aigcLabel()}</div>${searchControl('work', '搜索模型或作品', taskState.query)}</div>
-      <div class="collection-toolbar"><span>已验证作品优先展示</span><div class="toolbar-actions">${previewControl()}<label class="result-sort">厂商<select data-vendor-filter aria-label="按模型厂商筛选">
+      <div class="collection-toolbar"><span>每个模型先展示一件代表作，其余可展开</span><div class="toolbar-actions">${previewControl()}<label class="result-sort">厂商<select data-vendor-filter aria-label="按模型厂商筛选">
         <option value="">全部厂商（${t.results.length}）</option>
         ${vendors.map((v) => `<option value="${esc(v)}"${v === taskState.vendor ? ' selected' : ''}>${esc(v)}（${vendorCounts.get(v)}）</option>`).join('')}
       </select></label><label class="result-sort">Harness<select data-harness-filter aria-label="按 Harness 筛选">
@@ -674,6 +671,12 @@ function renderTask(t) {
       activatePanel(go.dataset.go);
       scrollTo({ top: 0 });
     }
+    const fold = e.target.closest('[data-fold]');
+    if (fold) {
+      if (taskState.open.has(fold.dataset.fold)) taskState.open.delete(fold.dataset.fold);
+      else taskState.open.add(fold.dataset.fold);
+      filterResults(t);
+    }
     const pick = e.target.closest('[data-pick], [data-unpick]');
     if (pick) togglePick(t, pick.dataset.pick ?? pick.dataset.unpick);
     if (e.target.closest('[data-clear-picks]')) { taskState.picks = []; syncPicks(t); }
@@ -709,22 +712,41 @@ function applySort(t) {
 }
 
 function filterResults(t) {
-  const shown = displayedResults(t).filter((r) => (!taskState.vendor || vendorOf(r) === taskState.vendor)
+  const displayed = displayedResults(t);
+  const shown = displayed.filter((r) => (!taskState.vendor || vendorOf(r) === taskState.vendor)
     && (!taskState.harness || sourceKey(r, 'harness', 'harnessName') === taskState.harness)
     && (!taskState.provider || providerKey(r) === taskState.provider)
     && [label(r), r.title, r.summary, vendorOf(r), harnessOf(r)?.name, providerOf(r)?.name].join(' ').toLowerCase().includes(taskState.query.toLowerCase()));
-  const ids = new Set(shown.map((r) => r.id));
-  $$('.result').forEach((el) => { el.hidden = !ids.has(el.dataset.id); });
+  // A filter or search lists every match; otherwise each model shows its lead work.
+  const filtering = Boolean(taskState.vendor || taskState.harness || taskState.provider || taskState.query.trim());
+  const leads = new Map(), folded = new Set();
+  for (const r of displayed) {
+    if (!leads.has(foldKey(r))) leads.set(foldKey(r), { id: r.id, more: 0 });
+    else { leads.get(foldKey(r)).more++; folded.add(r.id); }
+  }
+  const ids = new Set(shown.filter((r) => filtering || !folded.has(r.id) || taskState.open.has(foldKey(r))).map((r) => r.id));
+  $$('.result').forEach((el) => {
+    el.hidden = !ids.has(el.dataset.id);
+    $('[data-fold]', el)?.remove();
+    const r = displayed.find((item) => item.id === el.dataset.id);
+    const lead = r && leads.get(foldKey(r));
+    const open = Boolean(r) && !filtering && Boolean(lead?.more) && taskState.open.has(foldKey(r));
+    // An opened model's cards share one edge so the group reads as a unit.
+    el.classList.toggle('is-fold-open', open);
+    if (filtering || !lead?.more || lead.id !== r.id) return;
+    const name = modelOf(r).name;
+    $('.result-model', el).insertAdjacentHTML('beforeend', `<button class="fold-chip" data-fold="${esc(foldKey(r))}" aria-expanded="${open}" aria-label="${open ? `收起 ${esc(name)} 的其余作品` : `展开 ${esc(name)} 的另外 ${lead.more} 件作品`}">${open ? '收起' : `+${lead.more} 件`}</button>`);
+  });
   $$('[data-group-wrap]').forEach((wrap) => {
-    const visible = $$('.result', wrap).filter((el) => !el.hidden).length;
-    wrap.hidden = !visible;
-    $('[data-group-count]', wrap).textContent = visible;
+    const matches = new Set(shown.map((r) => r.id));
+    wrap.hidden = !$$('.result', wrap).some((el) => !el.hidden);
+    $('[data-group-count]', wrap).textContent = $$('.result', wrap).filter((el) => matches.has(el.dataset.id)).length;
   });
   $('[data-vendor-filter]').value = taskState.vendor;
   $('[data-harness-filter]').value = taskState.harness;
   $('[data-provider-filter]').value = taskState.provider;
   $('#filter-heading').textContent = taskState.vendor || '全部作品';
-  $('#filter-count').textContent = variantsOf(t).length ? `${shown.length} 组结果 · ${t.results.length} 份作品` : `${shown.length} 件作品`;
+  $('#filter-count').textContent = variantsOf(t).length ? `${modelCount(shown)} 个模型 · ${shown.length} 组结果 · ${t.results.length} 份作品` : `${modelCount(shown)} 个模型 · ${shown.length} 件作品`;
   $('.filter-empty').hidden = shown.length > 0;
   resultPreviews?.refresh();
 }

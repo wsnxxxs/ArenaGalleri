@@ -1,5 +1,13 @@
 # HANDOFF.md · 当前状态
 
+## 作品代表作折叠、题库封面与生成信息精简（2026-10-02，本地提交，未推送）
+
+- 新增 site/featured.js：题目页每个模型（跨档位）一件代表作、其余折叠；封面优先后台 `featured`，否则 Opus 5.5 Max → GPT-6 Astra Max → 灰色占位。首页不再逐题请求 leaderboard 选封面，删除 question-preview.js。
+- 多轮或有人工介入作品显示「多轮」「人工介入」标签；数量文案改为「X 个模型 · Y 件作品」，盲评大厅改为「可盲评 N 件」。投稿表单去掉模型版本、生成日期、过程记录链接；public-catalog 不再透传这三项。
+- 折叠按钮为模型名一行右侧的「+N 件」胶囊，展开的同组卡片左侧共用强调色边线；后台票选的代表作带「代表作」标记（注入模拟 featured 已核对）。
+- 依赖后端：bootstrap 新增 `featured: { [task]: { cover, models: { [modelKey]: workId } } }`；缺省时前端走兜底。后端提示词另行交给其他 agent。
+- check 44/0、test 16/16；以数据仓本地新产物构建 182 件 / 57 site 文件。Browser（无后台）核对题库 20 张封面、Boeing 折叠展开与手机宽度无横向滚动；未接入真实后台验收 featured、投稿与盲评。
+
 ## 截图回退与模型适配消费（2026-10-02，本地实现并提交）
 
 - public-catalog 透传 previewMode；首页、题目卡片和作品卡片对 screenshot 直接展示 captures.first、contain，跳过模型/海报。11 件回退验收通过，模式切换保持截图。

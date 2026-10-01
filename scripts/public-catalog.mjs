@@ -15,7 +15,7 @@ export function publicCatalog(data, buildInfo) {
       results: task.results.map(result => ({
         ...pick(result, ['id', 'model', 'effort', 'harness', 'harnessVersion', 'provider', 'sourceLabel', 'promptVariant',
           'title', 'summary', 'scene', 'previewModel', 'previewPoster', 'previewLoader', 'previewMode', 'addedAt',
-          'captureNote', 'modelVersion', 'generationMode', 'humanIntervention', 'generatedOn', 'evidenceUrl']),
+          'captureNote', 'generationMode', 'humanIntervention']),
         guide: {
           ...pick(result.guide ?? {}, ['tips']),
           sections: (result.guide?.sections ?? []).map(section => pick(section, ['title', 'items'])),

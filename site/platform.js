@@ -17,6 +17,7 @@ export const platform = {
   questions: [],
   reactions: { counts: {}, mine: {} },
   arena: {},
+  featured: {},
   totals: { votes: 0, voters: 0, entries: 0 },
   me: null,
   review: null,

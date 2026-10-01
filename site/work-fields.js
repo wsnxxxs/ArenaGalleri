@@ -4,7 +4,7 @@ import { $, $$, byName, esc, icon } from './ui.js';
 import { platform } from './platform.js';
 
 const GENERATION_MODES = [
-  ['single-turn', '一轮'],
+  ['single-turn', '一轮（智能体自主迭代也算一轮）'],
   ['multi-turn', '多轮'],
 ];
 const INTERVENTIONS = [
@@ -14,7 +14,6 @@ const INTERVENTIONS = [
 ];
 
 const option = (value, text, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(text)}</option>`;
-const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 10);
 
 function modelOptions(ctx, selected) {
   const byVendor = new Map();
@@ -45,7 +44,7 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '' } = {}) {
   const effort = !w.effort ? '' : efforts.includes(w.effort) ? w.effort : '__other';
   const harness = w.harness ?? (w.harnessName ? '__other' : '');
   const provider = ctx.providerOf(w)?.id ?? '';
-  const filled = ['summary', 'modelVersion', 'generatedOn', 'evidenceUrl', 'note'].some((key) => w[key]);
+  const filled = ['summary', 'note'].some((key) => w[key]);
   return `
     <label class="field"><span class="field-label">作品标题<i>*</i></span><input class="input" name="title" maxlength="40" required placeholder="例如：云山古刹" value="${esc(w.title ?? '')}"></label>
     ${variants.length ? `<label class="field"><span class="field-label">提示词版本<i>*</i></span><select class="input" name="promptVariant" required><option value="">选择生成时用的版本</option>${variants.map((v) => option(v.id, v.label, v.id === w.promptVariant)).join('')}</select><span class="field-hint">展厅会把同一模型的各版本合成一张卡片，可切换对比。</span></label>` : ''}
@@ -67,13 +66,9 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '' } = {}) {
       <label class="field"><span class="field-label">生成方式<i>*</i></span><select class="input" name="generationMode" required><option value="">请选择</option>${GENERATION_MODES.map(([value, text]) => option(value, text, value === w.generationMode)).join('')}</select></label>
       <label class="field"><span class="field-label">人工介入<i>*</i></span><select class="input" name="humanIntervention" required><option value="">请选择</option>${INTERVENTIONS.map(([value, text]) => option(value, text, value === w.humanIntervention)).join('')}</select></label>
     </div>
-    <details class="more-fields"${filled ? ' open' : ''}><summary>${icon('right')}补充信息<small>选填 · 过程记录链接、简介等，填了核验更快</small></summary><div class="step-body">
-      <label class="field"><span class="field-label">过程记录链接</span><input class="input" type="url" name="evidenceUrl" maxlength="2000" placeholder="https://…" value="${esc(w.evidenceUrl ?? '')}"><span class="field-hint">公开的对话分享或运行记录。</span></label>
+    <p class="field-hint">只发了一次题目提示词、也没有改代码的作品会进入盲评；多轮或有人工介入的作品只在展厅展示。</p>
+    <details class="more-fields"${filled ? ' open' : ''}><summary>${icon('right')}补充信息<small>选填 · 简介与补充说明，填了核验更快</small></summary><div class="step-body">
       <label class="field"><span class="field-label">简介</span><textarea class="input" name="summary" maxlength="200" rows="2" placeholder="一两句话介绍作品的看点">${esc(w.summary ?? '')}</textarea></label>
-      <div class="field-row">
-        <label class="field"><span class="field-label">模型版本</span><input class="input" name="modelVersion" maxlength="60" placeholder="例如 2026-09-15 快照" value="${esc(w.modelVersion ?? '')}"></label>
-        <label class="field"><span class="field-label">生成日期</span><input class="input" type="date" name="generatedOn" max="${today()}" value="${esc(w.generatedOn ?? '')}"></label>
-      </div>
       <label class="field"><span class="field-label">补充说明</span><textarea class="input" name="note" maxlength="1000" rows="3" placeholder="对话轮次、追加了哪些提示、改了哪些代码等。">${esc(w.note ?? '')}</textarea></label>
       ${extra}
     </div></details>`;
@@ -113,20 +108,16 @@ export function readWorkFields(form, task) {
   if (!['official', 'unofficial'].includes(data.providerId)) return fail(form, 'providerId', '请选择服务商');
   if (!data.generationMode) return fail(form, 'generationMode', '请选择生成方式');
   if (!data.humanIntervention) return fail(form, 'humanIntervention', '请选择人工介入程度');
-  if (text('evidenceUrl') && !/^https?:\/\//i.test(text('evidenceUrl'))) return fail(form, 'evidenceUrl', '请填写以 http:// 或 https:// 开头的链接');
   return { body: {
     title: text('title'),
     summary: data.summary ?? '',
     ...(data.promptVariant !== undefined ? { promptVariant: data.promptVariant } : {}),
     ...(other ? { modelName: text('modelName'), vendor: text('vendor') } : { modelId: data.modelId }),
     effort: data.effort === '__other' ? text('effortOther') : data.effort,
-    modelVersion: text('modelVersion'),
     ...(data.harnessId === '__other' ? { harnessOther: text('harnessOther') } : { harnessId: data.harnessId }),
     providerId: data.providerId,
     generationMode: data.generationMode,
     humanIntervention: data.humanIntervention,
-    generatedOn: data.generatedOn ?? '',
-    evidenceUrl: text('evidenceUrl'),
     note: data.note ?? '',
   } };
 }

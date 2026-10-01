@@ -43,7 +43,7 @@ function lobby(root, ctx) {
     return `<li class="arena-task${open ? '' : ' is-closed'}"><a ${open ? `href="#/arena/${esc(t.id)}"` : 'aria-disabled="true"'}>
       <span class="num">No.${pad(ctx.DATA.tasks.indexOf(t) + 1)}</span>
       <span class="arena-task-title"><b>${esc(t.title)}</b><small>${esc(t.summary)}</small></span>
-      <span class="arena-task-meta">${p.works} 件作品<br>${p.entries} 个配置</span>
+      <span class="arena-task-meta">可盲评 ${p.works} 件<br>${p.entries} 个配置</span>
       <span class="arena-task-go">${open ? `开始${icon('right')}` : '作品不足'}</span>
     </a></li>`;
   };
