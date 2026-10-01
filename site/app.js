@@ -205,9 +205,11 @@ function renderLibrary(category) {
   const controller = new AbortController();
   let previews = null, destroyed = false;
   const choices = DATA.tasks.map((task) => ({ task, result: questionPreview(task, [], entryKey) }));
-  const artworkFor = (t, shown, eager = false) => shown?.previewModel || shown?.previewLoader
-    ? (shown.previewPoster ? img(shown.previewPoster, '', 'question-model-poster', eager) : coverHtml(shown))
-    : shown ? coverHtml(shown, '', eager) : `<span class="question-placeholder">${icon('text')}<span>${counted(t).length ? '暂无预览图' : '等待第一份答案'}</span></span>`;
+  const artworkFor = (t, shown, eager = false) => shown?.previewMode === 'screenshot'
+    ? img(shown.captures?.first ?? shown.gallery?.[0]?.src ?? '', shown.title, 'question-screenshot-preview', eager)
+    : shown?.previewModel || shown?.previewLoader
+      ? (shown.previewPoster ? img(shown.previewPoster, '', 'question-model-poster', eager) : coverHtml(shown))
+      : shown ? coverHtml(shown, '', eager) : `<span class="question-placeholder">${icon('text')}<span>${counted(t).length ? '暂无预览图' : '等待第一份答案'}</span></span>`;
   const results = DATA.tasks.flatMap((t) => counted(t).map((r) => ({ t, r })));
   if (!DATA.tasks.some((t) => t.category === homeState.category)) homeState.category = '';
 
@@ -216,7 +218,7 @@ function renderLibrary(category) {
     const shown = choices.find(({ task }) => task === t).result;
     const artwork = artworkFor(t, shown, ti < 3);
     return `<article class="task-card" data-task-card="${esc(t.id)}">
-      <a class="question-visual${shown?.previewModel || shown?.previewLoader ? ' model-thumb' : ''}" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的全部作品" tabindex="-1"${shown ? ` data-preview-id="${esc(shown.id)}"` : ''}>
+      <a class="question-visual${shown?.previewMode === 'screenshot' ? ' screenshot-thumb' : shown?.previewModel || shown?.previewLoader ? ' model-thumb' : ''}" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的全部作品" tabindex="-1"${shown ? ` data-preview-id="${esc(shown.id)}"` : ''}>
         ${artwork}
       </a>
       <div class="task-body">
@@ -372,7 +374,8 @@ function renderLibrary(category) {
           choice.result = questionPreview(choice.task, board.rows, entryKey);
           const visual = $(`[data-task-card="${choice.task.id}"] .question-visual`, root);
           visual.innerHTML = artworkFor(choice.task, choice.result);
-          visual.classList.toggle('model-thumb', Boolean(choice.result?.previewModel || choice.result?.previewLoader));
+          visual.classList.toggle('model-thumb', Boolean(choice.result?.previewMode !== 'screenshot' && (choice.result?.previewModel || choice.result?.previewLoader)));
+          visual.classList.toggle('screenshot-thumb', choice.result?.previewMode === 'screenshot');
           if (choice.result) visual.dataset.previewId = choice.result.id;
           else delete visual.dataset.previewId;
           settleImages();
@@ -381,11 +384,11 @@ function renderLibrary(category) {
         }
       }));
     }
-    if (destroyed || !choices.some(({ result }) => result?.previewModel || result?.previewLoader)) return;
+    if (destroyed || !choices.some(({ result }) => result?.previewMode !== 'screenshot' && (result?.previewModel || result?.previewLoader))) return;
     try {
       const { createQuestionPreviews } = await import('./result-previews.js');
       if (destroyed) return;
-      previews = createQuestionPreviews(root, choices);
+      previews = createQuestionPreviews(root, choices.filter(({ result }) => result?.previewMode !== 'screenshot'));
       previews.setPaused(homeState.view !== 'tasks');
       settleImages();
     } catch (error) {
@@ -415,10 +418,12 @@ async function updateResultPreviews(t) {
   resultPreviews?.destroy();
   resultPreviews = null;
   if (previewMode !== 'model') return;
+  const results = displayedResults(curatedTask(t)).filter((result) => result.previewMode !== 'screenshot');
+  if (!results.length) return;
   try {
     const { createResultPreviews } = await import('./result-previews.js');
     if (version !== previewVersion) return;
-    resultPreviews = createResultPreviews(root, { ...t, results: displayedResults(curatedTask(t)) });
+    resultPreviews = createResultPreviews(root, { ...t, results });
     resultPreviews.setPaused($('#results').hidden);
   } catch (error) {
     console.error('Model previews unavailable:', error);
@@ -480,9 +485,11 @@ function shotGrid(t) {
 
 function resultCard(t, r) {
   const m = modelOf(r);
-  return `<article class="result${r.upload ? ' is-upload' : ''}" data-vendor="${esc(vendorOf(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
+  const screenshotPreview = r.previewMode === 'screenshot';
+  const screenshot = r.captures?.first ?? r.gallery?.[0]?.src ?? '';
+  return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${r.upload ? ' is-upload' : ''}" data-vendor="${esc(vendorOf(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media">
-      <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${coverHtml(r)}${r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
+      <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
       ${t.results.length > 1 ? `<button class="pick" data-pick="${esc(r.id)}" aria-pressed="false" aria-label="加入对比：${esc(r.title)}"><span class="pick-box">${icon('plus')}${icon('check')}</span><span class="pick-text">对比</span></button>` : ''}
     </div>
     <div class="result-body">

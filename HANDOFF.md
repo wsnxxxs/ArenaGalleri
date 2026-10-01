@@ -1,5 +1,12 @@
 # HANDOFF.md · 当前状态
 
+## 截图回退与模型适配消费（2026-10-02，本地实现并提交）
+
+- public-catalog 透传 previewMode；首页、题目卡片和作品卡片对 screenshot 直接展示 captures.first、contain，跳过模型/海报。11 件回退验收通过，模式切换保持截图。
+- 数据仓配套修复 29 个模型包/海报和 9 张首屏；182 包桌面/手机渲染 0 错/0 出画。Gallery 渲染器不变；非目标 153 张渲染逐像素未变。
+- check 43/0、test 14/14；当前包严格 CI intake 0 错/8 既有提示，隔离构建 182 件+57 site 文件、无冲突。Browser 核对题目卡片及桌面/手机荷塘模型/截图，diff --check 通过。未重新验收所有交互或真机性能。
+- 仅本地提交本轮五个功能文件和记录，不纳入其他会话已提交的修改；未推送、部署、改私有 pin 或真实 .datapack。证据在相邻数据仓 output/preview-repair-20261001/；[归档](docs/archive/2026-10-02-preview-adaptation-repair-wsnxxxs.md)。
+
 ## 排行榜计分单位核查（2026-10-02，仅检查）
 
 - 「按配置」与「按模型」均真实生效。前端请求分别带 by=config / model；后端按模型 ID + 归一化推理档位 / 模型 ID 分组，并重新拟合 Bradley–Terry，缓存键包含 by。Harness、服务商是来源筛选，不属于配置分组键。

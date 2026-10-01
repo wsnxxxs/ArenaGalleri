@@ -14,7 +14,7 @@ export function publicCatalog(data, buildInfo) {
       conditions: (task.conditions ?? []).map(condition => pick(condition, ['id', 'label', 'note', 'mobile'])),
       results: task.results.map(result => ({
         ...pick(result, ['id', 'model', 'effort', 'harness', 'harnessVersion', 'provider', 'sourceLabel', 'promptVariant',
-          'title', 'summary', 'scene', 'previewModel', 'previewPoster', 'previewLoader', 'addedAt',
+          'title', 'summary', 'scene', 'previewModel', 'previewPoster', 'previewLoader', 'previewMode', 'addedAt',
           'captureNote', 'modelVersion', 'generationMode', 'humanIntervention', 'generatedOn', 'evidenceUrl']),
         guide: {
           ...pick(result.guide ?? {}, ['tips']),

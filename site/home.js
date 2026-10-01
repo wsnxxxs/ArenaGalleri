@@ -73,7 +73,9 @@ const pick = (list, recent = []) => {
 
 export function mount(root, ctx) {
   // The home page shows each answer's rendered model where there is one, not a screenshot of its interface.
-  const shotOf = (r) => r.previewPoster || ctx.cover(r);
+  const shotOf = (r) => r.previewMode === 'screenshot'
+    ? r.captures?.first ?? r.gallery?.[0]?.src ?? ctx.cover(r)
+    : r.previewPoster || ctx.cover(r);
   const answersOf = (t) => t.results.filter((r) => ctx.interactive(r) && shotOf(r))
     .sort((a, b) => (a.status === 'verified' ? 0 : 1) - (b.status === 'verified' ? 0 : 1) || time(b) - time(a));
   // Each couplet sets a handful of old variants against the answers, so only questions with more than four lead.
@@ -93,7 +95,7 @@ export function mount(root, ctx) {
   // Every answer is a small browser window: the model in the title bar, its first screen below.
   const windowCard = (task, work, attrs = '', eager = false) => `<a class="home-window" href="${ctx.viewHref(task, work.id)}" aria-label="在线预览：${esc(work.title)}，${esc(ctx.label(work))}"${attrs}>
       <span class="home-window-bar"><span class="home-window-dots" aria-hidden="true"><i></i><i></i><i></i></span>${brandMark(ctx.modelOf(work), 'home-window-mark')}<b>${esc(ctx.label(work))}</b></span>
-      <span class="home-window-shot">${img(shotOf(work), '', work.previewPoster ? 'is-poster' : '', eager)}</span>
+      <span class="home-window-shot">${img(shotOf(work), '', work.previewMode !== 'screenshot' && work.previewPoster ? 'is-poster' : '', eager)}</span>
     </a>`;
   const posterFrames = new Map(), posterCanvas = document.createElement('canvas');
   const posterContext = posterCanvas.getContext('2d', { willReadFrequently: true });

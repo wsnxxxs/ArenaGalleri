@@ -334,6 +334,8 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .task-card:hover { border-color: var(--line-2); }
 .question-visual { position: relative; display: flex; flex: none; align-items: center; justify-content: center; height: auto; aspect-ratio: 16 / 9; max-height: clamp(180px, 23dvh, 280px); padding: 0; border-bottom: 1px solid var(--line); background: var(--surface); overflow: hidden; }
 .question-visual img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
+.question-visual.screenshot-thumb img { object-fit: contain; }
+.question-visual.screenshot-thumb:hover img { transform: none; }
 .question-visual:hover img { transform: scale(1.025); }
 .question-visual.model-thumb { background: radial-gradient(ellipse at 50% 75%, var(--surface-2), transparent 70%); }
 .question-visual.model-thumb img { object-fit: contain; }
