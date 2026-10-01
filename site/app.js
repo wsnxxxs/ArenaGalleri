@@ -113,6 +113,7 @@ function header(crumbs = [], showPreviewSetting = false, current = '', { notice 
     : '';
   return `<header class="topbar"><div class="wrap topbar-in">
     <a class="brand" href="#/" aria-label="${esc(DATA.title)} · 首页">${LOGO}<span class="wordmark">${esc(DATA.title)}</span></a>
+    ${backLink('top-back')}
     <nav class="crumbs" aria-label="面包屑">${breadcrumbTrail(crumbs)}</nav>
     <div class="topbar-tools${showPreviewSetting ? ' has-preview-setting' : ''}${platform.available ? ' has-platform' : ''}">
       ${nav}
@@ -127,8 +128,8 @@ function galleryStageHeader(t, mode) {
   const modes = [['exhibition', '原作展厅'], ['sandtable', '三维沙盘']];
   return `<header class="topbar sandbar"><div class="wrap topbar-in sandbar-in">
     <a class="brand" href="#/" aria-label="${esc(DATA.title)} · 首页">${LOGO}<span class="wordmark">${esc(DATA.title)}</span></a>
-    <a class="sand-task-back" href="${taskHref(t)}" aria-label="返回作品列表">${icon('prev')}</a>
-    <nav class="crumbs sand-crumbs" aria-label="位置"><span class="sep" aria-hidden="true">/</span><a href="${taskHref(t)}">${esc(t.title)}</a><span class="sep" aria-hidden="true">/</span><span aria-current="page">${current}</span></nav>
+    ${backLink('top-back')}
+    <nav class="crumbs sand-crumbs" aria-label="位置"><a href="${taskHref(t)}">${esc(t.title)}</a><span class="sep" aria-hidden="true">/</span><span aria-current="page">${current}</span></nav>
     <nav class="display-modes" aria-label="展示模式">${modes.map(([id, name]) => `<a ${id === mode ? 'aria-current="page"' : 'data-switch-mode'} href="#/${t.id}/${id}">${name}</a>`).join('')}</nav>
     <div class="sandbar-tools"><span class="sand-count">已选择 <b data-count>0</b> 件</span><button class="btn sm" data-action="panel" aria-expanded="true" aria-controls="${mode === 'sandtable' ? 'sand-library' : 'exhibition-library'}">选择模型</button>${themeButton()}</div>
   </div></header>`;
@@ -140,11 +141,10 @@ const footer = () => `<footer class="footer"><div class="wrap footer-in">
 </div></footer>`;
 
 // A shared two-column shell keeps every platform page in the same exhibition. The top bar is the
-// site navigation; the sidebar only holds this section's own views, and a back link appears only
-// on pages entered from another page (a task, the personal center).
-function pageStart({ title, description, section, meta = '', nav = '', heading = title, caption = '', back = null, crumbs = [{ text: title }] }) {
+// site navigation and carries the way back; the sidebar only holds this section's own views.
+function pageStart({ title, description, section, meta = '', nav = '', heading = title, caption = '', crumbs = [{ text: title }] }) {
   return `${header(crumbs, false, section)}<div class="app-layout platform-layout">
-    <aside class="app-sidebar">${back ? `<a class="back-link" href="${esc(back.href)}">${icon('prev')}${esc(back.text)}</a>` : ''}
+    <aside class="app-sidebar">
       <h1>${esc(title)}</h1><p class="side-intro">${esc(description)}</p>${meta}${nav}
       <div class="side-bottom"><p>同一份提示词，<br>看见不同的答案。</p></div>
     </aside><main class="workspace page"><div class="collection-heading"><h2>${esc(heading)}</h2>${caption || '<span class="collection-caption">亿模亿样 · 模型作品对比</span>'}</div>`;
@@ -196,7 +196,10 @@ function sortedTasks() {
   });
 }
 
-function renderLibrary() {
+// The category comes from the address (#/questions/<category>) so a return or a shared link keeps it.
+function renderLibrary(category) {
+  if (category) homeState.view = 'tasks';
+  homeState.category = category ?? '';
   const controller = new AbortController();
   let previews = null, destroyed = false;
   const choices = DATA.tasks.map((task) => ({ task, result: questionPreview(task, [], entryKey) }));
@@ -325,6 +328,8 @@ function renderLibrary() {
     $$('[data-home-category]').forEach((el) => el.setAttribute('aria-pressed', String(homeState.view === 'tasks' && el.dataset.homeCategory === homeState.category)));
     const scope = homeState.view === 'models' ? '模型索引' : homeState.category;
     $('.topbar .crumbs').innerHTML = breadcrumbTrail(scope ? [LIBRARY, { text: scope }] : [{ text: '题库' }]);
+    const address = homeState.view === 'tasks' && homeState.category ? `${LIBRARY.href}/${encodeURIComponent(homeState.category)}` : LIBRARY.href;
+    if (location.hash !== address) history.replaceState(history.state, '', address);
     previews?.setPaused(homeState.view !== 'tasks');
   };
   root.oninput = (event) => {
@@ -432,7 +437,7 @@ function activatePanel(name, updateHash = true) {
   if (target === 'board') mountTaskBoard();
   if (updateHash) {
     const base = `#${location.hash.split('#')[1]}`;
-    history.replaceState(null, '', target === 'results' ? base : `${base}#${target}`);
+    history.replaceState(history.state, '', target === 'results' ? base : `${base}#${target}`);
   }
 }
 
@@ -554,7 +559,6 @@ function renderTask(t) {
 
   root.innerHTML = `${header([LIBRARY, { text: t.title }], false, 'questions')}<div class="app-layout task-layout">
     <aside class="app-sidebar">
-      ${origin?.task === t.id ? `<a class="back-link" href="${esc(origin.href)}">${icon('prev')}${esc(origin.text)}</a>` : `<a class="back-link" href="#/questions">${icon('prev')}全部题目</a>`}
       <h1>${esc(t.title)}</h1>
       <p class="side-intro">${esc(t.summary)}</p>
       <p class="side-byline">${t.owner ? `${esc(t.owner)} 发起 · ` : `No.${pad(DATA.tasks.indexOf(t) + 1)} · `}${esc(t.date ?? '')}</p>
@@ -885,7 +889,7 @@ function uploadFacts(r) {
   </div>`;
 }
 
-function createViewer(t, back = null) {
+function createViewer(t) {
   const state = { panes: [], queries: [], active: 0, guide: store.get('guide') === '1' && wide() };
   const byId = (id) => t.results.find((r) => r.id === id);
   const options = () => sortedResults(t).map((r) => `<option value="${esc(r.id)}">${esc(r.title)} · ${esc(label(r))}${r.promptVariant ? ` · ${esc(variantsOf(t).find((variant) => variant.id === r.promptVariant)?.label)}` : ''}${r.status !== 'verified' ? ` · ${STATUS[r.status].label}` : ''}</option>`).join('');
@@ -894,9 +898,7 @@ function createViewer(t, back = null) {
 
   root.innerHTML = `<div class="viewer">
     <header class="vbar">
-      ${back
-        ? `<a class="vback" href="${esc(back.href)}" title="返回${esc(back.text)}">${icon('prev')}<span class="vback-text">${esc(back.text)}</span></a>`
-        : `<a class="vback" href="${taskHref(t)}" title="返回「${esc(t.title)}」">${icon('prev')}<span class="vback-text">${esc(t.title)}</span></a>`}
+      ${backLink('vback')}
       <div class="vnav">
         ${many ? `<button class="vtool icon-only" data-v="prev" aria-label="上一件作品" title="上一件（←）">${icon('prev')}</button>` : ''}
         <span class="vselect-wrap"><span class="vmark" aria-hidden="true"></span><select class="vselect" aria-label="选择预览作品">${options()}</select></span>
@@ -1014,7 +1016,7 @@ function createViewer(t, back = null) {
   function navigate(panes, active = state.active) {
     state.active = Math.min(active, panes.length - 1);
     const hash = viewHref(t, panes[0], panes[1]);
-    if (location.hash !== hash) history.replaceState(null, '', hash);
+    if (location.hash !== hash) history.replaceState(history.state, '', hash);
     update(panes);
   }
 
@@ -1169,8 +1171,71 @@ function platformOffline(name) {
   </main>${footer()}`;
 }
 
+// ---- the way back ---------------------------------------------------------------------
+// Every sub-page has one "返回" at the left of its top bar. It leads to the page the reader came
+// from, or to the page above when the reader arrived by a shared link or came up from below.
+const PAGE_NAMES = { '': '首页', questions: '题库', arena: '盲评', leaderboard: '排行榜', new: '发起题目', me: '个人中心', 'me/works': '我的作品', 'me/questions': '我的题目', review: '审核', terms: '使用条款', privacy: '隐私政策', submit: '上传作品' };
+function placeOf(hash) {
+  const [p = '', a] = hash.replace(/^#\/?/, '').split('#')[0].split('/').filter(Boolean).map(decodeURIComponent);
+  const t = DATA.tasks.find((x) => x.id === p);
+  if (t && !a) return { key: p, name: '题目', up: LIBRARY.href };
+  if (t) return a === 'exhibition' || a === 'sandtable'
+    ? { key: `${p}/stage`, name: '展厅', up: taskHref(t) }
+    : { key: `${p}/view`, name: '作品预览', up: taskHref(t) };
+  if (p === 'submit' && DATA.tasks.some((x) => x.id === a)) return { key: `submit/${a}`, name: '上传作品', up: `#/${a}` };
+  if (p === 'arena' && a) return { key: `arena/${a}`, name: '盲评', up: '#/arena' };
+  // The library's category rides in its address but leaves it the same page.
+  const key = p === 'questions' ? p : [p, a].filter(Boolean).join('/');
+  return { key, name: PAGE_NAMES[key] ?? PAGE_NAMES[p] ?? '上一页', up: null };
+}
+const isBelow = (hash, key) => {
+  for (let up = placeOf(hash).up; up; up = placeOf(up).up) if (placeOf(up).key === key) return true;
+  return false;
+};
+// Keep each history entry, including forward entries, so browser traversal keeps its origin and scroll.
+const visits = new Map();
+let currentVisit = null;
+let nextVisit = Date.now();
+let back = null;
+// Returns the scroll position to restore: the page's own when the reader went back to it.
+function retrace(from) {
+  const here = placeOf(location.hash);
+  // The page being left is still on screen, so its address and scroll are taken as it goes.
+  if (from && currentVisit) Object.assign(visits.get(currentVisit), { hash: new URL(from).hash || '#/', scroll: scrollY });
+  const visit = history.state?.visit;
+  let entry = visits.get(visit);
+  const returning = entry?.key === here.key;
+  if (!returning) {
+    // `from` is the history entry just before this one, when this visit followed a link from it.
+    nextVisit = Math.max(nextVisit, visit ?? 0);
+    entry = { key: here.key, visit: visit ?? ++nextVisit, from: visit ? null : currentVisit, scroll: 0 };
+    visits.set(entry.visit, entry);
+    if (!visit) history.replaceState({ ...history.state, visit: entry.visit }, '');
+  }
+  currentVisit = entry.visit;
+  entry.hash = location.hash;
+  // Pages below this one (a work opened from a shared link) are skipped on the way back.
+  let prev = visits.get(entry.from);
+  while (prev && (prev.key === here.key || isBelow(prev.hash, here.key))) prev = visits.get(prev.from);
+  back = !here.up ? null
+    : prev ? { href: prev.hash, text: placeOf(prev.hash).name, history: prev.visit === entry.from }
+    : { href: here.up, text: placeOf(here.up).name };
+  return returning ? entry.scroll : 0;
+}
+history.scrollRestoration = 'manual';
+// Back to the page just before in history goes back for real, so that page keeps its scroll.
+addEventListener('click', (event) => {
+  if (!back?.history || event.defaultPrevented || event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !event.target.closest('.top-back, .vback')) return;
+  event.preventDefault();
+  history.back();
+});
+// On narrow screens only "返回" stays; the place is in the title.
+function backLink(cls) {
+  return back ? `<a class="${cls}" href="${esc(back.href)}" title="返回${esc(back.text)}">${icon('prev')}<span class="back-text">返回<span class="back-place">${esc(back.text)}</span></span></a>` : '';
+}
+
 // Everything a platform page needs from the gallery.
-const context = () => ({ DATA, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, entryKey, taskHref, viewHref, workKey, interactive, settleImages });
+const context = () => ({ DATA, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, entryKey, taskHref, viewHref, workKey, interactive, settleImages });
 
 // Uploads join their task's result list in the same shape as curated works.
 function uploadResult(w) {
@@ -1225,25 +1290,16 @@ function mergePlatform() {
 let exhibition = null;
 let page = null;
 let routeVersion = 0;
-// A task opened from a personal-center list keeps a way back to that list while the reader stays in that task.
-const ACCOUNT_LISTS = { '#/me/works': '我的作品', '#/me/questions': '我的题目' };
-let lastPage = '';
-let lastHash = '';
-let origin = null;
-async function route({ keepScroll = false } = {}) {
+// `from` is the address being left; a redraw in place (sign-in, a review) passes none.
+async function route({ keepScroll = false, from = null } = {}) {
   const version = ++routeVersion;
-  const scrollBack = keepScroll ? scrollY : 0;
+  const scrollBack = keepScroll ? scrollY : from === null ? 0 : retrace(from);
   const parts = location.hash.replace(/^#\/?/, '').split('#')[0].split('/').filter(Boolean).map(decodeURIComponent);
   const [taskId, a, vs, b] = parts;
   const platformPage = Object.hasOwn(PLATFORM_PAGES, taskId ?? '') ? taskId : null;
   const t = platformPage ? null : DATA.tasks.find((x) => x.id === taskId);
   const inExhibition = t && hasExhibition(t) && (a === 'exhibition' || a === 'sandtable');
   const inViewer = t && a && !inExhibition;
-  const fromAccount = lastPage === 'me' || lastPage === 'review';
-  if (t && fromAccount) origin = { task: t.id, href: lastHash, text: lastPage === 'review' ? '审核' : ACCOUNT_LISTS[lastHash] ?? '个人中心' };
-  else if (t?.id !== origin?.task) origin = null;
-  lastPage = platformPage ?? taskId ?? '';
-  lastHash = location.hash;
   exhibition?.destroy();
   exhibition = null;
   page?.destroy?.();
@@ -1269,7 +1325,7 @@ async function route({ keepScroll = false } = {}) {
   if (!taskId) {
     renderLanding(root, context());
   } else if (taskId === 'questions') {
-    page = renderLibrary();
+    page = renderLibrary(a);
   } else if (taskId === 'terms' || taskId === 'privacy') {
     page = renderLegal(root, context(), taskId);
   } else if (platformPage) {
@@ -1314,7 +1370,7 @@ async function route({ keepScroll = false } = {}) {
       notFound(`「${t.title}」下没有 id 为「${a}」的作品。`);
     }
     else {
-      viewer ??= createViewer(t, fromAccount ? origin : null);
+      viewer ??= createViewer(t);
       viewer.update(valid);
     }
   }
@@ -1348,8 +1404,8 @@ try {
   PROVIDERS = new Map((DATA.providers ?? []).map((p) => [p.id, p]));
   if (!platform.available && resultSort === 'score') resultSort = 'added';
   mergePlatform();
-  addEventListener('hashchange', () => route());
-  route();
+  addEventListener('hashchange', (event) => route({ from: event.oldURL }));
+  route({ from: '' });
 } catch (err) {
   root.innerHTML = err.status === 429
     ? `<main class="wrap empty-page"><h1>访问较频繁</h1><p>${esc(err.message)}</p></main>`

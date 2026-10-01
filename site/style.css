@@ -586,13 +586,16 @@ body[data-preview-mode="model"] .result-media > a:has(.result-model-poster) > im
 @media (max-width: 860px) {
   .vtool-text, .vdivider { display: none; }
   .vtool { width: 36px; padding: 0; }
-  .vback { padding-right: 4px; }
-  .vback-text { display: none; }
+  .vback { gap: 0; padding: 0 6px 0 0; }
+  .vback .back-place { display: none; }
   .vbar { gap: 6px; padding: 0 8px; }
   .split .stage { flex-direction: column; }
   .split-context { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (max-width: 640px) {
+  /* The back label takes the room of the model mark in the work picker. */
+  .vmark { display: none; }
+  .vselect { padding-left: 12px; }
   :root { --gutter: 16px; --topbar: 56px; }
   body { font-size: 14.5px; }
   .brand { gap: 9px; }

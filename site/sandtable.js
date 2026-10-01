@@ -357,7 +357,7 @@ export function createSandtable(root, task, { label, vendorOf, cover, header, in
     requestRender();
     $('[data-count]', el).textContent = count;
     const ids = [...entries.keys()];
-    history.replaceState(null, '', `#/${task.id}/sandtable${ids.length ? `/${ids.join(',')}` : ''}`);
+    history.replaceState(history.state, '', `#/${task.id}/sandtable${ids.length ? `/${ids.join(',')}` : ''}`);
     $('[data-switch-mode]', el).href = `#/${task.id}/exhibition${ids.length ? `/${ids.join(',')}` : ''}`;
     $('.display-modes [aria-current="page"]', el).href = location.hash;
     $('.sand-empty', el).hidden = count > 0;

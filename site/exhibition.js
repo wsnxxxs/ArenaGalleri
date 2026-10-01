@@ -72,7 +72,7 @@ export function createExhibition(root, task, { label, vendorOf, cover, header, i
   }
   function syncSelection() {
     const ids = [...entries.keys()];
-    history.replaceState(null, '', `#/${task.id}/exhibition${ids.length ? `/${ids.join(',')}` : ''}`);
+    history.replaceState(history.state, '', `#/${task.id}/exhibition${ids.length ? `/${ids.join(',')}` : ''}`);
     $('[data-switch-mode]', el).href = `#/${task.id}/sandtable${ids.length ? `/${ids.join(',')}` : ''}`;
     $('.display-modes [aria-current="page"]', el).href = location.hash;
     $('[data-count]', el).textContent = ids.length;

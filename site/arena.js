@@ -130,7 +130,7 @@ function match(root, ctx, task) {
   document.title = `盲评 · ${task.title}`;
   root.innerHTML = `<div class="viewer arena">
     <header class="vbar">
-      <a class="vback" href="#/arena" title="返回盲评">${icon('prev')}<span class="vback-text">盲评</span></a>
+      ${ctx.backLink('vback')}
       <div class="arena-heading"><b>${esc(task.title)}</b><span data-round>正在准备</span></div>
       <div class="vtools">
         <button class="vtool" data-a="prompt" aria-pressed="false" title="查看提示词">${icon('guide')}<span class="vtool-text">提示词</span></button>

@@ -31,8 +31,8 @@ export function mount(root, ctx) {
   const task = tasks.find((t) => t.id === ctx.param);
   if (!task || !accepts(task)) {
     root.innerHTML = `${ctx.pageStart({ title: '上传作品', section: 'questions', heading: task ? '这道题暂不接受作品' : '从一道题目开始', description: '每份作品都对应一道明确的题目。',
-      crumbs: task ? [ctx.LIBRARY, { text: task.title, href: ctx.taskHref(task) }, { text: '上传作品' }] : [ctx.LIBRARY, { text: '上传作品' }],
-      back: task ? { href: ctx.taskHref(task), text: '返回当前题目' } : null })}<section class="account-empty">${icon('grid')}<h2>${task ? '提示词原文尚未公开' : '请从题目内上传作品'}</h2><p>${task ? '待题目补充完整提示词后即可上传。' : '在题库中打开一道题，点击「上传作品」。'}</p><a class="btn primary" href="${task ? ctx.taskHref(task) : '#/questions'}">${task ? '返回题目' : '浏览题库'}</a></section>${ctx.pageEnd()}`;
+      crumbs: task ? [ctx.LIBRARY, { text: task.title, href: ctx.taskHref(task) }, { text: '上传作品' }] : [ctx.LIBRARY, { text: '上传作品' }] })}
+      <section class="account-empty">${icon('grid')}<h2>${task ? '提示词原文尚未公开' : '请从题目内上传作品'}</h2><p>${task ? '待题目补充完整提示词后即可上传。' : '在题库中打开一道题，点击「上传作品」。'}</p><a class="btn primary" href="${task ? ctx.taskHref(task) : '#/questions'}">${task ? '返回题目' : '浏览题库'}</a></section>${ctx.pageEnd()}`;
     return {};
   }
   return uploadFlow(root, ctx, { task });
@@ -193,8 +193,7 @@ export function uploadFlow(root, ctx, options) {
     const limits = platform.site.limits;
     const page = options.page?.(Boolean(state.result)) ?? { title: '上传作品', section: 'questions', heading: state.result ? '作品已提交' : '带来你的答案',
       description: task.title,
-      crumbs: [ctx.LIBRARY, { text: task.title, href: ctx.taskHref(task) }, { text: '上传作品' }],
-      back: { href: ctx.taskHref(task), text: '返回当前题目' } };
+      crumbs: [ctx.LIBRARY, { text: task.title, href: ctx.taskHref(task) }, { text: '上传作品' }] };
     const current = !state.draft ? 0 : state.confirmed ? 2 : 1;
     const steps = [...(options.lead ? [options.lead.label] : []), '选择文件', '试加载', options.infoLabel ?? '作品信息'];
     root.innerHTML = `${ctx.pageStart({ ...page,

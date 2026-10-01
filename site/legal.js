@@ -4,7 +4,7 @@
 import { $, $$, esc, icon } from './ui.js';
 import { toast } from './platform.js';
 
-export const CONTACT = 'alcanocto@outlook.com';
+export const CONTACT = 'arenagallari@outlook.com';
 export const OPERATOR = 'ArenaGalleri 运营团队';
 const UPDATED = '2026-10-01';
 const mail = `<a href="mailto:${CONTACT}">${CONTACT}</a>`;
@@ -143,7 +143,7 @@ export function mount(root, ctx, kind) {
     const link = e.target.closest('[data-jump]');
     if (link) {
       e.preventDefault();
-      history.replaceState(null, '', `#/${kind}#${link.dataset.jump}`);
+      history.replaceState(history.state, '', `#/${kind}#${link.dataset.jump}`);
       return jump(link.dataset.jump, true);
     }
     if (e.target.closest('[data-copy-cite]')) {

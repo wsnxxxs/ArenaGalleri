@@ -22,6 +22,9 @@ a { text-decoration: none; }
 .topbar:not(.sandbar) .crumbs a:first-child { flex: none; }
 .topbar:not(.sandbar) .crumbs a:hover { color: var(--ink); }
 .topbar:not(.sandbar) .crumbs [aria-current] { min-width: 0; color: var(--ink-2); }
+.top-back { display: inline-flex; align-items: center; gap: 3px; flex: none; height: 30px; padding: 0 10px 0 5px; border: 1px solid var(--line-2); border-radius: 6px; color: var(--ink-2); font-size: 12px; text-decoration: none; white-space: nowrap; }
+.top-back .i { width: 16px; height: 16px; }
+.top-back:hover { background: var(--surface-2); border-color: var(--muted); color: var(--ink); }
 .site-nav { gap: 3px; margin: 0 7px 0 0; padding-right: 17px; border-right: 1px solid var(--line); }
 .site-nav .topbar-link { padding: 7px 11px; font-size: 12px; }
 .site-nav .topbar-link:hover, .site-nav .topbar-link[aria-current="page"] { color: var(--ink); background: var(--surface-2); }
@@ -244,9 +247,6 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .app-sidebar h1 { font: 500 37px/1.4 var(--serif); letter-spacing: -.04em; overflow-wrap: anywhere; }
 .side-intro { margin: 17px 0 0; color: var(--ink-2); font-size: 12px; line-height: 1.9; }
 .side-byline { margin: 17px 0 12px; color: var(--muted); font-size: 12px; }
-.back-link { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 23px; color: var(--muted); font-size: 12px; }
-.back-link .i { width: 14px; height: 14px; }
-.back-link:hover { color: var(--ink); }
 .side-nav { display: grid; gap: 5px; margin: 27px 0; }
 .side-link { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 41px; padding: 10px 12px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font: 13px/1.5 var(--sans); text-align: left; text-decoration: none; }
 .side-link .i { width: 18px; height: 18px; }
@@ -613,6 +613,9 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
   .topbar:not(.sandbar) .topbar-in { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 59px 32px; gap: 0 10px; }
   .topbar:not(.sandbar) .topbar-tools { grid-column: 2; grid-row: 1; }
   .topbar:not(.sandbar) .crumbs { grid-column: 1 / -1; grid-row: 2; align-self: stretch; padding: 0 0 8px; border-left: 0; font-size: 11px; }
+  .topbar:not(.sandbar) .top-back { grid-column: 1; grid-row: 2; align-self: start; height: 24px; }
+  .topbar:not(.sandbar) .top-back .back-place { display: none; }
+  .topbar:not(.sandbar) .top-back + .crumbs { grid-column: 2; padding-top: 4px; }
   .app-layout { display: flex; flex-direction: column; }
   .app-layout > .workspace { flex: 1; }
   .app-sidebar { position: relative; top: auto; align-self: stretch; min-width: 0; min-height: 0; max-height: none; overflow: visible; padding: 26px 20px 19px; border-right: 0; border-bottom: 1px solid var(--line); }
@@ -624,7 +627,6 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
   .home-layout .side-section { margin-top: 14px; }
   .home-layout .side-bottom { display: none; }
   .side-intro { max-width: 620px; margin-top: 12px; }
-  .back-link { margin-bottom: 16px; }
   .side-nav { display: flex; flex-wrap: wrap; gap: 5px; margin: 21px 0 0; }
   .side-link { width: auto; min-height: 36px; padding: 8px 10px; font-size: 12px; gap: 7px; }
   .side-link .i { width: 16px; height: 16px; }

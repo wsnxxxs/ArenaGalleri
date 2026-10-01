@@ -137,7 +137,6 @@
 .sandtable { color:var(--ink); background:var(--bg); color-scheme:inherit; }
 .sandtable .sandbar { height:var(--topbar); padding:0; background:var(--glass); border-color:var(--line); }
 .sandbar-in { width:100%; gap:16px; }
-.sand-task-back { display:none; }
 .sand-crumbs { flex:1; }
 .sandbar-tools { display:flex; align-items:center; gap:8px; margin-left:auto; }
 .sandtable .sand-count { margin-left:0; color:var(--muted); font-size:12px; }
@@ -207,8 +206,7 @@
 @media(max-width:700px) {
   .sandbar-in { gap:8px; }
   .sandbar-in .brand { display:none; }
-  .sand-task-back { display:inline-grid; place-items:center; width:32px; height:34px; flex:none; color:var(--ink-2); text-decoration:none; }
-  .sand-task-back .i { width:20px; height:20px; }
+  .sandbar .back-place { display:none; }
   .sandbar-tools { gap:4px; }
   .sandbar-tools .theme-toggle { display:inline-grid; }
   .sandtable .display-modes { margin-left:0; }
