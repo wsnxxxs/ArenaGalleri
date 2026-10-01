@@ -92,7 +92,7 @@ export function mount(root, ctx) {
         tags: [...tags], templates: data.getAll('templates') };
       if (!(await requireUser('登录后即可发起题目')) || !active) return;
       if (event.submitter?.value === 'sample') { showUpload(); scrollTo({ top: 0 }); return; }
-      const buttons = $('button[type="submit"]', form);
+      const buttons = $$('button[type="submit"]', form);
       buttons.forEach((button) => { button.disabled = true; });
       try {
         const result = await api('questions', { method: 'POST', body: question });
