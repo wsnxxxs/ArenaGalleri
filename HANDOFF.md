@@ -57,6 +57,12 @@
 - 前端 check 41/0、test 14/14、本地新包 build 121 件、CI intake 0 错/4 既有提示；数据仓 check 28/0、test 16/16、build:data 和 intake 通过。1280×720、1440×900、375×812 三类模型首页卡片等高、提示词无遮挡；最近收录等高；两种卡片的 18 项海报/实时 alpha 外框差异最大 1px，console error 0。没有真机、生产或全量交互验证。
 - 未 commit、push、发布数据包、更新 pin 或部署；本地缓存为 local 数据包，原有 `.claude/` 未动。确认提交后还需发布数据包、升级消费者 pin，线上才生效。归档：[home-poster-sizing](docs/archive/2026-10-01-home-poster-sizing-wsnxxxs.md)；截图索引在忽略的 `output/poster-sizing/comparison.html`。
 
+## 提示词版本卡片适配（2026-10-01，独立分支）
+
+- 分支 `codex/intake-oct01-variants` 修复题目页配对卡片的模型加载：只给预览器传当前显示的作品版本，避免找不到未显示版本的卡片节点。普通卡片与来源过滤沿用现有行为。
+- `npm run check` 41 文件 / 0 错误，`npm test` 14/14；本地数据包构建成功。两个配对题目的长短按钮、详情入口、桌面/手机截图对照已在浏览器验证，390px 页面无横向溢出。完整检查见 [本轮归档](docs/archive/2026-10-01-prompt-variant-preview-wsnxxxs.md)。
+- 本轮只处理当前收录需要的前端兼容，未推送、未合并、未部署；原 checkout 的他人未提交改动保留。私有数据、本地 pin 和生成物不进入本仓提交。
+
 ## 四仓统一发布完成（2026-10-01 Brisbane）
 
 - 用户已确认两站、共享后端与数据仓同属本轮，授权一起提交、推送和部署，包含新增 38 件作品。此前只发布两仓、保留旧数据的范围已撤回；下方早期记录是当时状态。
