@@ -4,7 +4,7 @@
 import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
 import { api, needsEmail, platform, reactionBar, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
-import { tracksOf } from './leaderboard.js';
+import { tracksOf } from './categories.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', skip: '你跳过了这一组' };
@@ -92,7 +92,7 @@ function lobby(root, ctx) {
           <dl>
             <div><dt>匿名</dt><dd>两件作品来自同一道题、不同的模型配置。左右位置随机，作品地址也不透露身份，投票后才揭晓。</dd></div>
             <div><dt>体验</dt><dd>分别打开、操作两件作品，再选「A 更好」「B 更好」或「不分伯仲」。认出作品或页面异常时，请跳过这一组。</dd></div>
-            <div><dt>计入</dt><dd>登录后的选择计入榜单，每对作品每人计一次。只有已验证作品参与，你上传的作品不会出现在你面前。</dd></div>
+            <div><dt>计入</dt><dd>登录且绑定邮箱后的选择计入榜单，每对作品每人计一次。只有已验证作品参与，你上传的作品不会出现在你面前。</dd></div>
             <div><dt>快捷键</dt><dd><kbd>A</kbd> A 更好，<kbd>S</kbd> 不分伯仲，<kbd>D</kbd> B 更好，揭晓后 <kbd>N</kbd> 下一组。</dd></div>
           </dl>
         </details>
@@ -320,7 +320,10 @@ function match(root, ctx, task) {
     const kind = action.dataset.a;
     if (kind === 'next') next();
     else if (kind === 'prompt') togglePrompt();
-    else if (kind === 'reload' && state.match && !state.result) frame(action.dataset.side ?? state.side);
+    else if (kind === 'reload' && state.match && !state.result) {
+      frame(action.dataset.side ?? state.side);
+      update();
+    }
     else if (kind === 'side') {
       state.side = action.dataset.side;
       state.seen[state.side] = true;

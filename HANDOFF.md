@@ -1,5 +1,14 @@
 # HANDOFF.md · 当前状态
 
+## 四仓整理收尾（2026-10-01，仅推送，不部署）
+
+- 用户授权整理四仓、合并完成分支、提交和推送，并清理无用的独立工作树；本轮没有部署、生产写操作或生产 pin 升级。`main` 已合入邮箱注册 `f9aef92`、配对预览 `6773f69` 和盲评 UI `974b2cc`，旧共享题库分支此前已完整合入。
+- 主目录七个未提交邮箱文件是邮箱分支的旧副本；完整恢复补丁保存在忽略的 `output/repository-housekeeping-20261001/superseded-email-edits.patch`，采用邮箱分支已有联调修复，避免覆盖为旧实现。原 `.claude/launch.json` 保留，通过本地 Git exclude 忽略，不发布个人启动配置。
+- 浏览器验收发现盲评分支仍从 `leaderboard.js` 引用已迁移的 `tracksOf`，现改为 `categories.js`；重新载入作品后即时刷新投票门槛，规则同步说明绑定邮箱的计票条件。题目分类、邮箱门槛、页脚版本删除与配对预览均保留。
+- 现有源码 check 42/0、test 14/14；使用合并后的本地数据包 build 182 件 / 56 个 site 文件、严格 CI intake 0 错 / 9 条既有提示，跨仓真实隔离 integration smoke 通过。之前 121 张海报过期的缓存错误在匹配当前数据包后消失。
+- 本轮本地真实 API 的盲评大厅加载、文学筛选、搜索空状态和 1280px / 390px 截图目检通过，无横向溢出或控制台错误；浏览器使用独立空数据库，没有验证真实作品对战、投票、SMTP / Cloudflare 或生产交互。截图和测试数据库在忽略的 housekeeping 输出目录。
+- 四个已合并的 Gallery 次级工作树，在推送确认后清理；配置、截图、邮箱测试 SQLite/WAL/SHM 和预览本地数据包已逐文件校验归档。生产固定包未变，未来部署前仍需先升级消费者 pin 并重新按发布流程验收。当前归档：[repository-housekeeping](docs/archive/2026-10-01-repository-housekeeping-wsnxxxs.md)。下面“未合并 / 未推送 / 待确认”均为历史轮次状态。
+
 ## 本轮：去掉页脚「版本」诊断（2026-10-01，已本地提交，未推送、未部署）
 
 - 访客用不到页脚右侧的「版本」折叠项，它还会暴露部署信息，所以删掉了：`site/app.js` 的 `buildVersion`/`shortSha` 和调用、`site/style.css` 的 `.build-info`、`docs/DESIGN.md` 的对应条目。`DATA.buildInfo` 保留，写请求版本校验仍在用。`platform.serverVersion` 不再显示；`platform.js` 有他人未提交改动，这次没动。
