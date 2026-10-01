@@ -1,18 +1,9 @@
 // Leaderboard: the full page (#/leaderboard[/<category>|/<task>]) and the panel on each task page.
 import { $, brandMark, esc, icon, pad, store } from './ui.js';
 import { api, platform } from './platform.js';
+import { tracksOf } from './categories.js';
 
 const UNITS = { config: '按配置', model: '按模型' };
-// Task categories from the datapack; unknown categories still get a view with a generic glyph.
-const KNOWN_TRACKS = [['文学', 'text', 'text'], ['静态网页', 'page', 'desktop'], ['建模', 'model', 'cube']];
-
-export function tracksOf(tasks) {
-  const present = [...new Set(tasks.map((t) => t.category).filter(Boolean))];
-  const known = KNOWN_TRACKS.filter(([name]) => present.includes(name)).map(([name, slug, glyph]) => ({ name, slug, glyph }));
-  const other = present.filter((name) => !KNOWN_TRACKS.some(([known]) => known === name)).map((name) => ({ name, slug: name, glyph: 'grid' }));
-  return [...known, ...other].map((track) => ({ ...track, tasks: tasks.filter((t) => t.category === track.name) }));
-}
-
 export const boardNotes = (open = false) => `<details class="board-notes"${open ? ' open' : ''}>
   <summary>计分方法${icon('next')}</summary>
   <dl>

@@ -5,10 +5,18 @@ import { $, $$, esc, formatBytes, formatTime, icon } from './ui.js';
 import { api, platform, refreshPlatform, toast } from './platform.js';
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
+import { TEMPLATE_LABELS, templatesOf } from './categories.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VIEWS = { desktop: { width: 1440, height: 900, label: '桌面 1440×900' }, phone: { width: 390, height: 844, label: '手机 390×844' } };
 const TRIAL_TIMEOUT = 30000;
+
+// What each format's dropzone accepts: the picker filter, the name check and its message.
+const FILES = {
+  text: { accept: '.txt,.md,.markdown,text/plain,text/markdown', pattern: /\.(txt|md|markdown)$/i, prompt: '拖入 .txt 或 .md 文本文件', error: '文学作品请上传 .txt 或 .md 文本文件' },
+  static: { accept: '.zip,.html,.htm,application/zip,text/html', pattern: /\.(zip|html?)$/i, prompt: '拖入 ZIP 压缩包或单个 HTML 文件', error: '请选择 .zip 压缩包或 .html 文件' },
+  vite: { accept: '.zip,application/zip', pattern: /\.zip$/i, prompt: '拖入包含 dist/ 的 Vite 项目 ZIP', error: 'Vite 项目请上传包含 dist/ 的 ZIP 压缩包' },
+};
 
 const freshTrial = () => ({ booted: false, loaded: false, loadMs: null, errors: [], failed: [], blocked: [], paint: null, timedOut: false });
 
@@ -37,8 +45,8 @@ export function uploadFlow(root, ctx, options) {
   const { task } = options;
   const draftTask = options.draftTask ?? task.id;
   const offset = options.lead ? 1 : 0;
-  const templates = task.templates ?? ['static', 'vite'];
-  const templateLabel = (value) => value === 'vite' ? 'Vite 静态网页（含 dist/）' : '纯 HTML / JavaScript';
+  const templates = templatesOf(task);
+  const templateLabel = (value) => value === 'vite' ? 'Vite 静态网页（含 dist/）' : TEMPLATE_LABELS[value];
   let active = true;
   const state = {
     task, template: templates[0],
@@ -71,8 +79,8 @@ export function uploadFlow(root, ctx, options) {
       <div class="dropzone${task ? '' : ' is-disabled'}${state.uploading ? ' is-busy' : ''}" data-drop tabindex="${task ? 0 : -1}" role="button" aria-label="选择或拖入作品文件">
         ${state.uploading
           ? `<span class="progress"><i style="width:${Math.round(state.progress * 100)}%"></i></span><b>${state.progress < 1 ? `正在上传 ${Math.round(state.progress * 100)}%` : '正在检查文件…'}</b><span>请稍候，不要关闭页面</span>`
-          : `${icon('upload')}<b>${state.template === 'vite' ? '拖入包含 dist/ 的 Vite 项目 ZIP' : '拖入 ZIP 压缩包或单个 HTML 文件'}</b><span>或点击选择 · 最大 ${formatBytes(platform.site.limits.uploadBytes)}</span>`}
-        <input type="file" accept="${state.template === 'vite' ? '.zip,application/zip' : '.zip,.html,.htm,application/zip,text/html'}" hidden>
+          : `${icon('upload')}<b>${FILES[state.template].prompt}</b><span>或点击选择 · 最大 ${formatBytes(platform.site.limits.uploadBytes)}</span>`}
+        <input type="file" accept="${FILES[state.template].accept}" hidden>
       </div>`}
       ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ''}
     </div>`;
@@ -207,16 +215,19 @@ export function uploadFlow(root, ctx, options) {
           </div>
           <div class="aside-block">
             <h3>文件要求</h3>
-            <ul class="plain">
+            <ul class="plain">${templates.includes('text') ? `
+              <li>上传一个 UTF-8 编码的 <code>.txt</code> 或 <code>.md</code> 文件，内容为模型生成的原文。</li>
+              <li>Markdown 支持标题、段落、列表、引用、强调与代码；HTML 标签、链接和图片都按原文字显示。</li>
+              <li>平台按统一版式排版，预览、盲评与截图都使用排版后的页面。</li>` : `
               <li>ZIP 根目录（或 <code>dist/</code>）有 <code>index.html</code>；也可以直接上传单个 HTML 文件。</li>
               <li>Vite 等需要构建的项目，请先运行构建，把 <code>dist/</code> 一起打包；平台不会执行构建脚本。</li>
               <li><code>node_modules</code>、<code>.git</code> 会被自动忽略，但仍计入压缩包大小，建议打包前移除；<code>.env</code> 等密钥文件会被拒绝。</li>
-              <li>作品不能访问外部网络。可以引用的公共 CDN：${platform.site.cdn.map((host) => `<code>${esc(host)}</code>`).join('、')}。</li>
+              <li>作品不能访问外部网络。可以引用的公共 CDN：${platform.site.cdn.map((host) => `<code>${esc(host)}</code>`).join('、')}。</li>`}
             </ul>
           </div>
           <div class="aside-block">
             <h3>限制</h3>
-            <ul class="plain"><li>压缩包不超过 ${formatBytes(limits.uploadBytes)}，解压后不超过 150 MB，最多 2000 个文件。</li><li>每人最多 ${limits.pendingPerUser} 件作品同时等待核验。</li></ul>
+            <ul class="plain"><li>${templates.includes('text') ? `文件不超过 ${formatBytes(limits.uploadBytes)}，最多 20 万字符。` : `压缩包不超过 ${formatBytes(limits.uploadBytes)}，解压后不超过 150 MB，最多 2000 个文件。`}</li><li>每人最多 ${limits.pendingPerUser} 件作品同时等待核验。</li></ul>
           </div>
         </aside>
       </section>
@@ -279,8 +290,7 @@ export function uploadFlow(root, ctx, options) {
   function upload(file) {
     if (!file || state.uploading) return;
     if (file.size > platform.site.limits.uploadBytes) { state.error = `文件超过 ${formatBytes(platform.site.limits.uploadBytes)} 上限`; return draw(); }
-    if (!/\.(zip|html?)$/i.test(file.name)) { state.error = '请选择 .zip 压缩包或 .html 文件'; return draw(); }
-    if (state.template === 'vite' && !/\.zip$/i.test(file.name)) { state.error = 'Vite 项目请上传包含 dist/ 的 ZIP 压缩包'; return draw(); }
+    if (!FILES[state.template].pattern.test(file.name)) { state.error = FILES[state.template].error; return draw(); }
     Object.assign(state, { uploading: true, progress: 0, error: '' });
     draw();
     const xhr = createUploadRequest(`drafts?task=${encodeURIComponent(draftTask)}&name=${encodeURIComponent(file.name)}&template=${state.template}`);

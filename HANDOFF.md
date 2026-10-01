@@ -1,5 +1,13 @@
 # HANDOFF.md · 当前状态
 
+## 本轮：题目分类与按分类的提交格式（2026-10-01，已本地提交，未推送、未部署）
+
+- 联调后修复：审核对话框保存成功即刷新列表；后端 `e81cb4e` 去掉文本投稿的 README 检查项，均已复测。上线顺序：Gallery 与后端（`14a0dbf`、`e81cb4e`）、数据仓（`a2f8f95`）推送 → 发布数据包并升级两端 pin → 前后端一起部署，均待用户授权。
+- 联调完成（后端 `14a0dbf`、数据仓 `a2f8f95`，均未推送）：隔离后端上走通文学题 + Markdown 示例、建模题无示例、审核改分类与审计、题库 / 排行榜 / 我的题目分类显示、小红帽按分类推断文本格式。联调中补了 `submit.js` 文本题的文件要求说明。见 [question-categories-2](docs/archive/2026-10-01-question-categories-wsnxxxs-2.md)。后端文本草稿仍显示 README 检查项，建议后端隐藏。
+- 题库侧栏由标签筛选改为 全部题目 / 文学 / 静态网页 / 建模 / 模型索引，与排行榜题型同源（新增 `site/categories.js`，`tracksOf` 移入）。卡片和题目页先显示分类，与分类同名的标签隐藏；标签改为选填补充。
+- 发起题目新增必选分类（三张单选卡片），提交格式随分类：文学固定纯文本 / Markdown（新 `text` 格式，上传 .txt/.md），静态网页与建模为 static / vite。审核通过对话框可设置分类。手机侧栏被不换行导航撑宽的问题一并修复。
+- 依赖后端：`category` 字段与校验、`template=text` 文本渲染、审核改分类、各列表返回分类；任务提示词在忽略的 `output/backend-question-category-prompt.md`，需前后端一起发布。check 42/0、test 14/14、build 121 件；intake 121 错均为当前 pin 旧数据包的海报指纹过期，与本轮无关。真实后端联调、text 上传、手机端发起题目未验证。归档：[question-categories](docs/archive/2026-10-01-question-categories-wsnxxxs.md)。
+
 ## 本轮：发起题目示例结果选填（2026-10-01，已本地提交，未推送、未部署）
 
 - `publish.js` 题目表单改为「提交题目」（只发 `POST /api/questions` 题目字段）与「附上示例结果（选填）」（沿用 `uploadFlow`）两个按钮；完成页兼容无作品。`submit.js` 文件要求改为 node_modules / .git 自动忽略但计入压缩包大小、密钥文件拒绝；`account.js` 两处文案改为“有示例结果时”。`docs/PRODUCT.md` 同步。

@@ -1,22 +1,34 @@
-// Publish a question: 01 describe it (title / summary / tags / prompt / formats), then either
+// Publish a question: 01 describe it (title / summary / category / tags / prompt / formats), then either
 // submit it alone or attach an optional first result through the shared upload steps. The
 // question waits for an admin; an attached result also goes through content moderation.
 import { $, $$, esc, icon } from './ui.js';
 import { api, platform, refreshPlatform, requireUser, toast } from './platform.js';
 import { uploadFlow } from './submit.js';
+import { CATEGORIES, TEMPLATE_LABELS, categoryOf, tagsOf } from './categories.js';
 
 const normalize = (name) => String(name).normalize('NFKC').trim().replace(/^#+/, '').trim();
-const TEMPLATE_LABELS = { static: '纯 HTML / JavaScript', vite: 'Vite 静态网页' };
+const CATEGORY_NOTES = { 文学: '故事、诗歌、文案', 静态网页: '页面与前端交互', 建模: '三维场景与模型' };
 // Drafts staged for a question that does not exist yet.
 const NEW_QUESTION = '__new__';
-const blank = () => ({ title: '', summary: '', prompt: '', tags: [], templates: ['static', 'vite'] });
+const blank = () => ({ title: '', summary: '', category: '', prompt: '', tags: [], templates: [] });
 const sideSteps = (current) => `<ol class="side-steps">${['题目信息', '选择文件', '试加载', '结果信息']
   .map((label, i) => `<li${i === current ? ' aria-current="step"' : ''}><span>0${i + 1}</span>${label}</li>`).join('')}</ol>`;
 
 export function mount(root, ctx) {
-  const existing = [...new Set(ctx.DATA.tasks.flatMap((task) => task.tags))];
+  const existing = [...new Set(ctx.DATA.tasks.flatMap(tagsOf))].filter((tag) => !categoryOf(tag));
   let question = blank();
   let flow = null, active = true;
+
+  // Formats follow the category: a text question takes text only; web and 3D questions choose.
+  function formatField() {
+    const category = categoryOf(question.category);
+    if (!category) return '<span class="field-label">允许的提交格式 *</span><p class="fine">选择题目分类后显示可用格式。</p>';
+    const [only] = category.templates;
+    if (category.templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '上传 .txt 或 .md 文件，站内按统一版式展示。' : ''}</p>`;
+    return `<span class="field-label">允许的提交格式 *</span><div class="format-options">
+      ${category.templates.map((value) => `<label><input type="checkbox" name="templates" value="${value}"${question.templates.includes(value) ? ' checked' : ''}>${TEMPLATE_LABELS[value]}</label>`).join('')}
+    </div><p class="fine">Vite 项目需要包含构建后的 dist/ 目录。</p>`;
+  }
 
   function showForm() {
     flow?.destroy();
@@ -29,20 +41,21 @@ export function mount(root, ctx) {
           <div class="notice publish-auth" data-publish-auth${platform.user ? ' hidden' : ''}>${icon('user')}<p>登录后即可发起题目，已填写的内容会保留。</p><button class="btn sm" type="button" data-auth="login">登录 / 注册</button></div>
           <label class="field"><span class="field-label">题目标题 *</span><input class="input" name="title" required maxlength="70" placeholder="例如：体素中国古典建筑群" value="${esc(question.title)}"></label>
           <label class="field"><span class="field-label">测试简述 *</span><textarea class="input" name="summary" required maxlength="400" rows="3" placeholder="需要完成什么？能测出模型的哪些能力？">${esc(question.summary)}</textarea></label>
-          <div class="field"><label class="field-label" for="question-tag">题目标签 *</label>
+          <fieldset class="field"><legend class="field-label">题目分类 *</legend><div class="category-options">
+            ${CATEGORIES.map((c) => `<label class="category-option"><input type="radio" name="category" value="${esc(c.name)}"${c.name === question.category ? ' checked' : ''}>${icon(c.glyph)}<span><b>${esc(c.name)}</b><small>${esc(CATEGORY_NOTES[c.name])}</small></span></label>`).join('')}
+          </div><p class="fine">分类决定这道题在题库、排行榜中的位置，以及作品的提交格式。</p></fieldset>
+          <div class="field"><label class="field-label" for="question-tag">题目标签<small>选填</small></label>
             <div class="tag-input-row"><input class="input" id="question-tag" maxlength="24" placeholder="选择或创建标签，按 Enter 添加"><button class="btn" type="button" data-add-tag>添加</button></div>
             <div class="tag-editor" aria-label="已选择的标签"></div>
             <div class="tag-suggestions" aria-label="已有标签">${existing.map((tag) => `<button type="button" data-suggest-tag="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div>
-            <p class="fine">最多 6 个；同名标签会归入同一分类。</p>
+            <p class="fine">最多 6 个，补充技术栈或主题，例如 Three.js、产品展示；不必重复分类。</p>
           </div>
           <label class="field"><span class="field-label">完整提示词 *</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="粘贴所有参与模型需要使用的同一份完整提示词。">${esc(question.prompt)}</textarea></label>
-          <div class="field"><span class="field-label">允许的提交格式 *</span><div class="format-options">
-            ${Object.entries(TEMPLATE_LABELS).map(([value, label]) => `<label><input type="checkbox" name="templates" value="${value}"${question.templates.includes(value) ? ' checked' : ''}>${label}</label>`).join('')}
-          </div><p class="fine">Vite 项目需要包含构建后的 dist/ 目录。</p></div>
+          <div class="field" data-formats>${formatField()}</div>
           <p class="form-error" role="alert"></p>
           <div class="form-actions"><button class="btn primary" type="submit" value="plain">提交题目</button><button class="btn" type="submit" value="sample">附上示例结果（选填）${icon('right')}</button><a class="btn" href="#/questions">取消</a><span class="fine">发起即表示你同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></div>
         </form>
-        <aside class="publish-note"><h3>一道可比较的题目</h3><p>简述说明测试目标。<br>提示词作为所有作品的共同依据。<br>标签帮助其他人发现这道题。</p><p>可以选择附上一份用这份提示词生成的模型结果，让管理员和大家更快看到它能做出什么。</p><p>题目由管理员人工审核，示例结果另做内容审核；通过前只有你能看到。测试文字、灌水或广告不会通过。</p></aside>
+        <aside class="publish-note"><h3>一道可比较的题目</h3><p>简述说明测试目标。<br>分类决定题目归属与提交格式。<br>提示词作为所有作品的共同依据。</p><p>可以选择附上一份用这份提示词生成的模型结果，让管理员和大家更快看到它能做出什么。</p><p>题目由管理员人工审核，示例结果另做内容审核；通过前只有你能看到。测试文字、灌水或广告不会通过。</p></aside>
       </section>${ctx.pageEnd()}`;
     document.title = `发起题目 · ${ctx.DATA.title}`;
     const form = $('.publish-form', root);
@@ -66,7 +79,13 @@ export function mount(root, ctx) {
       return true;
     }
     paintTags();
-    root.onchange = null;
+    root.onchange = (event) => {
+      if (!event.target.matches('[name="category"]')) return;
+      question.category = event.target.value;
+      question.templates = [...categoryOf(question.category).templates];
+      $('[data-formats]', form).innerHTML = formatField();
+      error.textContent = '';
+    };
     root.onclick = (event) => {
       if (event.target.closest('[data-add-tag]')) addTag(tagInput.value);
       const suggestion = event.target.closest('[data-suggest-tag]');
@@ -86,9 +105,9 @@ export function mount(root, ctx) {
       for (const [name, label] of [['title', '题目标题'], ['summary', '测试简述'], ['prompt', '完整提示词']]) {
         if (!String(data.get(name)).trim()) { error.textContent = `请填写${label}`; $(`[name="${name}"]`, form).focus(); return; }
       }
-      if (!tags.length) { error.textContent = '请至少添加一个标签'; tagInput.focus(); return; }
+      if (!categoryOf(data.get('category'))) { error.textContent = '请选择题目分类'; $('[name="category"]', form).focus(); return; }
       if (!data.getAll('templates').length) { error.textContent = '请至少选择一种提交格式'; return; }
-      question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), prompt: String(data.get('prompt')).trim(),
+      question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), category: String(data.get('category')), prompt: String(data.get('prompt')).trim(),
         tags: [...tags], templates: data.getAll('templates') };
       if (!(await requireUser('登录后即可发起题目')) || !active) return;
       if (event.submitter?.value === 'sample') { showUpload(); scrollTo({ top: 0 }); return; }
@@ -112,7 +131,7 @@ export function mount(root, ctx) {
       <div class="step-body question-brief">
         <h3>${esc(question.title)}</h3>
         <p>${esc(question.summary)}</p>
-        <p class="work-meta">${question.tags.map((tag) => `#${esc(tag)}`).join(' · ')} · ${question.templates.map((t) => TEMPLATE_LABELS[t]).join(' / ')}</p>
+        <p class="work-meta">${[esc(question.category), ...question.tags.map((tag) => `#${esc(tag)}`), question.templates.map((t) => TEMPLATE_LABELS[t]).join(' / ')].join(' · ')}</p>
         <details class="prompt-peek"><summary>${icon('guide')}完整提示词 · 示例结果需按它生成</summary><pre>${esc(question.prompt)}</pre></details>
       </div>
     </section>`;

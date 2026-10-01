@@ -17,6 +17,7 @@ import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { questionPreview } from './question-preview.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
+import { tagsOf, tracksOf } from './categories.js';
 
 const root = $('#app');
 let DATA;
@@ -165,7 +166,7 @@ const sideNav = (label, links) => `<nav class="side-nav section-nav" aria-label=
 const pageEnd = () => `${footer()}</main></div>`;
 const searchControl = (type, placeholder, value = '') => `<label class="collection-search">${icon('search')}<input type="search" data-${type}-search aria-label="${placeholder}" placeholder="${placeholder}" value="${esc(value)}"></label>`;
 const questionSorts = { date: '发布时间（最新在前）', works: '解答数量（多到少）', title: '题目名称（A–Z）' };
-const homeState = { tag: '', model: '', query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'date', modelQuery: '', vendor: '' };
+const homeState = { category: '', model: '', query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'date', modelQuery: '', vendor: '' };
 
 // ---- home -----------------------------------------------------------------------------
 // Questioned uploads stay visible as reference but are left out of every count.
@@ -174,19 +175,16 @@ const counted = (t) => t.results.filter(interactive);
 function libraryStart(crumbs) {
   const works = DATA.tasks.reduce((sum, t) => sum + counted(t).length, 0);
   const vendorCount = new Set(DATA.models.map((m) => m.vendor || '其他')).size;
-  const tags = [...new Set(DATA.tasks.flatMap((t) => t.tags))];
   const control = (cls, attrs, pressed, body) => `<button class="${cls}" ${attrs} aria-pressed="${pressed}">${body}</button>`;
   return `${header(crumbs, false, 'questions')}<div class="app-layout home-layout">
     <aside class="app-sidebar">
       <h1>题库</h1><p class="side-intro">${DATA.tasks.length} 道题目 · ${works} 件作品</p>
-      <nav class="side-nav" aria-label="题库导航">
+      <nav class="side-nav section-nav" aria-label="题库导航">
         ${control('side-link', 'data-home-view="tasks"', true, `${icon('grid')}全部题目<span class="nav-count">${DATA.tasks.length}</span>`)}
+        ${tracksOf(DATA.tasks).map((x) => control('side-link', `data-home-category="${esc(x.name)}"`, false, `${icon(x.glyph)}${esc(x.name)}<span class="nav-count">${x.tasks.length}</span>`)).join('')}
+        <span class="side-divider" aria-hidden="true"></span>
         ${control('side-link', 'data-home-view="models"', false, `${icon('code')}模型索引<span class="nav-count">${DATA.models.length}</span>`)}
       </nav>
-      <section class="side-section home-tags"><h2>按标签筛选</h2><div class="chips" aria-label="按标签筛选">
-        ${control('chip', 'data-home-tag=""', true, '全部')}
-        ${tags.map((tag) => control('chip', `data-home-tag="${esc(tag)}"`, false, `#${esc(tag)}`)).join('')}
-      </div></section>
       <div class="side-bottom"><p>${vendorCount} 家厂商 · ${DATA.models.length} 个模型<br>同一份提示词，不同的表达。</p></div>
     </aside>
     <main class="workspace page">`;
@@ -196,6 +194,11 @@ function libraryStart(crumbs) {
 const selectControl = (name, aria, options) => `<label class="result-sort">${aria}<select data-${name} aria-label="${aria}">${options}</select></label>`;
 const option = (value, text, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(text)}</option>`;
 const answeredBy = (t, id) => counted(t).some((r) => r.model === id);
+// A card names its category first, then up to two of its own tags.
+function tagLine(t) {
+  const tags = tagsOf(t), more = tags.slice(2);
+  return `${t.category ? `<li class="tag-kind">${esc(t.category)}</li>` : ''}${tags.slice(0, 2).map((g) => `<li>#${esc(g)}</li>`).join('')}${more.length ? `<li class="tag-more" title="${esc(more.join(' · '))}">+${more.length}</li>` : ''}`;
+}
 function sortedTasks() {
   const order = new Map(DATA.tasks.map((t, i) => [t.id, i]));
   return [...DATA.tasks].sort((a, b) => {
@@ -213,8 +216,7 @@ function renderLibrary() {
     ? (shown.previewPoster ? img(shown.previewPoster, '', 'question-model-poster', eager) : coverHtml(shown))
     : shown ? coverHtml(shown, '', eager) : `<span class="question-placeholder">${icon('text')}<span>${counted(t).length ? '暂无预览图' : '等待第一份答案'}</span></span>`;
   const results = DATA.tasks.flatMap((t) => counted(t).map((r) => ({ t, r })));
-  const tags = [...new Set(DATA.tasks.flatMap((t) => t.tags))];
-  if (homeState.tag && !tags.includes(homeState.tag)) homeState.tag = '';
+  if (!DATA.tasks.some((t) => t.category === homeState.category)) homeState.category = '';
 
   const taskCards = sortedTasks().map((t, ti) => {
     const works = counted(t);
@@ -225,7 +227,7 @@ function renderLibrary() {
         ${artwork}
       </a>
       <div class="task-body">
-        <div class="question-byline"><ul class="tag-line">${t.tags.slice(0, 3).map((g) => `<li>#${esc(g)}</li>`).join('')}${t.tags.length > 3 ? `<li class="tag-more" title="${esc(t.tags.slice(3).join(' · '))}">+${t.tags.length - 3}</li>` : ''}</ul>
+        <div class="question-byline"><ul class="tag-line">${tagLine(t)}</ul>
           <span class="avatar question-avatar" role="img" aria-label="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}" title="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}">${t.owner ? avatarFace(t.ownerAvatar, t.owner) : icon('user')}</span>
         </div>
         <h3><a href="${taskHref(t)}">${esc(t.title)}</a></h3>
@@ -305,14 +307,13 @@ function renderLibrary() {
     let count = 0;
     for (const card of $$('[data-task-card]', root)) {
       const task = DATA.tasks.find((t) => t.id === card.dataset.taskCard);
-      card.hidden = Boolean((homeState.tag && !task.tags.includes(homeState.tag)) || (homeState.model && !answeredBy(task, homeState.model)) || ![task.title, task.summary, ...task.tags].join(' ').toLowerCase().includes(homeState.query.toLowerCase()));
+      card.hidden = Boolean((homeState.category && task.category !== homeState.category) || (homeState.model && !answeredBy(task, homeState.model)) || ![task.title, task.summary, task.category ?? '', ...task.tags].join(' ').toLowerCase().includes(homeState.query.toLowerCase()));
       if (!card.hidden) count++;
     }
-    $('#h-tasks').textContent = [homeState.tag && `#${homeState.tag}`, MODELS.get(homeState.model)?.name].filter(Boolean).join(' · ') || '全部题目';
+    $('#h-tasks').textContent = [homeState.category, MODELS.get(homeState.model)?.name].filter(Boolean).join(' · ') || '全部题目';
     $('[data-home-count]').textContent = `${count} 道题目`;
     $('[data-home-empty]').hidden = count > 0;
     $('[data-task-new]')?.toggleAttribute('hidden', count === 0);
-    $$('[data-home-tag]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.homeTag === homeState.tag)));
     $('[data-home-model]').value = homeState.model;
     // Model index: the keyword matches a model or its vendor; the vendor select keeps one row.
     const needle = homeState.modelQuery.trim().toLowerCase();
@@ -332,8 +333,10 @@ function renderLibrary() {
     $('[data-model-empty]').hidden = models > 0;
     $('[data-model-vendor]').value = homeState.vendor;
     $$('[data-home-panel]').forEach((el) => { el.hidden = el.dataset.homePanel !== homeState.view; });
-    $$('[data-home-view]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.homeView === homeState.view)));
-    $('.topbar .crumbs').innerHTML = breadcrumbTrail(homeState.view === 'models' ? [LIBRARY, { text: '模型索引' }] : [{ text: '题库' }]);
+    $$('.side-nav [data-home-view]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.homeView === homeState.view && !(el.dataset.homeView === 'tasks' && homeState.category))));
+    $$('[data-home-category]').forEach((el) => el.setAttribute('aria-pressed', String(homeState.view === 'tasks' && el.dataset.homeCategory === homeState.category)));
+    const scope = homeState.view === 'models' ? '模型索引' : homeState.category;
+    $('.topbar .crumbs').innerHTML = breadcrumbTrail(scope ? [LIBRARY, { text: scope }] : [{ text: '题库' }]);
     previews?.setPaused(homeState.view !== 'tasks');
   };
   root.oninput = (event) => {
@@ -356,12 +359,12 @@ function renderLibrary() {
     filter();
   };
   root.onclick = (event) => {
-    const tag = event.target.closest('[data-home-tag]'), view = event.target.closest('[data-home-view]');
-    if (tag) { homeState.tag = tag.dataset.homeTag; homeState.view = 'tasks'; }
-    if (view) homeState.view = view.dataset.homeView;
-    if (event.target.closest('[data-home-reset]')) { homeState.tag = ''; homeState.model = ''; homeState.query = ''; $('[data-home-search]').value = ''; }
+    const category = event.target.closest('[data-home-category]'), view = event.target.closest('[data-home-view]');
+    if (category) { homeState.category = category.dataset.homeCategory; homeState.view = 'tasks'; }
+    if (view) { homeState.view = view.dataset.homeView; homeState.category = ''; }
+    if (event.target.closest('[data-home-reset]')) { homeState.category = ''; homeState.model = ''; homeState.query = ''; $('[data-home-search]').value = ''; }
     if (event.target.closest('[data-model-reset]')) { homeState.vendor = ''; homeState.modelQuery = ''; $('[data-model-search]').value = ''; }
-    if (tag || view || event.target.closest('[data-home-reset], [data-model-reset]')) filter();
+    if (category || view || event.target.closest('[data-home-reset], [data-model-reset]')) filter();
   };
   filter();
   document.title = `题库 · ${DATA.title}`;
@@ -567,7 +570,7 @@ function renderTask(t) {
       <h1>${esc(t.title)}</h1>
       <p class="side-intro">${esc(t.summary)}</p>
       <p class="side-byline">${t.owner ? `${esc(t.owner)} 发起 · ` : `No.${pad(DATA.tasks.indexOf(t) + 1)} · `}${esc(t.date ?? '')}</p>
-      <ul class="tags side-tags">${t.tags.map((g) => `<li>#${esc(g)}</li>`).join('')}</ul>
+      <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(t.category)}</li>` : ''}${tagsOf(t).map((g) => `<li>#${esc(g)}</li>`).join('')}</ul>
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}

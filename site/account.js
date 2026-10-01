@@ -2,6 +2,7 @@
 import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
 import { api, avatarFace, codeSender, confirmDialog, moderationBadge, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
+import { CATEGORIES, tagsOf } from './categories.js';
 
 const TABS = { unverified: '未验证', verified: '已验证', questioned: '存疑', questions: '题目', log: '记录' };
 const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的题目' };
@@ -159,7 +160,7 @@ function questionRow(ctx, question) {
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
     <div class="submission-question-body"><h3>${hidden ? esc(question.title) : `<a href="#/${esc(question.id)}">${esc(question.title)}</a>`}${moderationBadge(question.moderation, HELD.question[question.moderation?.status], QUESTION_LABELS)}</h3>
       <p class="summary">${esc(question.summary)}</p>
-      <p class="work-meta">${question.tags.map((tag) => `#${esc(tag)}`).join(' · ')}<span>${esc(question.date)}${hidden ? '' : ` · ${works} 件作品`}</span></p>
+      <p class="work-meta">${[question.category, ...tagsOf(question).map((tag) => `#${tag}`)].filter(Boolean).map(esc).join(' · ')}<span>${esc(question.date)}${hidden ? '' : ` · ${works} 件作品`}</span></p>
       ${heldNote('question', question)}
     </div><div class="actions">${hidden ? '' : `<a class="btn sm" href="#/${esc(question.id)}">查看题目${icon('next')}</a>`}${works && !hidden ? '' : `<button class="icon-btn" data-delete-question="${esc(question.id)}" title="删除题目" aria-label="删除「${esc(question.title)}」">${icon('trash')}</button>`}</div>
   </article>`;
@@ -670,7 +671,7 @@ function reviewQuestionRow(q) {
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
     <div class="submission-question-body"><h3>${shown ? `<a href="#/${esc(q.id)}">${esc(q.title)}</a>` : esc(q.title)}${moderationBadge(q.moderation, '', QUESTION_LABELS)}</h3>
       <p class="summary">${esc(q.summary)}</p>
-      <p class="work-meta">${esc(q.ownerName ?? q.owner ?? '已注销的用户')}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.tags.map((tag) => `<span>#${esc(tag)}</span>`).join('')}</p>
+      <p class="work-meta">${esc(q.ownerName ?? q.owner ?? '已注销的用户')}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}${tagsOf(q).map((tag) => `<span>#${esc(tag)}</span>`).join('')}</p>
       ${detail ? `<p class="result-reason">${icon(status === 'rejected' ? 'alert' : 'guide')}<span>${esc(detail)}</span></p>` : ''}
       ${samples.length ? `<ul class="question-samples">${samples.map(sampleRow).join('')}</ul>` : shown ? '' : '<p class="result-reason"><span>没有附带示例结果。</span></p>'}
       <details class="prompt-peek"><summary>${icon('guide')}完整提示词</summary><pre>${esc(q.prompt)}</pre></details>
@@ -683,7 +684,7 @@ function reviewQuestionRow(q) {
   </article>`;
 }
 
-// Approving needs no reason; rejecting requires one that the author will read.
+// Approving needs no reason and can correct the category; rejecting requires a reason the author will read.
 function decideQuestion(q, status) {
   return new Promise((resolve) => {
     let saved = false;
@@ -693,6 +694,7 @@ function decideQuestion(q, status) {
       onClose: () => resolve(saved),
       body: `<form data-q-form novalidate>
         <p class="sheet-text">「${esc(q.title)}」${status === 'approved' ? '会公开到题库并开放投稿。' : '不会公开，作者会看到下面的理由。'}</p>
+        ${status === 'approved' ? `<label class="field"><span class="field-label">题目分类<i>*</i></span><select class="input" name="category" required><option value="">请选择</option>${CATEGORIES.map((c) => `<option value="${esc(c.name)}"${c.name === q.category ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         <label class="field"><span class="field-label">理由${status === 'rejected' ? '<i>*</i>' : '<small>选填</small>'}</span><textarea class="input" name="reason" rows="3" maxlength="500"></textarea></label>
         <p class="form-error" role="alert"></p>
         <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary${status === 'rejected' ? ' danger' : ''}" type="submit">${status === 'approved' ? '通过' : '拒绝'}</button></div>
@@ -704,12 +706,16 @@ function decideQuestion(q, status) {
       const reason = form.reason.value.trim();
       const error = $('.form-error', form);
       if (status === 'rejected' && !reason) { error.textContent = '请写明拒绝理由'; form.reason.focus(); return; }
+      const category = form.category?.value;
+      if (status === 'approved' && !category) { error.textContent = '请选择题目分类'; form.category.focus(); return; }
       const button = $('[type="submit"]', form);
       button.disabled = true;
       try {
-        await api(`questions/${encodeURIComponent(q.id)}/moderation`, { method: 'POST', body: { status, reason } });
+        await api(`questions/${encodeURIComponent(q.id)}/moderation`, { method: 'POST', body: { status, reason, ...(category ? { category } : {}) } });
         saved = true;
         sheet.close();
+        // Settle on success too, so the list refreshes even if the close event never arrives.
+        resolve(true);
         toast(status === 'approved' ? '题目已通过' : '题目已拒绝');
       } catch (err) {
         error.textContent = err.message;

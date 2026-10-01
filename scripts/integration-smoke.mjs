@@ -88,7 +88,7 @@ try {
   assert.equal(me.status, 200);
   assert.deepEqual(resolveApiMedia(me.data, 'me').works, []);
   const question = await call('questions', { method: 'POST', cookie, body: {
-    title: 'Smoke question', summary: 'Integration check.', prompt: 'Build one small page.', tags: ['界面'], templates: ['static'],
+    title: 'Smoke question', summary: 'Integration check.', category: '静态网页', prompt: 'Build one small page.', tags: ['界面'], templates: ['static'],
   } });
   assert.equal(question.status, 200);
   assert.ok(question.data.question.id);
