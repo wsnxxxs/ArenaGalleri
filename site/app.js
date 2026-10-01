@@ -1405,8 +1405,10 @@ try {
   if (!platform.available && resultSort === 'score') resultSort = 'added';
   mergePlatform();
   addEventListener('hashchange', (event) => route({ from: event.oldURL }));
-  route({ from: '' });
+  await route({ from: '' });
+  await window.ArenaEntry?.ready(root);
 } catch (err) {
+  window.ArenaEntry?.fail();
   root.innerHTML = err.status === 429
     ? `<main class="wrap empty-page"><h1>访问较频繁</h1><p>${esc(err.message)}</p></main>`
     : `<main class="wrap empty-page"><h1>数据加载失败</h1><p>${esc(err.message)}</p><p>本地查看请先运行 <code>npm run build</code>，再用 <code>npm start</code> 打开。</p></main>`;

@@ -95,6 +95,19 @@
 - 分支 `codex/intake-oct01-variants` 修复题目页配对卡片的模型加载：只给预览器传当前显示的作品版本，避免找不到未显示版本的卡片节点。普通卡片与来源过滤沿用现有行为。
 - `npm run check` 41 文件 / 0 错误，`npm test` 14/14；本地数据包构建成功。两个配对题目的长短按钮、详情入口、桌面/手机截图对照已在浏览器验证，390px 页面无横向溢出。完整检查见 [本轮归档](docs/archive/2026-10-01-prompt-variant-preview-wsnxxxs.md)。
 - 本轮只处理当前收录需要的前端兼容，未推送、未合并、未部署；原 checkout 的他人未提交改动保留。私有数据、本地 pin 和生成物不进入本仓提交。
+## 本轮补充：用户授权先上线检查、不提交（2026-10-01）
+
+- 用户确认正式仓库为 wsnxxxs/ArenaGalleri、自己有协作者权限，并明确要求先上线、不 commit。fetch 看到 origin/main=4e5ee04 的其他未上线功能；本轮只将现网功能基线加过场补丁发布，未合并/捎带这些其他变更，工作区源码与 HEAD 保留。
+- 在服务器独立预览目录对固定现网作品包正常复制构建（本 checkout 缺配置仍保持不变），check 42/0、test 14/14、assemble 121 件/56 site 文件、CI intake 0 错/4 已知提示。公开 data.json 除预览 buildInfo 外与切换前逐字段一致。先前构建限制在这次服务器暂存构建中已解除；未升级作品包或修改数据库/后端。
+- 发布 ID portal-preview-20261001T073255Z，buildInfo 用该标记辨识未提交预览。Gallery 本轮 4 文件变化：app.js、index.html、entry-boot.js、data.json（仅构建信息）；1556 文件完整哈希/集合核对通过，删除 0。旧目录保存在 /www/wwwroot/gallery.prev-portal-preview-20261001T073255Z；发布审计在 /root/portal-preview-20261001T073255Z，子站先切、总入口后启用，Nginx/后端均未改。
+- 公网实际浏览器 1440px 从总入口点击进入、390px 带入口标记到达均就绪揭幕，零 pageerror/HTTP 错误，无横向溢出，首页截图目检通过；没有注册、投稿或盲评写入。本地证据在 Show1 output/portal-release-preview/live。两仓本轮没有 commit/push，用户正在检查预览。
+
+## 本轮：总入口到达过场（2026-10-01，本地未提交/部署）
+
+- 用户授权跨三个页面接通总入口色块过场。`site/index.html` head 在 ?entry=portal 时以 #121211 首帧盖住；新增 `site/entry-boot.js` 与 Show1 public 同名源文件逐字相同。初次 app 初始化 await route 后等待首屏图片、字体与布局，随后揭幕；数据异常、脚本/样式资源失败或 25 秒超时显示加载失败和重试/返回 arenaofbias.icu，失败后迟到就绪不能揭幕。成功移除 query 标记；直接打开不插入过场。默认 Gallery 主题与数据协议保持。
+- 总入口源在 Show1 `portal/`，竞技场到达接入和 80% 整站缩放在 Show1，本仓没有缩放修改。三个入口须配套发布，不能仅上线入口动画。
+- npm check 42 文件/0 错，npm test 14/14。npm build 因缺 datapack.json 配置无法完成，CI intake 因缺 .datapack/vendor/three.module.js 无法完成，未创建或改动私有配置。
+- Show1 `scripts/validate-portal-entry.mjs` 用实际 site 源和合成档案/图片在独立 Gallery origin 验证桌面/手机/2048、正常/减少动态效果 6 组慢图保持遮罩、就绪揭幕与返回清理；5 类失败及重试通过。两站合计 12 组成功、10 组失败；不是正式数据包、真实平台业务或生产验收。截图在 Show1 忽略目录 output/portal-entry。未提交、推送、部署。
 
 ## 四仓统一发布完成（2026-10-01 Brisbane）
 

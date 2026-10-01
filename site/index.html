@@ -2,6 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
+  <script>
+    if (new URLSearchParams(location.search).get('entry') === 'portal') document.documentElement.dataset.entry = 'gallery';
+  </script>
+  <style>html[data-entry]::after { content:''; position:fixed; inset:0; z-index:2147483646; background:#121211; }</style>
+  <script src="entry-boot.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>亿模亿样 · 模型效果对比</title>
   <meta name="description" content="同一份提示词，不同模型的前端表达。浏览作品、并排体验、查看截图与提示词。" />
