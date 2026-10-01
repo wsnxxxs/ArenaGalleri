@@ -429,11 +429,8 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .platform-layout .workspace { display: flex; flex-direction: column; }
 .platform-layout .workspace > .footer { margin-top: auto; padding-top: 0; }
 .platform-layout .workspace > .block:last-of-type { padding-bottom: 40px; }
-.rules { border-top: 0; margin-top: 0; }
-.rules h3 { font: 500 19px/1.5 var(--serif); }
-.rules p { font-size: 12px; }
-.arena-task > a { padding-block: 21px; }
-.arena-task-title b { font: 500 22px/1.5 var(--serif); }
+.arena-task > a { padding-block: 18px; }
+.arena-task-title b { font: 550 16px/1.55 var(--sans); letter-spacing: 0; }
 .arena-task-title small { font-size: 12px; }
 .board-head { padding-bottom: 15px; }
 .board-meta { font-size: 12px; }
@@ -578,9 +575,6 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
   .toolbar-actions .result-sort { flex: 1 1 0; min-width: 0; }
   .toolbar-actions .result-sort select { width: 100%; max-width: none; }
   .task-layout .toolbar-actions .result-sort { flex: 1 1 140px; }
-  .rules { grid-template-columns: 1fr; }
-  .rules > li { border-left: 0; border-bottom: 1px solid var(--line); padding: 18px 0; }
-  .rules > li:last-child { border-bottom: 0; }
   .dir-row { grid-template-columns: 1fr; gap: 16px; }
   .collection-heading { flex-wrap: wrap; gap: 12px; }
   .task-list { --task-gap: 15px; }
