@@ -39,8 +39,7 @@ function harnessOptions(ctx, selected) {
 }
 
 function providerOptions(ctx, selected) {
-  return [...ctx.PROVIDERS.values()].filter((p) => p.listed || p.id === selected)
-    .sort((a, b) => byName(a.name, b.name)).map((p) => option(p.id, p.name, p.id === selected)).join('');
+  return [...ctx.PROVIDERS.values()].map((p) => option(p.id, p.name, p.id === selected)).join('');
 }
 
 // work is an existing upload when editing; its values prefill the form.
@@ -51,7 +50,7 @@ export function workFieldsHtml(ctx, task, work = null) {
   const efforts = platform.site.efforts;
   const effort = !w.effort ? '' : efforts.includes(w.effort) ? w.effort : '__other';
   const harness = w.harness ?? (w.harnessName ? '__other' : '');
-  const provider = w.provider ?? (w.providerName ? '__other' : '');
+  const provider = ctx.providerOf(w)?.id ?? '';
   return `
     <label class="field"><span class="field-label">作品标题<i>*</i></span><input class="input" name="title" maxlength="40" required placeholder="例如：云山古刹" value="${esc(w.title ?? '')}"></label>
     <label class="field"><span class="field-label">简介</span><textarea class="input" name="summary" maxlength="200" rows="2" placeholder="一两句话介绍作品的看点">${esc(w.summary ?? '')}</textarea></label>
@@ -71,8 +70,7 @@ export function workFieldsHtml(ctx, task, work = null) {
       <label class="field"><span class="field-label">Harness 版本</span><input class="input" name="harnessVersion" maxlength="40" placeholder="选填，例如 2.1.3" value="${esc(w.harnessVersion ?? '')}"${harness ? '' : ' disabled'}><span class="field-hint">选择 Harness 后可填写，最多 40 字。</span></label>
     </div>
     <label class="field" data-other-harness${harness === '__other' ? '' : ' hidden'}><span class="field-label">其他 Harness<i>*</i></span><input class="input" name="harnessOther" maxlength="40" placeholder="填写工具或环境名称" value="${esc(harness === '__other' ? w.harnessName : '')}"></label>
-    <label class="field"><span class="field-label">服务商</span><select class="input" name="providerId"><option value="">未注明</option>${providerOptions(ctx, w.provider)}${option('__other', '其他（手动填写）', provider === '__other')}</select><span class="field-hint">模型经由谁调用；「官方」指模型厂商自己的 API、网页或 App。不确定就留「未注明」。</span></label>
-    <label class="field" data-other-provider${provider === '__other' ? '' : ' hidden'}><span class="field-label">其他服务商</span><input class="input" name="providerOther" maxlength="40" placeholder="填写服务商名称" value="${esc(provider === '__other' ? w.providerName : '')}"></label>
+    <label class="field"><span class="field-label">服务商</span><select class="input" name="providerId"><option value="">未注明</option>${providerOptions(ctx, provider)}</select><span class="field-hint">「官方」指模型厂商自己的 API、网页或 App，其他都选「非官方」。不确定就留「未注明」。</span></label>
     <div class="field-row">
       <label class="field"><span class="field-label">生成方式<i>*</i></span><select class="input" name="generationMode" required><option value="">请选择</option>${GENERATION_MODES.map(([value, text]) => option(value, text, value === w.generationMode)).join('')}</select></label>
       <label class="field"><span class="field-label">人工介入<i>*</i></span><select class="input" name="humanIntervention" required><option value="">请选择</option>${INTERVENTIONS.map(([value, text]) => option(value, text, value === w.humanIntervention)).join('')}</select></label>
@@ -86,7 +84,7 @@ export function workFieldsHtml(ctx, task, work = null) {
 
 // Shows the "other" inputs that belong to the changed select.
 export function onWorkFieldChange(form, target) {
-  const toggle = { modelId: '[data-other-model]', effort: '[data-other-effort]', harnessId: '[data-other-harness]', providerId: '[data-other-provider]' }[target.name];
+  const toggle = { modelId: '[data-other-model]', effort: '[data-other-effort]', harnessId: '[data-other-harness]' }[target.name];
   if (!toggle) return;
   $(toggle, form).hidden = target.value !== '__other';
   if (target.name === 'harnessId') $('[name="harnessVersion"]', form).disabled = !target.value;
@@ -113,7 +111,6 @@ export function readWorkFields(form, task) {
   if (other && !text('modelName')) return fail(form, 'modelName', '请填写模型名称');
   if (!data.harnessId) return fail(form, 'harnessId', '请选择 Harness');
   if (data.harnessId === '__other' && !text('harnessOther')) return fail(form, 'harnessOther', '请填写 Harness 名称');
-  if (data.providerId === '__other' && !text('providerOther')) return fail(form, 'providerOther', '请填写服务商名称');
   if (!data.generationMode) return fail(form, 'generationMode', '请选择生成方式');
   if (!data.humanIntervention) return fail(form, 'humanIntervention', '请选择人工介入程度');
   if (text('evidenceUrl') && !/^https?:\/\//i.test(text('evidenceUrl'))) return fail(form, 'evidenceUrl', '请填写以 http:// 或 https:// 开头的链接');
@@ -126,7 +123,7 @@ export function readWorkFields(form, task) {
     modelVersion: text('modelVersion'),
     ...(data.harnessId === '__other' ? { harnessOther: text('harnessOther') } : { harnessId: data.harnessId }),
     harnessVersion: text('harnessVersion'),
-    ...(data.providerId === '__other' ? { providerOther: text('providerOther') } : { providerId: data.providerId }),
+    providerId: data.providerId,
     generationMode: data.generationMode,
     humanIntervention: data.humanIntervention,
     generatedOn: data.generatedOn ?? '',

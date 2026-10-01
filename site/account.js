@@ -415,13 +415,21 @@ function mine(root, ctx) {
 // ---- review queue -----------------------------------------------------------------------------
 function provenanceSelect(ctx, type, work) {
   const harness = type === 'harness';
+  if (!harness) {
+    const selected = ctx.providerOf(work)?.id ?? 'unset';
+    return `<div class="provenance-field"><label class="field"><span class="field-label">服务商</span>
+    <select class="input" name="providerChoice">
+      <option value="unset"${selected === 'unset' ? ' selected' : ''}>未注明</option>
+      ${[...ctx.PROVIDERS.values()].map((entry) => `<option value="${esc(entry.id)}"${selected === entry.id ? ' selected' : ''}>${esc(entry.name)}</option>`).join('')}
+    </select></label></div>`;
+  }
   const id = work[type];
-  const name = work[harness ? 'harnessName' : 'providerName'];
-  const registry = harness ? ctx.HARNESSES : ctx.PROVIDERS;
+  const name = work.harnessName;
+  const registry = ctx.HARNESSES;
   const selected = id ? id : name ? 'other' : 'unset';
   const entries = [...registry.values()].filter((entry) => entry.listed || entry.id === id).sort((a, b) => byName(a.name, b.name));
   if (id && !registry.has(id)) entries.push({ id, name: name || id, listed: false });
-  return `<div class="provenance-field"><label class="field"><span class="field-label">${harness ? 'Harness' : '服务商'}</span>
+  return `<div class="provenance-field"><label class="field"><span class="field-label">Harness</span>
     <select class="input" name="${type}Choice" data-provenance-choice="${type}">
       <option value="unset"${selected === 'unset' ? ' selected' : ''}>未注明</option>
       ${entries.map((entry) => `<option value="${esc(entry.id)}"${selected === entry.id ? ' selected' : ''}>${esc(entry.name)}${entry.listed ? '' : '（已停用）'}</option>`).join('')}
@@ -443,22 +451,20 @@ function sourceSuggestion(registry, value) {
 }
 
 function updateProvenanceForm(form, ctx) {
-  for (const type of ['harness', 'provider']) {
-    const choice = form.elements.namedItem(`${type}Choice`);
-    const other = form.querySelector(`[data-provenance-other="${type}"]`);
-    const input = form.elements.namedItem(`${type}Other`);
-    const suggestion = form.querySelector(`[data-provenance-suggestion="${type}"]`);
-    other.hidden = choice.value !== 'other';
-    suggestion.hidden = true;
-    suggestion.replaceChildren();
-    if (choice.value !== 'other') continue;
-    const match = sourceSuggestion(type === 'harness' ? ctx.HARNESSES : ctx.PROVIDERS, input.value);
-    if (!match) continue;
+  const choice = form.elements.namedItem('harnessChoice');
+  const other = form.querySelector('[data-provenance-other="harness"]');
+  const input = form.elements.namedItem('harnessOther');
+  const suggestion = form.querySelector('[data-provenance-suggestion="harness"]');
+  other.hidden = choice.value !== 'other';
+  suggestion.hidden = true;
+  suggestion.replaceChildren();
+  const match = choice.value === 'other' && sourceSuggestion(ctx.HARNESSES, input.value);
+  if (match) {
     suggestion.append('可能是 ', match.name, ' ');
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn sm';
-    button.dataset.selectSource = type;
+    button.dataset.selectSource = 'harness';
     button.dataset.sourceId = match.id;
     button.textContent = `改选 ${match.name}`;
     suggestion.append(button);
@@ -467,24 +473,25 @@ function updateProvenanceForm(form, ctx) {
   form.elements.namedItem('harnessVersion').disabled = form.elements.namedItem('harnessChoice').value === 'unset';
 }
 
-function changedProvenance(form, work) {
+function changedProvenance(form, work, ctx) {
   const body = {};
-  for (const type of ['harness', 'provider']) {
-    const id = work[type] ?? null;
-    const name = work[type === 'harness' ? 'harnessName' : 'providerName'] ?? '';
-    const initial = id || (name ? 'other' : 'unset');
-    const choice = form.elements.namedItem(`${type}Choice`).value;
-    const other = form.elements.namedItem(`${type}Other`).value.trim();
-    if (choice === initial && (choice !== 'other' || other === name)) continue;
+  const harnessId = work.harness ?? null;
+  const harnessName = work.harnessName ?? '';
+  const initial = harnessId || (harnessName ? 'other' : 'unset');
+  const choice = form.elements.namedItem('harnessChoice').value;
+  const other = form.elements.namedItem('harnessOther').value.trim();
+  if (choice !== initial || (choice === 'other' && other !== harnessName)) {
     if (choice === 'other') {
-      if (!other) throw new Error(`请填写${type === 'harness' ? 'Harness' : '服务商'}名称`);
-      body[`${type}Id`] = null;
-      body[`${type}Other`] = other;
+      if (!other) throw new Error('请填写 Harness 名称');
+      body.harnessId = null;
+      body.harnessOther = other;
     } else {
-      body[`${type}Id`] = choice === 'unset' ? null : choice;
-      body[`${type}Other`] = '';
+      body.harnessId = choice === 'unset' ? null : choice;
+      body.harnessOther = '';
     }
   }
+  const provider = form.elements.namedItem('providerChoice').value;
+  if (provider !== (ctx.providerOf(work)?.id ?? 'unset')) body.providerId = provider === 'unset' ? null : provider;
   const version = form.elements.namedItem('harnessChoice').value === 'unset' ? '' : form.elements.namedItem('harnessVersion').value.trim();
   if (version !== (work.harnessVersion ?? '')) body.harnessVersion = version;
   return body;
@@ -565,7 +572,7 @@ function openReview(ctx, w, { onDecided } = {}) {
   const form = $('form', sheet.el);
   updateProvenanceForm(form, ctx);
   form.addEventListener('input', (event) => {
-    if (event.target.matches('[data-provenance-choice], [name="harnessOther"], [name="providerOther"]')) updateProvenanceForm(form, ctx);
+    if (event.target.matches('[data-provenance-choice], [name="harnessOther"]')) updateProvenanceForm(form, ctx);
   });
   form.addEventListener('change', (event) => {
     if (event.target.matches('[data-provenance-choice]')) updateProvenanceForm(form, ctx);
@@ -576,7 +583,7 @@ function openReview(ctx, w, { onDecided } = {}) {
     if (suggestion) {
       const choice = form.elements.namedItem(`${suggestion.dataset.selectSource}Choice`);
       if (![...choice.options].some((option) => option.value === suggestion.dataset.sourceId)) {
-        const registry = suggestion.dataset.selectSource === 'harness' ? ctx.HARNESSES : ctx.PROVIDERS;
+        const registry = ctx.HARNESSES;
         const option = new Option(registry.get(suggestion.dataset.sourceId).name, suggestion.dataset.sourceId);
         choice.add(option, choice.options[choice.options.length - 1]);
       }
@@ -593,7 +600,7 @@ function openReview(ctx, w, { onDecided } = {}) {
     if (!decide) return;
     let body;
     try {
-      body = { status: decide.dataset.decide, reason: form.reason.value, ...changedProvenance(form, w) };
+      body = { status: decide.dataset.decide, reason: form.reason.value, ...changedProvenance(form, w, ctx) };
     } catch (error) {
       $('.form-error', form).textContent = error.message;
       return;

@@ -29,7 +29,9 @@ let PROVIDERS;
 const modelOf = (r) => MODELS.get(r.model) ?? { name: r.modelName ?? r.model, vendor: r.vendorName ?? '' };
 const vendorOf = (r) => modelOf(r).vendor || '其他';
 const harnessOf = (r) => (r.harness && HARNESSES.get(r.harness)) || (r.harnessName || r.harness ? { name: r.harnessName ?? r.harness } : null);
-const providerOf = (r) => (r.provider && PROVIDERS.get(r.provider)) || (r.providerName || r.provider ? { name: r.providerName ?? r.provider } : null);
+// Provider is only official or not: anything named other than 'official' counts as unofficial.
+const providerOf = (r) => (r.provider || r.providerName ? PROVIDERS.get(r.provider === 'official' ? 'official' : 'unofficial') : null);
+const providerKey = (r) => providerOf(r)?.id ?? 'unset';
 const sourceLine = (r) => {
   const harness = harnessOf(r);
   return [harness && `${harness.name}${r.harnessVersion ? ` ${r.harnessVersion}` : ''}`, providerOf(r)?.name].filter(Boolean).join(' · ');
@@ -544,7 +546,7 @@ function renderTask(t) {
   const vendors = [...vendorCounts.keys()].sort(byName);
   if (!vendors.includes(taskState.vendor)) taskState.vendor = '';
   const harnessChoices = sourceChoices(t.results, 'harness', 'harnessName', harnessOf);
-  const providerChoices = sourceChoices(t.results, 'provider', 'providerName', providerOf);
+  const providerChoices = ['unset', ...PROVIDERS.keys()].map((key) => [key, { name: PROVIDERS.get(key)?.name ?? '未注明', count: t.results.filter((r) => providerKey(r) === key).length }]);
   if (!harnessChoices.some(([key]) => key === taskState.harness)) taskState.harness = '';
   if (!providerChoices.some(([key]) => key === taskState.provider)) taskState.provider = '';
   taskState.picks = taskState.picks.filter((id) => t.results.some((r) => r.id === id));
@@ -702,7 +704,7 @@ function applySort(t) {
 function filterResults(t) {
   const shown = displayedResults(t).filter((r) => (!taskState.vendor || vendorOf(r) === taskState.vendor)
     && (!taskState.harness || sourceKey(r, 'harness', 'harnessName') === taskState.harness)
-    && (!taskState.provider || sourceKey(r, 'provider', 'providerName') === taskState.provider)
+    && (!taskState.provider || providerKey(r) === taskState.provider)
     && [label(r), r.title, r.summary, vendorOf(r), harnessOf(r)?.name, providerOf(r)?.name].join(' ').toLowerCase().includes(taskState.query.toLowerCase()));
   const ids = new Set(shown.map((r) => r.id));
   $$('.result').forEach((el) => { el.hidden = !ids.has(el.dataset.id); });
@@ -1403,7 +1405,7 @@ try {
   await connectPlatform(DATA.buildInfo);
   MODELS = new Map(DATA.models.map((m) => [m.id, m]));
   HARNESSES = new Map((DATA.harnesses ?? []).map((h) => [h.id, h]));
-  PROVIDERS = new Map((DATA.providers ?? []).map((p) => [p.id, p]));
+  PROVIDERS = new Map([['official', { id: 'official', name: '官方', listed: true }], ['unofficial', { id: 'unofficial', name: '非官方', listed: true }]]);
   if (!platform.available && resultSort === 'score') resultSort = 'added';
   mergePlatform();
   addEventListener('hashchange', (event) => route({ from: event.oldURL }));

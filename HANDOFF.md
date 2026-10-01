@@ -1,5 +1,12 @@
 # HANDOFF.md · 当前状态
 
+## 服务商二值与后端联调（2026-10-01，提交与推送收尾，未部署）
+
+- 用户授权提交现有服务商修改、完成隔离后端联调、更新文档并推送。投稿、作者编辑和管理员核验只提交 `providerId`（official / unofficial / 空）；服务商固定为未注明 / 官方 / 非官方，不再有手填名称。题目页、作品信息与排行榜统一显示和筛选，旧平台 ID 或名称按非官方显示；Harness 原有手填、提示和版本保持。榜单说明同步修正，产品与设计文档已更新。
+- 本地真实 API 联调通过：HTML 试加载及按钮交互、非官方上传、作者编辑为官方 / 清空 / 非官方、管理员把官方改为非官方并通过验证、非官方榜单筛选。五次作品写请求均 200，只发送 providerId；筛选返回 filters.provider=unofficial、1 票 / 1 人 / 2 配置。bootstrap 仅两项 providers，作品 provider 二值/null 且无 providerName。截图目检通过，捕获的 console error 为 0。
+- 收尾在保留他轮已提交启动与缓存修改的当前 main 上运行 check 43/0、test 14/14、固定包 build 121 件 / 57 site 文件。固定包严格 CI intake 仍为 121 个过期海报指纹错误 / 4 条提示；与匹配渲染版本的本地包隔离构建为 182 件 / 57 site 文件，严格 intake 0 错 / 9 条既有提示，跨仓 integration smoke 通过。
+- 以 wsnxxxs 的 GitHub noreply 身份提交并推送 origin/main，提交号与远端源码 CI 见 Git / Actions。后端和前端需配套发布，后端先完成 v25 迁移；本轮没有部署、改消费者 pin 或操作生产库。归档：[provider-binary-integration](docs/archive/2026-10-01-provider-binary-integration-wsnxxxs.md)。隔离数据库、请求证据和截图保留在忽略的 output/provider-binary-20261001-4d06e23b/。
+
 ## 验证码垃圾邮件提示（2026-10-01，仅提交与推送）
 
 - 用户授权提交两个前端的现有提示修改并推送。Gallery 的 `site/platform.js` 在共用 `codeSender` 发送成功提示末尾追加「没收到请检查垃圾邮件箱。」，覆盖注册、账号绑定和找回密码；本仓记录仅包含 Gallery 改动。
