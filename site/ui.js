@@ -79,7 +79,15 @@ export const themeButton = (cls = 'icon-btn') => `<button class="${cls} theme-to
 // Theme changes are explicit, so the default ink exhibition stays consistent.
 document.addEventListener('click', (e) => { if (e.target.closest('[data-theme-toggle]')) setTheme(currentTheme() === 'dark' ? 'light' : 'dark'); });
 
+// 截图/封面在同一个数据包内内容不变：URL 拼数据包版本号，配 nginx 长缓存后
+// 平时直接吃本地缓存，换包时版本变化自动失效。
+export const versionedMedia = (src) => {
+  const version = globalThis.SAME_PROMPT_CONFIG?.assetVersion;
+  return src && version ? `${src}${src.includes('?') ? '&' : '?'}v=${version}` : src;
+};
+
 export function img(src, alt, cls = '', eager = false) {
+  src = versionedMedia(src);
   return src
     ? `<img class="${cls}" src="${esc(src)}" alt="${esc(alt)}"${eager ? '' : ' loading="lazy"'} decoding="async" />`
     : `<div class="${cls} img-empty">暂无截图</div>`;

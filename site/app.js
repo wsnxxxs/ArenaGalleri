@@ -11,7 +11,7 @@
 //   #/submit/<task>           upload to this task         (platform)
 //   #/me · #/review           personal center · review queue (platform)
 //   #/terms · #/privacy       terms of use and disclaimer · privacy policy
-import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, store, syncThemeUi, themeButton } from './ui.js';
+import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, store, syncThemeUi, themeButton, versionedMedia } from './ui.js';
 import { STATUS, accountControl, api, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, statusBadge } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
@@ -267,7 +267,7 @@ function renderLibrary(category) {
     const items = models.map((m) => {
       const mine = catalogued.filter(({ r }) => r.model === m.id);
       const mark = m.logo
-        ? `<a class="brand-mark" href="${esc(m.brandUrl)}" target="_blank" rel="noopener" aria-label="${esc(m.brandName)} 官网" title="${esc(m.brandName)} 官网"><img src="${esc(m.logo)}" alt="" loading="lazy" decoding="async"></a>`
+        ? `<a class="brand-mark" href="${esc(m.brandUrl)}" target="_blank" rel="noopener" aria-label="${esc(m.brandName)} 官网" title="${esc(m.brandName)} 官网"><img src="${esc(versionedMedia(m.logo))}" alt="" loading="lazy" decoding="async"></a>`
         : brandMark(m);
       return `<li class="dir-model" data-dir-model="${esc([m.name, m.vendorNote ?? '', vendor].join(' ').toLowerCase())}">${mark}
         <div class="dir-model-body">
@@ -680,7 +680,7 @@ function renderTask(t) {
     const gal = e.target.closest('[data-gallery]');
     if (gal) {
       const r = t.results.find((x) => x.id === gal.dataset.gallery);
-      lightbox.open(r.gallery.map((g) => ({ src: g.src, title: g.caption || r.title, sub: `${r.title} · ${label(r)} · ${r.upload ? '投稿者提供' : '作者截图'}` })), 0);
+      lightbox.open(r.gallery.map((g) => ({ src: versionedMedia(g.src), title: g.caption || r.title, sub: `${r.title} · ${label(r)} · ${r.upload ? '投稿者提供' : '作者截图'}` })), 0);
     }
     const copy = e.target.closest('[data-copy]');
     if (copy) {
@@ -950,7 +950,7 @@ function createViewer(t) {
       return;
     }
     const src = r.scene + (state.queries[i] ? `?${state.queries[i]}` : '');
-    const bg = cover(r);
+    const bg = versionedMedia(cover(r));
     // Uploads run on their own origin; the frame sandbox repeats the server's policy.
     const sandbox = r.upload ? ' sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads" referrerpolicy="no-referrer"' : '';
     // Replace the whole frame so the previous scene's WebGL context is released.
@@ -1004,7 +1004,7 @@ function createViewer(t) {
     const current = byId(state.panes[state.active]);
     $('.vselect', el).value = current.id;
     const m = modelOf(current);
-    $('.vmark', el).innerHTML = m.logo ? `<img src="${esc(m.logo)}" alt="">` : '';
+    $('.vmark', el).innerHTML = m.logo ? `<img src="${esc(versionedMedia(m.logo))}" alt="">` : '';
     $('[data-v="guide"]', el).setAttribute('aria-pressed', String(state.guide));
     $('[data-v="split"]', el)?.setAttribute('aria-pressed', String(split));
     const open = $('[data-v="open"]', el);
@@ -1398,6 +1398,8 @@ try {
   }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   DATA = await res.json();
+  // 媒体缓存钥匙：数据包提交号前 8 位，nginx 长缓存依赖它换包失效。
+  globalThis.SAME_PROMPT_CONFIG.assetVersion ??= DATA.buildInfo?.datapack?.slice(0, 8) ?? '';
   await connectPlatform(DATA.buildInfo);
   MODELS = new Map(DATA.models.map((m) => [m.id, m]));
   HARNESSES = new Map((DATA.harnesses ?? []).map((h) => [h.id, h]));
