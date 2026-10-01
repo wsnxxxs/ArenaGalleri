@@ -1,5 +1,25 @@
 # HANDOFF.md · 当前状态
 
+## 四仓最新功能发布准备（2026-10-01，已授权提交、推送和部署）
+
+- 用户明确授权将现有上传与审核流程改版、去掉 Harness 版本的 11 个未提交文件一并提交和部署。负责人 wsnxxxs；本轮功能与文档使用一条英文提交，私有配置、缓存和生成物不入库。
+- fetch 前后 main 与 origin/main 均为 a1ab4f2；远端仅 main、没有开放 PR，旧 PR #1 已关闭。邮箱注册分支已完整合入，干净的历史 worktree 及其依赖保留，本轮没有删除遗留文件或改写远端有效修改。
+- 正式构建改用四仓一致的已验证固定包（182 件作品）；真实 pin 仅更新忽略的 datapack.json，不写入公开文档。此前旧包的 121 个海报指纹错误不再适用于新固定包。
+- 线上未提交过场预览已由 main 的 2e178cd 保存：入口遮罩、首屏图片和字体等待、失败重试与返回入口均保留。生产 entry-boot.js 与 main 的 LF 内容逐字一致，工作区哈希差异仅为 CRLF。
+- 本轮工作区 check 43/0、test 14/14。已提交备用版本的干净 LF 构建为 182 件 / 57 site 文件，严格 intake 0 错 / 9 条既有提示，对后端当前已提交源码的真实隔离 integration smoke 通过。最终功能提交后再从真实 SHA 导出、构建及验收，结果由共享后端本轮发布记录统一确认。
+- 本仓准备产物，不操作生产。实际发布与公网验收以共享后端 docs/archive/2026-10-01-latest-release-wsnxxxs.md 为准；此前上传改版的浏览器联调仍见下节，本轮未重新执行真实付费审核、SMTP、真机或全部作品交互。归档：[latest-release-preparation](docs/archive/2026-10-01-latest-release-preparation-wsnxxxs.md)。
+
+## 上传与审核流程改版、去掉 Harness 版本（2026-10-01，本轮授权提交、推送和部署）
+
+- 投稿页（`site/submit.js`）：拖拽区下只留一行关键文件要求，其余折叠；上传中改为带「取消」的进度卡；试加载 30 秒无载入信号时可在新窗口确认后继续；作品信息必填项在外、选填收进「补充信息」（`site/work-fields.js`，编辑弹窗共用）；提交按钮显示「提交中…」。侧栏和提交完成页共用阶段条 `stageTrack`（`.timeline` 改为按状态着色，新增横排 `.is-row`），完成页每 15 秒轮询 `GET /api/me`（最多 10 分钟）跟进审核结果，分别显示审核中 / 待人工复核 / 未通过及原因 / 已公开。发起题目（`site/publish.js`）的完成页同时显示题目人工审核与示例结果内容审核。
+- 审核（`site/account.js`）：新增「内容复核」标签，处理 `moderation` 为 review / pending / rejected 的上传，可通过并公开（理由选填，空时发送「人工复核通过」）、拒绝（理由必填）或重新自动审核；「未验证」只列内容已放行且题目已公开的作品（待审题目的示例结果在题目通过后才进入），修复了内容未放行时点「通过验证」后作品仍不公开的问题；示例结果待复核时题目审核行提供「去复核内容」。「我的作品」在有作品自动审核中时同样轮询，等待核验计数排除内容未放行的作品。
+- 去掉 Harness 版本：投稿、编辑、管理员核验表单与展示（`app.js` 来源行与信息栏、`prompt-variants.js` 分组键）不再使用 `harnessVersion`。
+- 顺带修复：发起题目附带示例时，提交过程中的 `refreshPlatform('question')` 会让上传流程重绘已被消费的草稿预览并报 410；现在提交中跳过重绘。
+- 依赖的后端契约（缺失时均有兜底，可与当前后端共存）：`site.autoModeration`、`review.content`、`reviewContent` 通过理由选填、内容未放行时禁止 verified、作者端只返回必要审核字段、截图失败后恢复。给后端的提示词在忽略目录 `output/backend-upload-moderation-prompt.md`。
+- 验证：check 43/0、test 14/14、固定包 build 121 件 / 57 site 文件。隔离联调（`output/upload-review-redesign/harness.mjs`：当前后端代码 + 本地假 6 Luna 按标题给结论 + 借用 Gallery Playwright 的测试截图器）用真实浏览器跑通：静态作品从审核中自动跟进到未验证、待复核与被拒作品进入内容复核、管理员不填理由通过后进入未验证、文学 .md 作品走截图与审核、带示例的新题目完成页、编辑与核验表单无 Harness 版本、手机宽度投稿页；修复后 console error 0。截图在 `output/upload-review-redesign/shots/`。未验证：真实 6 Luna、生产截图服务、Vite ZIP、真机。
+- 与后端本轮未提交改动（`site.autoModeration`、`review.content`、作者端审核字段裁剪、核验 409、人工通过理由选填）联调：同一套浏览器流程全部通过，console error 0；API 核对管理员计数 unverified 4 / content 0 / questions 1，作者只收到 status / at（被拒时含 reason），内容未放行时核验返回 409「请先完成内容审核」。截图在 `output/upload-review-redesign/shots-new-backend/`。示例结果筛选另行验证：题目待审时「未验证」为空，通过题目后出现该示例，console error 0。后端 `review.unverified` 计数仍包含待审题目的示例，侧栏待办数会比列表多，需后端同步。
+- 发现：后端检出目录没有安装 `playwright` 时截图失败，作品一律以 `capture_incomplete` 转人工；生产需确认已安装。联调时「我的作品」缩略图不显示，是因为 `api('me')` 返回的媒体路径没有按 API 地址解析，跨端口才出现，与本轮无关，未改。
+
 ## 服务商二值与后端联调（2026-10-01，提交与推送收尾，未部署）
 
 - 用户授权提交现有服务商修改、完成隔离后端联调、更新文档并推送。投稿、作者编辑和管理员核验只提交 `providerId`（official / unofficial / 空）；服务商固定为未注明 / 官方 / 非官方，不再有手填名称。题目页、作品信息与排行榜统一显示和筛选，旧平台 ID 或名称按非官方显示；Harness 原有手填、提示和版本保持。榜单说明同步修正，产品与设计文档已更新。

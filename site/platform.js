@@ -120,7 +120,7 @@ export function moderationBadge(moderation, hint = '', labels = {}) {
 // Questions are always reviewed by a person, so a pending one waits for an admin.
 export const QUESTION_LABELS = { pending: '等待人工审核' };
 // Everything waiting on an admin: unverified or held works, and questions under review.
-export const reviewCount = () => (platform.review?.unverified ?? 0) + (platform.review?.questions ?? 0);
+export const reviewCount = () => (platform.review?.unverified ?? 0) + (platform.review?.questions ?? 0) + (platform.review?.content ?? 0);
 
 // ---- toast and dialogs ------------------------------------------------------------------
 let toastTimer = 0;

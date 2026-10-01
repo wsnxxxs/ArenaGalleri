@@ -2,7 +2,7 @@
 export const variantsOf = (task) => task.promptVariants ?? [];
 export const variantKey = (result) => JSON.stringify([
   result.model, result.effort ?? '', result.status, result.harness ?? '',
-  result.harnessName ?? '', result.harnessVersion ?? '', result.provider ?? '',
+  result.harnessName ?? '', result.provider ?? '',
   result.providerName ?? '', result.upload ? result.owner : '',
 ]);
 export function variantChoices(task, result) {

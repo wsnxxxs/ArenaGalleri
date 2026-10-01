@@ -1,6 +1,7 @@
 // Submitting to a fixed task (#/submit/<task>): 01 choose file → 02 trial load in the
 // platform sandbox → 03 describe the work and submit. The staged draft runs from its own
 // origin with a small probe that reports load time, errors and blocked requests.
+// After submitting, one stage track shows where the work is and follows it while it waits.
 import { $, $$, esc, formatBytes, formatTime, icon } from './ui.js';
 import { api, needsEmail, platform, refreshPlatform, toast } from './platform.js';
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
@@ -10,6 +11,9 @@ import { TEMPLATE_LABELS, templatesOf } from './categories.js';
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VIEWS = { desktop: { width: 1440, height: 900, label: '桌面 1440×900' }, phone: { width: 390, height: 844, label: '手机 390×844' } };
 const TRIAL_TIMEOUT = 30000;
+// A waiting result is checked every 15 s for up to 10 minutes; past that the author looks in 我的作品.
+const POLL_MS = 15000;
+const POLL_LIMIT = 40;
 
 // What each format's dropzone accepts: the picker filter, the name check and its message.
 const FILES = {
@@ -18,11 +22,41 @@ const FILES = {
   vite: { accept: '.zip,application/zip', pattern: /\.zip$/i, prompt: '拖入包含 dist/ 的 Vite 项目 ZIP', error: 'Vite 项目请上传包含 dist/ 的 ZIP 压缩包' },
 };
 
-const freshTrial = () => ({ booted: false, loaded: false, loadMs: null, errors: [], failed: [], blocked: [], paint: null, timedOut: false });
+const freshTrial = () => ({ booted: false, loaded: false, loadMs: null, errors: [], failed: [], blocked: [], paint: null, timedOut: false, manual: false });
 
 function checkRow({ state, label, detail }) {
   const mark = { ok: 'check', warn: 'alert', info: 'guide', fail: 'close', wait: 'clock' }[state] ?? 'clock';
   return `<li class="check is-${state}">${icon(mark)}<span><b>${esc(label)}</b>${esc(detail)}</span></li>`;
+}
+
+// Content moderation may be on without a working automatic check (no screenshots, no key);
+// then an admin reviews every upload. Older servers do not report the difference.
+export const moderated = () => Boolean(platform.site.contentModeration);
+const automatic = () => moderated() && platform.site.autoModeration !== false;
+export const contentStage = () => ['内容审核', automatic() ? '自动检查，通过前仅你可见' : '管理员检查，通过前仅你可见'];
+
+// stages: [label, hint] pairs; current: index of the stage in progress, -1 for none.
+export function stageTrack(stages, current = -1, { row = false } = {}) {
+  return `<ol class="timeline${row ? ' is-row' : ''}" style="--n:${stages.length}">${stages.map(([label, hint], i) => {
+    const cls = current < 0 ? '' : i < current ? 'is-done' : i === current ? 'is-current' : 'is-next';
+    return `<li${cls ? ` class="${cls}"` : ''}${i === current ? ' aria-current="step"' : ''}><b>${esc(label)}</b><span>${esc(hint)}</span></li>`;
+  }).join('')}</ol>`;
+}
+
+const workStages = () => [...(moderated() ? [contentStage()] : []), ['未验证', '公开展示，可修改信息'], ['已验证', '管理员核对后排在前面']];
+// Where a submitted work stands, for its done page.
+function workStage(w) {
+  const offset = moderated() ? 1 : 0;
+  const status = w.moderation?.status;
+  if (status === 'pending') return { kicker: '内容审核中', title: `「${w.title}」正在内容审核`,
+    text: automatic() ? '通常几分钟，排队较多时会更久。这一页会自动更新。' : '管理员会检查内容，通过前只有你能看到。', current: 0 };
+  if (status === 'review') return { kicker: '等待人工复核', title: `「${w.title}」等待人工复核`,
+    text: '自动审核没能确定结果，管理员会人工查看。通过前仍然只有你能看到。', current: 0 };
+  if (status === 'rejected') return { kicker: '未通过', title: `「${w.title}」没有通过内容审核`,
+    text: '作品不会公开。可以在「我的作品」删除后修改，再重新上传。', current: -1, rejected: true };
+  if (w.status === 'verified') return { kicker: '已验证', title: `「${w.title}」已通过验证`, text: '它会排在题目页前面。', current: offset + 1 };
+  return { kicker: '未验证', title: `「${w.title}」已经进入展厅`,
+    text: '所有人都可以浏览它、给它贴表情。管理员核对生成信息后会标为已验证。', current: offset, live: true };
 }
 
 export function mount(root, ctx) {
@@ -40,29 +74,47 @@ export function mount(root, ctx) {
 
 // The three upload steps, shared by uploading to a task and by publishing a new question
 // together with its first result. options.task needs id, title, prompt and templates;
-// the other options replace the page frame, the submit request and the finished view.
+// the other options replace the page frame, the submit request, the stages and the finished view.
+// options.waiting(result) says whether the finished view should keep following the result.
 export function uploadFlow(root, ctx, options) {
   const { task } = options;
   const draftTask = options.draftTask ?? task.id;
   const offset = options.lead ? 1 : 0;
   const templates = templatesOf(task);
   const templateLabel = (value) => value === 'vite' ? 'Vite 静态网页（含 dist/）' : TEMPLATE_LABELS[value];
+  const waiting = options.waiting ?? ((result) => result.work?.moderation?.status === 'pending');
   let active = true;
   const state = {
     task, template: templates[0],
-    progress: 0, uploading: false, draft: null, error: '',
+    progress: 0, loaded: 0, total: 0, uploading: false, draft: null, error: '',
     trial: freshTrial(), view: 'desktop', confirmed: false, cover: null,
-    submitting: false, work: null, result: null, xhr: null, timer: 0,
+    submitting: false, work: null, result: null, xhr: null, timer: 0, poll: 0, polls: 0,
     resumable: null, peek: task.promptVariants?.[0]?.id ?? null,
   };
-  const moderated = () => Boolean(platform.site.contentModeration);
 
   const pendingFull = () => (platform.me?.pending ?? 0) >= (platform.site.limits.pendingPerUser ?? 5);
+
+  // One line under the dropzone with what most often goes wrong; the rest folds away.
+  function fileRules() {
+    const limits = platform.site.limits;
+    if (state.template === 'text') return {
+      summary: ['UTF-8 编码', '最多 20 万字符', `最大 ${formatBytes(limits.uploadBytes)}`],
+      rules: ['内容为模型生成的原文。Markdown 支持标题、段落、列表、引用、强调与代码。',
+        'HTML 标签、链接和图片按原文字显示；平台用统一版式排版，预览、盲评与截图都用排版后的页面。'],
+    };
+    return {
+      summary: [state.template === 'vite' ? '需包含构建后的 <code>dist/</code>' : '根目录或 <code>dist/</code> 内需有 <code>index.html</code>', `最大 ${formatBytes(limits.uploadBytes)}`],
+      rules: ['Vite 等需要构建的项目，先构建再把 <code>dist/</code> 一起打包；平台不执行构建脚本。',
+        '<code>node_modules</code>、<code>.git</code> 会被忽略但计入大小；<code>.env</code> 等密钥文件会被拒绝。',
+        '解压后不超过 150 MB、2000 个文件。',
+        `作品不能联网，只能引用这些 CDN：${platform.site.cdn.map((host) => `<code>${esc(host)}</code>`).join('、')}。`],
+    };
+  }
 
   function stepOne() {
     const taskLabel = options.lead ? '' : `<div class="upload-task"><span>当前题目 · 固定关联</span><a href="${ctx.taskHref(task)}">${esc(task.title)}${icon('arrow')}</a></div>`;
     if (!platform.user) {
-      return `<div class="step-body">${taskLabel}<div class="notice">${icon('user')}<p>登录后上传到这道题，并在「个人中心」里跟进核验结果。</p><button class="btn primary sm" data-auth="login">登录 / 注册</button></div></div>`;
+      return `<div class="step-body">${taskLabel}<div class="notice">${icon('user')}<p>登录后上传到这道题，并在「个人中心」里跟进审核结果。</p><button class="btn primary sm" data-auth="login">登录 / 注册</button></div></div>`;
     }
     if (needsEmail()) {
       return `<div class="step-body">${taskLabel}<div class="notice">${icon('mail')}<p>账号需要先绑定邮箱，才能上传作品。</p><button class="btn primary sm" data-bind-email>绑定邮箱</button></div></div>`;
@@ -70,67 +122,82 @@ export function uploadFlow(root, ctx, options) {
     if (state.draft) {
       const d = state.draft;
       return `<div class="step-body">${taskLabel}
-        <p class="file-line">${icon('file')}<b>${esc(d.sourceName)}</b><span>${d.files} 个文件 · ${formatBytes(d.bytes)} · ${esc(task.title)}</span></p>
+        <p class="file-line">${icon('file')}<b>${esc(d.sourceName)}</b><span>${d.files} 个文件 · ${formatBytes(d.bytes)}</span></p>
         <ul class="checks">${d.checks.map(checkRow).join('')}</ul>
       </div>`;
     }
+    const { summary, rules } = fileRules();
+    const picker = state.uploading
+      ? `<div class="upload-progress" data-upload-progress><b data-progress-label>${progressLabel()}</b><button class="btn sm" type="button" data-act="cancel-upload">取消</button>
+          <span class="progress"><i style="width:${Math.round(state.progress * 100)}%"></i></span><span data-progress-bytes>${progressBytes()}</span></div>`
+      : `<div class="dropzone" data-drop tabindex="0" role="button" aria-label="选择或拖入作品文件">
+          ${icon('upload')}<b>${FILES[state.template].prompt}</b>
+          <span class="drop-meta"><span>或点击选择</span>${summary.map((item) => `<span>${item}</span>`).join('')}</span>
+          <input type="file" accept="${FILES[state.template].accept}" hidden>
+        </div>`;
     return `<div class="step-body">${taskLabel}
-      ${templates.length > 1 ? `<label class="field"><span class="field-label">提交格式</span><select class="input" data-template${state.uploading ? ' disabled' : ''}>${templates.map((value) => `<option value="${value}"${value === state.template ? ' selected' : ''}>${templateLabel(value)}</option>`).join('')}</select></label>` : `<p class="fine">提交格式：${templateLabel(state.template)}</p>`}
+      ${templates.length > 1 ? `<label class="field"><span class="field-label">提交格式</span><select class="input" data-template${state.uploading ? ' disabled' : ''}>${templates.map((value) => `<option value="${value}"${value === state.template ? ' selected' : ''}>${templateLabel(value)}</option>`).join('')}</select></label>` : ''}
       ${options.lead ? '' : promptPeek()}
       ${state.resumable && !state.uploading ? `<div class="notice resume-draft">${icon('clock')}<p>你之前上传过「${esc(state.resumable.sourceName)}」，试加载保留到 ${esc(formatTime(state.resumable.expiresAt))}。</p><button class="btn primary sm" type="button" data-act="resume">继续试加载</button><button class="btn sm" type="button" data-act="drop-draft">丢弃</button></div>` : ''}
-      ${pendingFull() ? `<div class="notice">${icon('clock')}<p>你已有 ${platform.me.pending} 件作品在等待核验。核验之后再上传新的作品吧。</p></div>` : `
-      <div class="dropzone${task ? '' : ' is-disabled'}${state.uploading ? ' is-busy' : ''}" data-drop tabindex="${task ? 0 : -1}" role="button" aria-label="选择或拖入作品文件">
-        ${state.uploading
-          ? `<span class="progress"><i style="width:${Math.round(state.progress * 100)}%"></i></span><b>${state.progress < 1 ? `正在上传 ${Math.round(state.progress * 100)}%` : '正在检查文件…'}</b><span>请稍候，不要关闭页面</span>`
-          : `${icon('upload')}<b>${FILES[state.template].prompt}</b><span>或点击选择 · 最大 ${formatBytes(platform.site.limits.uploadBytes)}</span>`}
-        <input type="file" accept="${FILES[state.template].accept}" hidden>
-      </div>`}
+      ${pendingFull() ? `<div class="notice">${icon('clock')}<p>你已有 ${platform.me.pending} 件作品在等待核验，核验之后再上传新的作品吧。</p></div>` : picker}
       ${state.error ? `<p class="form-error" role="alert">${esc(state.error)}</p>` : ''}
+      ${pendingFull() ? '' : `<details class="fold"><summary>${icon('right')}全部文件要求</summary><ul class="plain">${rules.map((rule) => `<li>${rule}</li>`).join('')}</ul></details>`}
     </div>`;
   }
+
+  const progressLabel = () => (state.progress < 1 ? `正在上传 ${Math.round(state.progress * 100)}%` : '正在检查文件…');
+  const progressBytes = () => (state.total ? `${formatBytes(state.loaded)} / ${formatBytes(state.total)} · 请不要关闭页面` : '请不要关闭页面');
 
   function promptPeek() {
     const variants = task.promptVariants ?? [];
     const current = variants.find((v) => v.id === state.peek);
-    return `<details class="prompt-peek"><summary>${icon('guide')}查看本题提示词 · 作品需按它生成${variants.length ? ` · 共 ${variants.length} 个版本，任选其一` : ''}</summary>
+    return `<details class="prompt-peek"><summary>${icon('guide')}查看本题提示词${variants.length ? ` · ${variants.length} 个版本，任选其一` : ''}</summary>
       ${variants.length ? `<div class="seg" role="group" aria-label="提示词版本">${variants.map((v) => `<button type="button" data-peek="${esc(v.id)}" aria-pressed="${v.id === state.peek}">${esc(v.label)}</button>`).join('')}</div>` : ''}
       <pre>${esc(current?.prompt ?? task.prompt)}</pre></details>`;
   }
 
+  const confirmable = () => state.trial.loaded || state.trial.manual;
+
   function trialChecks() {
     const t = state.trial;
     const rows = [];
-    if (t.loaded) rows.push({ state: 'ok', label: '页面载入', detail: `${(t.loadMs / 1000).toFixed(1)} 秒内完成载入` });
-    else if (t.timedOut) rows.push({ state: 'fail', label: '页面载入', detail: '30 秒内没有完成载入。请检查作品后重新上传，或在新窗口中确认。' });
-    else rows.push({ state: 'wait', label: '页面载入', detail: '正在载入…' });
-    rows.push(t.errors.length
+    if (t.loaded) rows.push(checkRow({ state: 'ok', label: '页面载入', detail: `${(t.loadMs / 1000).toFixed(1)} 秒内完成载入` }));
+    else if (t.timedOut) {
+      // The probe can miss a page that works; the author may vouch for it after opening it alone.
+      rows.push(checkRow({ state: 'fail', label: '页面载入', detail: '30 秒内没有收到载入信号。在新窗口打开能正常运行就可以继续，否则请检查后重新上传。' }));
+      rows.push(`<li><label class="confirm"><input type="checkbox" data-manual${t.manual ? ' checked' : ''}><span>我已在新窗口打开，作品可以正常运行</span></label></li>`);
+    } else rows.push(checkRow({ state: 'wait', label: '页面载入', detail: '正在载入…' }));
+    if (!t.loaded) {
+      rows.push(checkRow({ state: 'wait', label: '脚本与资源', detail: '载入后检查' }));
+      return rows.join('');
+    }
+    rows.push(checkRow(t.errors.length
       ? { state: 'warn', label: '脚本错误', detail: `捕获到 ${t.errors.length} 条：${t.errors[0]}` }
-      : { state: t.loaded ? 'ok' : 'wait', label: '脚本错误', detail: t.loaded ? '没有捕获到错误' : '等待载入完成' });
-    rows.push(t.failed.length
+      : { state: 'ok', label: '脚本错误', detail: '没有捕获到错误' }));
+    rows.push(checkRow(t.failed.length
       ? { state: 'warn', label: '资源加载', detail: `${t.failed.length} 个文件载入失败：${t.failed[0]}` }
-      : { state: t.loaded ? 'ok' : 'wait', label: '资源加载', detail: t.loaded ? '引用的文件都已载入' : '等待载入完成' });
-    rows.push(t.blocked.length
+      : { state: 'ok', label: '资源加载', detail: '引用的文件都已载入' }));
+    rows.push(checkRow(t.blocked.length
       ? { state: 'warn', label: '外部请求', detail: `拦截了 ${t.blocked.length} 个外部请求：${[...new Set(t.blocked.map((url) => { try { return new URL(url).host; } catch { return url; } }))].slice(0, 3).join('、')}` }
-      : { state: t.loaded ? 'ok' : 'wait', label: '外部请求', detail: t.loaded ? '没有被拦截的外部请求' : '等待载入完成' });
+      : { state: 'ok', label: '外部请求', detail: '没有被拦截的外部请求' }));
     if (t.paint) {
       const drawn = t.paint.canvases || t.paint.media || t.paint.words > 20;
-      rows.push(drawn
+      rows.push(checkRow(drawn
         ? { state: 'ok', label: '画面内容', detail: t.paint.canvases ? `检测到 ${t.paint.canvases} 个正在显示的画布` : '页面上有可见内容' }
-        : { state: 'warn', label: '画面内容', detail: '页面看起来是空白的，请在上方确认' });
-    } else rows.push({ state: 'wait', label: '画面内容', detail: '载入后检查' });
-    return rows.map(checkRow).join('');
+        : { state: 'warn', label: '画面内容', detail: '页面看起来是空白的，请在上方确认' }));
+    } else rows.push(checkRow({ state: 'wait', label: '画面内容', detail: '载入后检查' }));
+    return rows.join('');
   }
 
   const confirmText = () => {
     const t = state.trial;
     const warned = t.errors.length || t.failed.length || t.blocked.length || state.draft?.checks.some((c) => c.state === 'warn');
-    return `我已在上方体验了作品，确认它加载正常、与题目相符${warned ? '，也看过了上面的提示' : ''}`;
+    return `我已亲自操作过作品，它与题目相符${warned ? '，也看过了上面的提示' : ''}`;
   };
 
   function stepTwo() {
     if (!state.draft) return '<p class="step-placeholder">选好文件后，作品会在这里试运行。</p>';
     const view = VIEWS[state.view];
-    const settled = state.trial.loaded || state.trial.timedOut;
     return `<div class="step-body">
       <div class="trial">
         <div class="trial-bar">
@@ -144,7 +211,7 @@ export function uploadFlow(root, ctx, options) {
         </div>
       </div>
       <ul class="checks" data-trial-checks>${trialChecks()}</ul>
-      <label class="confirm${settled && state.trial.loaded ? '' : ' is-disabled'}"><input type="checkbox" data-confirm${state.confirmed ? ' checked' : ''}${state.trial.loaded ? '' : ' disabled'}>
+      <label class="confirm${confirmable() ? '' : ' is-disabled'}"><input type="checkbox" data-confirm${state.confirmed ? ' checked' : ''}${confirmable() ? '' : ' disabled'}>
         <span data-confirm-text>${confirmText()}</span></label>
     </div>`;
   }
@@ -154,32 +221,32 @@ export function uploadFlow(root, ctx, options) {
     : `<button class="btn sm" type="button" data-act="pick-cover">${icon('image')}选择图片</button>`}<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-cover-input></div>`;
 
   function stepThree() {
-    if (!state.confirmed) return '<p class="step-placeholder">确认试加载结果后，在这里填写作品信息。</p>';
+    if (!state.confirmed) return '<p class="step-placeholder">确认试加载后填写。</p>';
+    const cover = `<div class="field"><span class="field-label">封面图片</span>${coverPick()}
+      <p class="field-hint">PNG / JPEG / WebP，不超过 ${formatBytes(platform.site.limits.coverBytes)}。${platform.site.capture ? '不上传时使用平台自动截图。' : '不上传时显示文字封面。'}</p></div>`;
     return `<form class="step-body submit-form" novalidate>
-      ${workFieldsHtml(ctx, task)}
-      <div class="field"><span class="field-label">封面图片</span>
-        ${coverPick()}
-        <p class="field-hint">选填，PNG / JPEG / WebP，不超过 ${formatBytes(platform.site.limits.coverBytes)}。${platform.site.capture ? '提交后平台还会自动截取桌面与手机首屏，用作统一截图。' : '不上传时，展厅显示文字封面。'}</p>
-      </div>
-      <label class="confirm"><input type="checkbox" name="attest" required><span>我确认作品由所选模型按本题提示词生成，人工介入情况如实填写。我有权提交该作品，并同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></label>
+      ${workFieldsHtml(ctx, task, null, { extra: cover })}
+      <label class="confirm"><input type="checkbox" name="attest" required><span>作品由所选模型按本题提示词生成，人工介入如实填写；我有权提交，并同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></label>
       <p class="form-error" role="alert"></p>
-      <div class="form-actions"><button class="btn primary" type="submit">${icon('upload')}${options.submitLabel ?? '提交作品'}</button><span class="fine">${options.submitNote ?? `${moderated() ? '提交后先做内容审核，通过后公开为「未验证」。' : '提交后公开为「未验证」，可以被浏览和贴表情。'}核验前可以在个人中心修改信息。`}</span></div>
+      <div class="form-actions"><button class="btn primary" type="submit">${icon('upload')}<span data-submit-label>${options.submitLabel ?? '提交作品'}</span></button><span class="fine">${options.submitNote ?? '核验前可在个人中心修改信息。'}</span></div>
     </form>`;
   }
 
   function done() {
     if (options.done) return options.done(state.result);
     const w = state.work;
-    const pending = ['pending', 'review'].includes(w.moderation?.status);
+    const stage = workStage(w);
+    const reason = stage.rejected && w.moderation?.reason ? `<p class="result-reason">${icon('alert')}<span>原因：${esc(w.moderation.reason)}</span></p>` : '';
+    const actions = stage.rejected
+      ? `<a class="btn primary" href="#/me/works">去我的作品处理${icon('right')}</a><button class="btn" data-act="another">重新上传</button>`
+      : stage.live
+        ? `<a class="btn primary" href="#/${esc(w.task)}/${esc(w.id)}">在展厅中查看${icon('right')}</a><a class="btn" href="#/me/works">我的作品</a><button class="btn" data-act="another">再上传一件</button>`
+        : `<a class="btn primary" href="${esc(w.scene)}" target="_blank" rel="noopener">预览作品${icon('arrow')}</a><a class="btn" href="#/me/works">我的作品</a><button class="btn" data-act="another">再上传一件</button>`;
     return `<section class="submit-done">
-      <p class="kicker"><span class="num">已提交</span><span>${pending ? '内容审核中' : '未验证'}</span></p>
-      <h2>「${esc(w.title)}」${pending ? '正在做内容审核' : '已经进入展厅'}</h2>
-      <p>${pending
-        ? '审核通常几分钟内完成。通过之前只有你能看到它，结果会显示在「个人中心 · 我的作品」。通过后它会出现在题目页，所有人都可以浏览、贴表情。'
-        : '现在所有人都可以浏览它、给它贴表情。'}管理员核对生成信息后会把它标为已验证并排在前面，是否加入盲评由管理员决定；如果核验存疑，你会在个人中心看到原因。核验之前，你可以随时修改作品信息或删除它。</p>
-      <div class="actions">${pending
-        ? `<a class="btn primary" href="#/me/works">查看审核进度${icon('right')}</a><a class="btn" href="${esc(w.scene)}" target="_blank" rel="noopener">预览作品${icon('arrow')}</a>`
-        : `<a class="btn primary" href="#/${esc(w.task)}/${esc(w.id)}">在展厅中查看${icon('right')}</a><a class="btn" href="#/me/works">我的作品</a>`}<button class="btn" data-act="another">再上传一件</button></div>
+      <p class="kicker"><span class="num">已提交</span><span>${stage.kicker}</span></p>
+      <h2>${esc(stage.title)}</h2><p>${stage.text}</p>${reason}
+      ${stage.rejected ? '' : stageTrack(workStages(), stage.current, { row: true })}
+      <div class="actions">${actions}</div>
     </section>`;
   }
 
@@ -194,44 +261,24 @@ export function uploadFlow(root, ctx, options) {
     const page = options.page?.(Boolean(state.result)) ?? { title: '上传作品', section: 'questions', heading: state.result ? '作品已提交' : '带来你的答案',
       description: task.title,
       crumbs: [ctx.LIBRARY, { text: task.title, href: ctx.taskHref(task) }, { text: '上传作品' }] };
-    const current = !state.draft ? 0 : state.confirmed ? 2 : 1;
+    const current = state.result ? -1 : !state.draft ? 0 : state.confirmed ? 2 : 1;
     const steps = [...(options.lead ? [options.lead.label] : []), '选择文件', '试加载', options.infoLabel ?? '作品信息'];
     root.innerHTML = `${ctx.pageStart({ ...page,
       meta: `<ol class="side-steps">${steps.map((label, i) => `<li${i === current + offset ? ' aria-current="step"' : ''}><span>0${i + 1}</span>${label}</li>`).join('')}</ol>` })}
-      <section class="block wrap submit-layout">
+      <section class="block wrap${state.result ? '' : ' submit-layout'}">
         <div class="submit-main">${state.result ? done() : [
           options.lead?.html() ?? '',
-          step(1, '选择文件', options.fileNote ?? '作品将上传到当前题目', stepOne(), { doneStep: Boolean(state.draft), action: state.draft ? '<button class="link step-action" data-act="restart">重新选择文件</button>' : '' }),
-          step(2, '试加载', '作品在与正式展示相同的沙盒中运行，请亲自操作一遍', stepTwo(), { locked: !state.draft, doneStep: state.confirmed }),
-          step(3, options.infoLabel ?? '作品信息', '核验时会对照这些信息', stepThree(), { locked: !state.confirmed }),
+          step(1, '选择文件', options.fileNote ?? '', stepOne(), { doneStep: Boolean(state.draft), action: state.draft ? '<button class="link step-action" data-act="restart">重新选择文件</button>' : '' }),
+          step(2, '试加载', state.draft && !state.confirmed ? '请在下面亲自操作一遍' : '', stepTwo(), { locked: !state.draft, doneStep: state.confirmed }),
+          step(3, options.infoLabel ?? '作品信息', state.confirmed ? '核验时会对照这些信息' : '', stepThree(), { locked: !state.confirmed }),
         ].join('')}</div>
-        <aside class="submit-aside">
+        ${state.result ? '' : `<aside class="submit-aside">
           <div class="aside-block">
-            <h3>之后会发生什么</h3>
-            <ol class="timeline">${options.timeline ?? `
-              ${moderated() ? '<li><b>内容审核</b><span>提交后先自动检查页面内容，通常几分钟。通过前只有你能看到。</span></li>' : ''}
-              <li><b>未验证</b><span>${moderated() ? '审核通过后' : '提交后立即'}出现在题目页，可以被浏览、贴表情；这时你仍可修改作品信息。</span></li>
-              <li><b>已验证</b><span>管理员核对作品与生成信息后通过，排在前面；由管理员决定是否加入盲评、计入榜单。</span></li>
-              <li><b>存疑</b><span>无法核实时标记存疑并写明原因：作品保留作参考，不再接受互动；你可以删除它。</span></li>`}
-            </ol>
+            <h3>提交之后</h3>
+            ${stageTrack(options.stages ?? workStages())}
+            <p class="fine">每人最多 ${limits.pendingPerUser} 件作品同时等待核验。</p>
           </div>
-          <div class="aside-block">
-            <h3>文件要求</h3>
-            <ul class="plain">${templates.includes('text') ? `
-              <li>上传一个 UTF-8 编码的 <code>.txt</code> 或 <code>.md</code> 文件，内容为模型生成的原文。</li>
-              <li>Markdown 支持标题、段落、列表、引用、强调与代码；HTML 标签、链接和图片都按原文字显示。</li>
-              <li>平台按统一版式排版，预览、盲评与截图都使用排版后的页面。</li>` : `
-              <li>ZIP 根目录（或 <code>dist/</code>）有 <code>index.html</code>；也可以直接上传单个 HTML 文件。</li>
-              <li>Vite 等需要构建的项目，请先运行构建，把 <code>dist/</code> 一起打包；平台不会执行构建脚本。</li>
-              <li><code>node_modules</code>、<code>.git</code> 会被自动忽略，但仍计入压缩包大小，建议打包前移除；<code>.env</code> 等密钥文件会被拒绝。</li>
-              <li>作品不能访问外部网络。可以引用的公共 CDN：${platform.site.cdn.map((host) => `<code>${esc(host)}</code>`).join('、')}。</li>`}
-            </ul>
-          </div>
-          <div class="aside-block">
-            <h3>限制</h3>
-            <ul class="plain"><li>${templates.includes('text') ? `文件不超过 ${formatBytes(limits.uploadBytes)}，最多 20 万字符。` : `压缩包不超过 ${formatBytes(limits.uploadBytes)}，解压后不超过 150 MB，最多 2000 个文件。`}</li><li>每人最多 ${limits.pendingPerUser} 件作品同时等待核验。</li></ul>
-          </div>
-        </aside>
+        </aside>`}
       </section>
     ${ctx.pageEnd()}`;
     document.title = `${page.title} · ${task.title || ctx.DATA.title}`;
@@ -263,8 +310,9 @@ export function uploadFlow(root, ctx, options) {
     list.innerHTML = trialChecks();
     const box = $('[data-confirm]', root);
     if (box) {
-      box.disabled = !state.trial.loaded;
-      box.closest('.confirm').classList.toggle('is-disabled', !state.trial.loaded);
+      box.disabled = !confirmable();
+      if (box.disabled && box.checked) { box.checked = false; setConfirmed(false); }
+      box.closest('.confirm').classList.toggle('is-disabled', !confirmable());
       $('[data-confirm-text]', root).textContent = confirmText();
     }
   }
@@ -293,19 +341,19 @@ export function uploadFlow(root, ctx, options) {
     if (!file || state.uploading) return;
     if (file.size > platform.site.limits.uploadBytes) { state.error = `文件超过 ${formatBytes(platform.site.limits.uploadBytes)} 上限`; return draw(); }
     if (!FILES[state.template].pattern.test(file.name)) { state.error = FILES[state.template].error; return draw(); }
-    Object.assign(state, { uploading: true, progress: 0, error: '' });
+    Object.assign(state, { uploading: true, progress: 0, loaded: 0, total: file.size, error: '' });
     draw();
     const xhr = createUploadRequest(`drafts?task=${encodeURIComponent(draftTask)}&name=${encodeURIComponent(file.name)}&template=${state.template}`);
     state.xhr = xhr;
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return;
-      state.progress = e.loaded / e.total;
-      const bar = $('.dropzone .progress i', root);
-      if (bar) {
-        bar.style.width = `${Math.round(state.progress * 100)}%`;
-        $('.dropzone b', root).textContent = state.progress < 1 ? `正在上传 ${Math.round(state.progress * 100)}%` : '正在检查文件…';
-      }
+      Object.assign(state, { progress: e.loaded / e.total, loaded: e.loaded, total: e.total });
+      const bar = $('[data-upload-progress] .progress i', root);
+      if (!bar) return;
+      bar.style.width = `${Math.round(state.progress * 100)}%`;
+      $('[data-progress-label]', root).textContent = progressLabel();
+      $('[data-progress-bytes]', root).textContent = progressBytes();
     };
     xhr.onload = () => {
       let data = {};
@@ -324,6 +372,10 @@ export function uploadFlow(root, ctx, options) {
       Object.assign(state, { uploading: false, xhr: null, error: '网络连接失败，请重试' });
       draw();
     };
+    xhr.onabort = () => {
+      Object.assign(state, { uploading: false, xhr: null, error: '' });
+      if (active) draw();
+    };
     xhr.send(file);
   }
 
@@ -334,8 +386,18 @@ export function uploadFlow(root, ctx, options) {
   function restart() {
     discard();
     clearTimeout(state.timer);
-    Object.assign(state, { draft: null, error: '', trial: freshTrial(), confirmed: false, cover: null, work: null, result: null });
+    clearTimeout(state.poll);
+    Object.assign(state, { draft: null, error: '', trial: freshTrial(), confirmed: false, cover: null, work: null, result: null, polls: 0 });
     draw();
+  }
+
+  function setConfirmed(confirmed) {
+    state.confirmed = confirmed;
+    const three = $('[data-step="3"]', root);
+    three.outerHTML = step(3, options.infoLabel ?? '作品信息', confirmed ? '核验时会对照这些信息' : '', stepThree(), { locked: !confirmed });
+    $('[data-step="2"]', root).classList.toggle('is-done', confirmed);
+    $$('.side-steps li', root).forEach((li, i) => (i === (confirmed ? 2 : 1) + offset ? li.setAttribute('aria-current', 'step') : li.removeAttribute('aria-current')));
+    if (confirmed) $('[data-step="3"]', root).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function trialSummary() {
@@ -353,6 +415,30 @@ export function uploadFlow(root, ctx, options) {
     };
   }
 
+  // Follows a waiting result through GET /api/me and redraws the finished view when it moves.
+  function follow() {
+    clearTimeout(state.poll);
+    if (!active || !state.result || !waiting(state.result) || state.polls >= POLL_LIMIT) return;
+    state.poll = setTimeout(async () => {
+      state.polls++;
+      try {
+        const me = await api('me');
+        if (!active || !state.result) return;
+        const { work, question } = state.result;
+        const freshWork = work && me.works?.find((item) => item.id === work.id);
+        const freshQuestion = question && me.questions?.find((item) => item.id === question.id);
+        const key = (r) => JSON.stringify([r.work?.moderation?.status, r.work?.status, r.question?.moderation?.status]);
+        const next = { ...state.result, ...(freshWork ? { work: freshWork } : {}), ...(freshQuestion ? { question: freshQuestion } : {}) };
+        if (key(next) !== key(state.result)) {
+          Object.assign(state, { result: next, work: next.work });
+          draw();
+          refreshPlatform('upload').catch(() => {});
+        }
+      } catch { /* keep trying until the limit */ }
+      follow();
+    }, POLL_MS);
+  }
+
   async function submit(form) {
     const error = $('.form-error:not(.field-error)', form);
     error.textContent = '';
@@ -360,20 +446,28 @@ export function uploadFlow(root, ctx, options) {
     if (!body) return void (error.textContent = problem);
     if (!form.attest.checked) return void (error.textContent = '请勾选确认生成信息真实');
     const button = $('[type="submit"]', form);
+    const label = $('[data-submit-label]', form);
+    const idle = label.textContent;
     button.disabled = true;
+    label.textContent = '提交中…';
+    state.submitting = true;
     try {
       const payload = { ...body, draftId: state.draft.id, confirmed: true, cover: state.cover, trial: trialSummary() };
       const result = options.submit ? await options.submit(payload) : await api('works', { method: 'POST', body: payload });
-      Object.assign(state, { result, work: result.work });
+      Object.assign(state, { result, work: result.work, polls: 0 });
       clearTimeout(state.timer);
-      if (!options.submit) toast(['pending', 'review'].includes(result.work.moderation?.status) ? '作品已提交，正在做内容审核' : '作品已提交，等待核验');
+      if (!options.submit) toast(['pending', 'review'].includes(result.work.moderation?.status) ? '作品已提交，正在内容审核' : '作品已提交');
       await refreshPlatform('upload');
       if (!active) return;
       draw();
       scrollTo({ top: 0 });
+      follow();
     } catch (e) {
       error.textContent = e.message;
       button.disabled = false;
+      label.textContent = idle;
+    } finally {
+      state.submitting = false;
     }
   }
 
@@ -416,7 +510,8 @@ export function uploadFlow(root, ctx, options) {
       api(`drafts/${state.resumable.id}`, { method: 'DELETE' }).catch(() => {});
       state.resumable = null;
       draw();
-    } else if (act === 'restart') restart();
+    } else if (act === 'cancel-upload') state.xhr?.abort();
+    else if (act === 'restart') restart();
     else if (act === 'another') restart();
     else if (act === 'reload') { startTrial(); drawTrial(); const frame = $('.trial iframe', root); frame.src = state.draft.preview; }
     else if (act === 'pick-cover') $('[data-cover-input]', root).click();
@@ -434,15 +529,11 @@ export function uploadFlow(root, ctx, options) {
       return draw();
     }
     if (e.target.matches('.dropzone input[type="file"]')) return upload(e.target.files[0]);
-    if (e.target.matches('[data-confirm]')) {
-      state.confirmed = e.target.checked;
-      const three = $('[data-step="3"]', root);
-      three.outerHTML = step(3, options.infoLabel ?? '作品信息', '核验时会对照这些信息', stepThree(), { locked: !state.confirmed });
-      $('[data-step="2"]', root).classList.toggle('is-done', state.confirmed);
-      $$('.side-steps li', root).forEach((li, i) => (i === (state.confirmed ? 2 : 1) + offset ? li.setAttribute('aria-current', 'step') : li.removeAttribute('aria-current')));
-      if (state.confirmed) $('[data-step="3"]', root).scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
+    if (e.target.matches('[data-manual]')) {
+      state.trial.manual = e.target.checked;
+      return drawTrial();
     }
+    if (e.target.matches('[data-confirm]')) return setConfirmed(e.target.checked);
     const form = e.target.closest('.submit-form');
     if (form) onWorkFieldChange(form, e.target);
     if (e.target.matches('[data-cover-input]')) {
@@ -472,7 +563,8 @@ export function uploadFlow(root, ctx, options) {
   findDraft();
   return {
     onPlatformChange(reason) {
-      if (reason === 'upload') return;
+      // A submit in flight already consumed the draft; redrawing would reload its dead preview.
+      if (reason === 'upload' || state.submitting) return;
       if (!platform.user) restart();
       else { draw(); findDraft(); }
     },
@@ -480,6 +572,7 @@ export function uploadFlow(root, ctx, options) {
       active = false;
       state.xhr?.abort();
       clearTimeout(state.timer);
+      clearTimeout(state.poll);
       resizeObserver?.disconnect();
       removeEventListener('message', onMessage);
       for (const type of ['dragover', 'dragleave', 'drop']) root.removeEventListener(type, onDrag);

@@ -3,7 +3,7 @@
 // question waits for an admin; an attached result also goes through content moderation.
 import { $, $$, esc, icon } from './ui.js';
 import { api, platform, refreshPlatform, requireUser, toast } from './platform.js';
-import { uploadFlow } from './submit.js';
+import { contentStage, moderated, stageTrack, uploadFlow } from './submit.js';
 import { CATEGORIES, TEMPLATE_LABELS, categoryOf, tagsOf } from './categories.js';
 
 const normalize = (name) => String(name).normalize('NFKC').trim().replace(/^#+/, '').trim();
@@ -137,12 +137,31 @@ export function mount(root, ctx) {
     </section>`;
   }
 
+  // A question always waits for a person; its sample result is moderated alongside it.
+  function questionStages(work) {
+    const status = work?.moderation?.status;
+    const sample = !work ? null : status === 'rejected' ? '未通过内容审核，不会展示'
+      : status === 'review' ? '等待人工复核' : status === 'pending' ? contentStage()[1] : '已通过';
+    return [['题目审核', '管理员人工审核，通过前仅你可见'], ...(sample ? [['示例结果', sample]] : []),
+      ['进入题库', work ? '示例结果作为第一份作品展示' : '其他人可以上传各自的结果']];
+  }
   function done({ question: saved, work }) {
+    const q = saved.moderation?.status ?? 'pending';
+    const sampleWaiting = work && ['pending', 'review'].includes(work.moderation?.status);
+    const passed = ['approved', 'legacy'].includes(q);
+    const current = !passed ? 0 : sampleWaiting ? 1 : -1;
+    const view = q === 'rejected'
+      ? ['未通过', `「${saved.title}」没有通过审核`, '题目不会公开。可以在「我的题目」删除后修改，再重新发起。']
+      : !passed ? ['等待人工审核', `「${saved.title}」已提交审核`, work ? '管理员审核题目的同时，示例结果做内容审核。通过前只有你能看到，这一页会自动更新。' : '管理员审核通过后，题目进入题库并开放投稿。']
+      : sampleWaiting ? ['题目已通过', `「${saved.title}」已进入题库`, '示例结果还在内容审核，通过后作为第一份作品展示。']
+      : ['已公开', `「${saved.title}」已进入题库`, '其他人现在可以上传各自模型的结果。'];
+    const reason = q === 'rejected' && saved.moderation?.reason ? `<p class="result-reason">${icon('alert')}<span>原因：${esc(saved.moderation.reason)}</span></p>` : '';
+    const stages = questionStages(work);
     return `<section class="submit-done">
-      <p class="kicker"><span class="num">已提交</span><span>等待人工审核</span></p>
-      <h2>「${esc(saved.title)}」已提交审核</h2>
-      <p>${work ? `管理员会人工审核这道题，示例结果「${esc(work.title)}」同时进行内容审核。审核通过前只有你能看到它们，进度显示在「个人中心 · 我的题目」和「我的作品」里。` : '管理员会人工审核这道题，通过前只有你能看到，进度显示在「个人中心 · 我的题目」里。'}题目通过后会出现在题库，其他人就可以上传各自模型的结果。</p>
-      <div class="actions"><a class="btn primary" href="#/me/questions">查看我的题目${icon('right')}</a>${work?.scene ? `<a class="btn" href="${esc(work.scene)}" target="_blank" rel="noopener">预览示例结果${icon('arrow')}</a>` : ''}<button class="btn" type="button" data-act="new-question">再发起一道题</button></div>
+      <p class="kicker"><span class="num">已提交</span><span>${view[0]}</span></p>
+      <h2>${esc(view[1])}</h2><p>${view[2]}</p>${reason}
+      ${q === 'rejected' ? '' : stageTrack(stages, current < 0 ? stages.length - 1 : current, { row: true })}
+      <div class="actions"><a class="btn primary" href="#/me/questions">查看我的题目${icon('right')}</a>${work?.scene && q !== 'rejected' ? `<a class="btn" href="${esc(work.scene)}" target="_blank" rel="noopener">预览示例结果${icon('arrow')}</a>` : ''}<button class="btn" type="button" data-act="new-question">再发起一道题</button></div>
     </section>`;
   }
 
@@ -166,10 +185,9 @@ export function mount(root, ctx) {
       fileNote: '上传用这份提示词让模型生成的结果',
       infoLabel: '结果信息',
       submitLabel: '提交题目与结果',
-      submitNote: '题目由管理员人工审核，示例结果先做内容审核；通过前只有你能看到。',
-      timeline: `<li><b>人工审核题目</b><span>管理员确认题目是一项具体、可比较的生成任务。</span></li>
-        <li><b>内容审核结果</b><span>示例结果先自动检查页面内容，异常时转人工复核。</span></li>
-        <li><b>公开</b><span>题目通过后进入题库，示例结果作为第一份作品展示，其他人可以上传自己的结果。</span></li>`,
+      submitNote: '通过审核前只有你能看到题目和结果。',
+      stages: [['题目审核', '管理员人工审核，通过前仅你可见'], ['示例结果', moderated() ? contentStage()[1] : '随题目一起公开'], ['进入题库', '示例结果作为第一份作品展示']],
+      waiting: ({ question: saved, work }) => ['pending', 'review'].includes(saved.moderation?.status ?? 'pending') || ['pending', 'review'].includes(work?.moderation?.status),
       async submit({ draftId, confirmed, ...work }) {
         const result = await api('questions', { method: 'POST', body: { ...question, draftId, confirmed, work } });
         toast('题目已提交，等待人工审核');

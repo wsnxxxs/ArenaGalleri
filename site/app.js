@@ -34,7 +34,7 @@ const providerOf = (r) => (r.provider || r.providerName ? PROVIDERS.get(r.provid
 const providerKey = (r) => providerOf(r)?.id ?? 'unset';
 const sourceLine = (r) => {
   const harness = harnessOf(r);
-  return [harness && `${harness.name}${r.harnessVersion ? ` ${r.harnessVersion}` : ''}`, providerOf(r)?.name].filter(Boolean).join(' · ');
+  return [harness?.name, providerOf(r)?.name].filter(Boolean).join(' · ');
 };
 const sourceKey = (r, field, nameField) => r[field] ? `id:${r[field]}` : r[nameField] ? `name:${r[nameField]}` : 'unset';
 const label = (r) => (r.effort ? `${modelOf(r).name} · ${r.effort}` : modelOf(r).name);
@@ -873,7 +873,7 @@ const wide = () => matchMedia('(min-width: 1100px)').matches;
 function sourceFacts(r) {
   const harness = harnessOf(r);
   const provider = providerOf(r);
-  return [harness ? `<div><dt>Harness</dt><dd>${esc(harness.name)}${r.harnessVersion ? ` ${esc(r.harnessVersion)}` : ''}</dd></div>` : r.tool ? `<div><dt>Harness</dt><dd>${esc(r.tool)}（作者原始声明）</dd></div>` : r.upload ? '<div><dt>Harness</dt><dd>未注明</dd></div>' : '',
+  return [harness ? `<div><dt>Harness</dt><dd>${esc(harness.name)}</dd></div>` : r.tool ? `<div><dt>Harness</dt><dd>${esc(r.tool)}（作者原始声明）</dd></div>` : r.upload ? '<div><dt>Harness</dt><dd>未注明</dd></div>' : '',
     provider || r.upload ? `<div><dt>服务商</dt><dd>${esc(provider?.name ?? '未注明')}</dd></div>` : ''].filter(Boolean).join('');
 }
 function uploadFacts(r) {
@@ -1256,7 +1256,6 @@ function uploadResult(w) {
     tool: w.tool,
     harness: w.harness,
     harnessName: w.harnessName,
-    harnessVersion: w.harnessVersion,
     provider: w.provider,
     providerName: w.providerName,
     ...(w.promptVariant ? { promptVariant: w.promptVariant } : {}),
