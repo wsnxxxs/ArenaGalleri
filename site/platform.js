@@ -193,7 +193,7 @@ export function codeSender(sheet, form, request, widgetFor = formWidget(sheet, f
       widget = await widgetFor();
       if (!sheet.el.open) return;
       if (widget && !widget.token) { errorLine.textContent = '请先完成人机验证。'; send.disabled = false; return; }
-      notice.textContent = await request(widget?.token);
+      notice.textContent = `${await request(widget?.token)}没收到请检查垃圾邮件箱。`;
       countdown = 60;
       tick();
       timer = setInterval(() => { countdown--; tick(); if (!countdown) clearInterval(timer); }, 1000);
