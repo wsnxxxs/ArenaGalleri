@@ -210,7 +210,7 @@ export function uploadFlow(root, ctx, options) {
             <ul class="plain">
               <li>ZIP 根目录（或 <code>dist/</code>）有 <code>index.html</code>；也可以直接上传单个 HTML 文件。</li>
               <li>Vite 等需要构建的项目，请先运行构建，把 <code>dist/</code> 一起打包；平台不会执行构建脚本。</li>
-              <li>不要包含 <code>node_modules</code>、<code>.git</code> 或密钥文件。</li>
+              <li><code>node_modules</code>、<code>.git</code> 会被自动忽略，但仍计入压缩包大小，建议打包前移除；<code>.env</code> 等密钥文件会被拒绝。</li>
               <li>作品不能访问外部网络。可以引用的公共 CDN：${platform.site.cdn.map((host) => `<code>${esc(host)}</code>`).join('、')}。</li>
             </ul>
           </div>

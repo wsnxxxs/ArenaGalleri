@@ -1,6 +1,6 @@
-// Publish a question: 01 describe it (title / summary / tags / prompt / formats), then attach
-// the first result through the shared upload steps. Both are submitted together; the
-// question waits for an admin while its result goes through content moderation.
+// Publish a question: 01 describe it (title / summary / tags / prompt / formats), then either
+// submit it alone or attach an optional first result through the shared upload steps. The
+// question waits for an admin; an attached result also goes through content moderation.
 import { $, $$, esc, icon } from './ui.js';
 import { api, platform, refreshPlatform, requireUser, toast } from './platform.js';
 import { uploadFlow } from './submit.js';
@@ -23,7 +23,7 @@ export function mount(root, ctx) {
     flow = null;
     const tags = [...question.tags];
     root.innerHTML = `${ctx.pageStart({ title: '发起题目', section: 'new', heading: '让每份答案，从同一题开始',
-      description: '写清要测试的能力，提供完整提示词，再附上一份模型结果展示它的效果。', meta: sideSteps(0) })}
+      description: '写清要测试的能力，提供完整提示词；也可以附上一份模型结果展示它的效果。', meta: sideSteps(0) })}
       <section class="block wrap publish-layout">
         <form class="publish-form" novalidate>
           <div class="notice publish-auth" data-publish-auth${platform.user ? ' hidden' : ''}>${icon('user')}<p>登录后即可发起题目，已填写的内容会保留。</p><button class="btn sm" type="button" data-auth="login">登录 / 注册</button></div>
@@ -40,9 +40,9 @@ export function mount(root, ctx) {
             ${Object.entries(TEMPLATE_LABELS).map(([value, label]) => `<label><input type="checkbox" name="templates" value="${value}"${question.templates.includes(value) ? ' checked' : ''}>${label}</label>`).join('')}
           </div><p class="fine">Vite 项目需要包含构建后的 dist/ 目录。</p></div>
           <p class="form-error" role="alert"></p>
-          <div class="form-actions"><button class="btn primary" type="submit">下一步：上传示例结果${icon('right')}</button><a class="btn" href="#/questions">取消</a><span class="fine">发起即表示你同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></div>
+          <div class="form-actions"><button class="btn primary" type="submit" value="plain">提交题目</button><button class="btn" type="submit" value="sample">附上示例结果（选填）${icon('right')}</button><a class="btn" href="#/questions">取消</a><span class="fine">发起即表示你同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></div>
         </form>
-        <aside class="publish-note"><h3>一道可比较的题目</h3><p>简述说明测试目标。<br>提示词作为所有作品的共同依据。<br>标签帮助其他人发现这道题。</p><p>发起时需要附上一份用这份提示词生成的模型结果，让大家看到它能做出什么。</p><p>题目由管理员人工审核，示例结果先做内容审核；通过前只有你能看到。测试文字、灌水或广告不会通过。</p></aside>
+        <aside class="publish-note"><h3>一道可比较的题目</h3><p>简述说明测试目标。<br>提示词作为所有作品的共同依据。<br>标签帮助其他人发现这道题。</p><p>可以选择附上一份用这份提示词生成的模型结果，让管理员和大家更快看到它能做出什么。</p><p>题目由管理员人工审核，示例结果另做内容审核；通过前只有你能看到。测试文字、灌水或广告不会通过。</p></aside>
       </section>${ctx.pageEnd()}`;
     document.title = `发起题目 · ${ctx.DATA.title}`;
     const form = $('.publish-form', root);
@@ -91,8 +91,18 @@ export function mount(root, ctx) {
       question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), prompt: String(data.get('prompt')).trim(),
         tags: [...tags], templates: data.getAll('templates') };
       if (!(await requireUser('登录后即可发起题目')) || !active) return;
-      showUpload();
-      scrollTo({ top: 0 });
+      if (event.submitter?.value === 'sample') { showUpload(); scrollTo({ top: 0 }); return; }
+      const buttons = $('button[type="submit"]', form);
+      buttons.forEach((button) => { button.disabled = true; });
+      try {
+        const result = await api('questions', { method: 'POST', body: question });
+        toast('题目已提交，等待人工审核');
+        await refreshPlatform('question');
+        if (active) showDone(result);
+      } catch (err) {
+        error.textContent = err.message;
+        buttons.forEach((button) => { button.disabled = false; });
+      }
     };
   }
 
@@ -112,9 +122,19 @@ export function mount(root, ctx) {
     return `<section class="submit-done">
       <p class="kicker"><span class="num">已提交</span><span>等待人工审核</span></p>
       <h2>「${esc(saved.title)}」已提交审核</h2>
-      <p>管理员会人工审核这道题，示例结果「${esc(work.title)}」同时进行内容审核。审核通过前只有你能看到它们，进度显示在「个人中心 · 我的题目」和「我的作品」里。题目通过后会出现在题库，其他人就可以上传各自模型的结果。</p>
-      <div class="actions"><a class="btn primary" href="#/me/questions">查看我的题目${icon('right')}</a>${work.scene ? `<a class="btn" href="${esc(work.scene)}" target="_blank" rel="noopener">预览示例结果${icon('arrow')}</a>` : ''}<button class="btn" type="button" data-act="new-question">再发起一道题</button></div>
+      <p>${work ? `管理员会人工审核这道题，示例结果「${esc(work.title)}」同时进行内容审核。审核通过前只有你能看到它们，进度显示在「个人中心 · 我的题目」和「我的作品」里。` : '管理员会人工审核这道题，通过前只有你能看到，进度显示在「个人中心 · 我的题目」里。'}题目通过后会出现在题库，其他人就可以上传各自模型的结果。</p>
+      <div class="actions"><a class="btn primary" href="#/me/questions">查看我的题目${icon('right')}</a>${work?.scene ? `<a class="btn" href="${esc(work.scene)}" target="_blank" rel="noopener">预览示例结果${icon('arrow')}</a>` : ''}<button class="btn" type="button" data-act="new-question">再发起一道题</button></div>
     </section>`;
+  }
+
+  // Shown after a question is submitted without a result; the upload flow draws its own.
+  function showDone(result) {
+    root.innerHTML = `${ctx.pageStart({ title: '发起题目', section: 'new', heading: '题目已提交审核', meta: sideSteps(0) })}
+      <section class="block wrap">${done(result)}</section>${ctx.pageEnd()}`;
+    root.onclick = (event) => {
+      if (event.target.closest('[data-act="new-question"]')) { question = blank(); showForm(); scrollTo({ top: 0 }); }
+    };
+    scrollTo({ top: 0 });
   }
 
   function showUpload() {
@@ -123,7 +143,7 @@ export function mount(root, ctx) {
       draftTask: NEW_QUESTION,
       lead: { label: '题目信息', html: brief },
       page: (finished) => ({ title: '发起题目', section: 'new', heading: finished ? '题目已提交审核' : '附上一份示例结果',
-        description: '用这道题的提示词让模型生成一份结果，展示题目的效果。' }),
+        description: '选填：用这道题的提示词让模型生成一份结果，展示题目的效果。' }),
       fileNote: '上传用这份提示词让模型生成的结果',
       infoLabel: '结果信息',
       submitLabel: '提交题目与结果',

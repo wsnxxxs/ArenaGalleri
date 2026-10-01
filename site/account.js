@@ -45,7 +45,7 @@ const HELD = {
     rejected: '内容审核未通过，作品不会公开。',
   },
   question: {
-    pending: '新题目由管理员人工审核，通过前只有你能看到；示例结果的审核进度在「我的作品」里。',
+    pending: '新题目由管理员人工审核，通过前只有你能看到；附带示例结果时，它的审核进度在「我的作品」里。',
     review: '管理员正在复核，通过前只有你能看到。',
     rejected: '审核未通过，题目不会公开。可以删除后重新发起。',
   },
@@ -769,7 +769,7 @@ function review(root, ctx) {
       crumbs: [{ text: '个人中心', href: '#/me' }, { text: '审核' }],
       caption: `<nav class="seg review-tabs" aria-label="审核分类">${Object.entries(TABS).map(([id, text]) => `<a href="#/review/${id}"${id === tab ? ' aria-current="page"' : ''}>${text}${id === 'log' || state.works === null ? '' : `<span>${tabCount(id)}</span>`}</a>`).join('')}</nav>` })}
       <section class="submission-section">
-        <p class="submission-summary">${tab === 'questions' ? '新题目由管理员人工审核，通过后才公开并开放投稿。先打开示例结果，确认提示词是一项具体、可比较的生成任务；拒绝时写明理由，作者会看到。' : '核对作品能否运行、是否符合题目、生成信息是否可信。无法核实的作品保留作参考，并写明原因。'}</p>
+        <p class="submission-summary">${tab === 'questions' ? '新题目由管理员人工审核，通过后才公开并开放投稿。有示例结果时先打开看看，确认提示词是一项具体、可比较的生成任务；拒绝时写明理由，作者会看到。' : '核对作品能否运行、是否符合题目、生成信息是否可信。无法核实的作品保留作参考，并写明原因。'}</p>
         ${state.error ? `<p class="form-error">${esc(state.error)}</p>` : ''}
         ${state.works === null ? '<p class="muted">正在载入…</p>' : list}
       </section>
