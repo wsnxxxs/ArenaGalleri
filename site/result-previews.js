@@ -40,6 +40,10 @@ export function buildPreviewScene(imported, architecture, clip) {
   const sun = new THREE.DirectionalLight(0xffe6be, 3.3); sun.position.set(-80, 110, 90); scene.add(sun);
   const fill = new THREE.DirectionalLight(0xb5d9db, 0.55); fill.position.set(70, 50, -80); scene.add(fill);
   const result = { scene, pivot, bounds: previewBounds };
+  // A world-axis box includes empty corners around thin, diagonal models such
+  // as aircraft. Frame their visible vertices in the resting camera instead.
+  // Architecture keeps its authored clipping bounds and display plinth.
+  if (!architecture) result.bounds = { projection: projectVisibleMeshes(createPreviewCamera(), group) };
   // Clip distant scenery from extraction copies, as in the existing sandtable.
   if (clip) {
     const { min, max } = previewBounds;
@@ -55,7 +59,35 @@ export function buildPreviewScene(imported, architecture, clip) {
   }
   return result;
 }
+function projectVisibleMeshes(camera, group) {
+  group.updateMatrixWorld(true);
+  const box = new THREE.Box3(), point = new THREE.Vector3();
+  const view = new THREE.Matrix4(), instance = new THREE.Matrix4(), transform = new THREE.Matrix4();
+  group.traverseVisible((mesh) => {
+    if (!mesh.isMesh || !mesh.geometry.attributes.position) return;
+    const { geometry, material } = mesh, positions = geometry.attributes.position;
+    const visible = (value) => value?.visible && !(value.transparent && value.opacity === 0);
+    const ranges = Array.isArray(material)
+      ? geometry.groups.filter((range) => visible(material[range.materialIndex]))
+      : visible(material) ? [{ start: 0, count: Infinity }] : [];
+    const draw = geometry.drawRange, count = geometry.index?.count ?? positions.count;
+    view.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
+    for (let i = 0; i < (mesh.isInstancedMesh ? mesh.count : 1); i++) {
+      if (mesh.isInstancedMesh) { mesh.getMatrixAt(i, instance); transform.multiplyMatrices(view, instance); }
+      else transform.copy(view);
+      for (const range of ranges) {
+        const end = Math.min(count, draw.start + draw.count, range.start + range.count);
+        for (let j = Math.max(draw.start, range.start); j < end; j++) {
+          point.fromBufferAttribute(positions, geometry.index ? geometry.index.getX(j) : j).applyMatrix4(transform);
+          box.expandByPoint(point);
+        }
+      }
+    }
+  });
+  return { minX: box.min.x, maxX: box.max.x, minY: box.min.y, maxY: box.max.y };
+}
 function projectBounds(camera, bounds) {
+  if (bounds.projection) return bounds.projection;
   const point = new THREE.Vector3();
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {

@@ -18,8 +18,15 @@ const SLOTS = [
   'translate(16%, -11%) rotate(6deg) scale(.84)',
   'translate(-15%, -9%) rotate(-6.5deg) scale(.8)',
 ];
-const SHUFFLE = 3200;
-const QUESTION = SHUFFLE * 4;
+// Long enough to look at each shot; a question shows three of its answers before the next one comes up.
+const SHUFFLE = 4800;
+const QUESTION = SHUFFLE * 3;
+// Every move shares one curve that starts gently and settles softly; leaving ones only speed up.
+const EASE = 'cubic-bezier(.45, 0, .2, 1)', EXIT = 'cubic-bezier(.5, 0, .75, 0)';
+const MOVE = 900, LEAVE = 520, SWAP = 400;
+// Below the front of the stack, where a card goes as it leaves; behind the stack, where new cards come from.
+const OUT = 'translate(3%, 14%) rotate(-2deg) scale(.95)';
+const BEHIND = 'translate(0, -16%) scale(.74)';
 // Headline couplets: an old story of one thing done many ways, then this question's answer count at {n}.
 // Each line stays short enough to sit on one line; the font shrinks to the longer of the two.
 // The last field picks the typeface: song for classics and poetry, kai for the painting and anecdote stories,
@@ -65,7 +72,9 @@ const pick = (list, recent = []) => {
 };
 
 export function mount(root, ctx) {
-  const answersOf = (t) => t.results.filter((r) => ctx.interactive(r) && ctx.cover(r))
+  // The home page shows each answer's rendered model where there is one, not a screenshot of its interface.
+  const shotOf = (r) => r.previewPoster || ctx.cover(r);
+  const answersOf = (t) => t.results.filter((r) => ctx.interactive(r) && shotOf(r))
     .sort((a, b) => (a.status === 'verified' ? 0 : 1) - (b.status === 'verified' ? 0 : 1) || time(b) - time(a));
   // Each couplet sets a handful of old variants against the answers, so only questions with more than four lead.
   const decks = ctx.DATA.tasks.filter((t) => answersOf(t).length > 4).sort((a, b) => answersOf(b).length - answersOf(a).length);
@@ -84,8 +93,41 @@ export function mount(root, ctx) {
   // Every answer is a small browser window: the model in the title bar, its first screen below.
   const windowCard = (task, work, attrs = '', eager = false) => `<a class="home-window" href="${ctx.viewHref(task, work.id)}" aria-label="在线预览：${esc(work.title)}，${esc(ctx.label(work))}"${attrs}>
       <span class="home-window-bar"><span class="home-window-dots" aria-hidden="true"><i></i><i></i><i></i></span>${brandMark(ctx.modelOf(work), 'home-window-mark')}<b>${esc(ctx.label(work))}</b></span>
-      <span class="home-window-shot">${img(ctx.cover(work), '', '', eager)}</span>
+      <span class="home-window-shot">${img(shotOf(work), '', work.previewPoster ? 'is-poster' : '', eager)}</span>
     </a>`;
+  const posterFrames = new Map(), posterCanvas = document.createElement('canvas');
+  const posterContext = posterCanvas.getContext('2d', { willReadFrequently: true });
+  const fitPosters = (container) => $$('img.is-poster', container).forEach((image) => {
+    const fit = () => {
+      if (!image.naturalWidth) return;
+      let frame = posterFrames.get(image.src);
+      if (!frame) {
+        const width = posterCanvas.width = image.naturalWidth, height = posterCanvas.height = image.naturalHeight;
+        posterContext.drawImage(image, 0, 0);
+        const pixels = posterContext.getImageData(0, 0, width, height).data;
+        let left = width, top = height, right = -1, bottom = -1;
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+          if (pixels[(y * width + x) * 4 + 3] <= 8) continue;
+          left = Math.min(left, x); top = Math.min(top, y);
+          right = Math.max(right, x); bottom = Math.max(bottom, y);
+        }
+        if (right < left) return;
+        // Fit the visible model into the same 8% inset, rather than adding
+        // another margin around transparent space already inside its poster.
+        const visibleWidth = right - left + 1, visibleHeight = bottom - top + 1;
+        const scale = .84 / Math.max(visibleWidth, visibleHeight * 1.6);
+        frame = {
+          width: width * scale, height: height * scale * 1.6,
+          left: (1 - visibleWidth * scale) / 2 - left * scale,
+          top: (1 - visibleHeight * scale * 1.6) / 2 - top * scale * 1.6,
+        };
+        posterFrames.set(image.src, frame);
+      }
+      for (const [key, value] of Object.entries(frame)) image.style.setProperty(`--poster-${key}`, `${value * 100}%`);
+    };
+    image.onload = fit;
+    if (image.complete) fit();
+  });
   // Two matching copies make the strip loop without a jump. Only the first is keyboard-focusable.
   const strip = [false, true].map((copy) => `<div class="home-stream-group"${copy ? ' aria-hidden="true"' : ''}>${recent.map(({ task, work }) =>
     `<div class="home-stream-item">${windowCard(task, work, copy ? ' tabindex="-1"' : '')}<span class="home-stream-task">${esc(shortTitle(task))}</span></div>`).join('')}</div>`).join('');
@@ -127,11 +169,12 @@ export function mount(root, ctx) {
     </section>` : ''}
   </main>${ctx.footer()}`;
 
+  fitPosters(root);
   const deck = root.querySelector('.home-deck'), slip = root.querySelector('.home-slip'), hero = root.querySelector('.home-hero');
   const cta = root.querySelector('[data-home-cta]'), autoplay = root.querySelector('[data-autoplay]');
   const verse = root.querySelector('.home-verse'), tabList = root.querySelector('.home-tabs');
   let current = 0, cards = [], elapsed = 0, sinceShuffle = 0, playing = !reducedMotion(), autoQuestion = playing, hovering = false;
-  let turning = 0;
+  let turning = 0, dealt = 0;
   const sung = [];
 
   // A random couplet, not one of the last eight, set in its own typeface.
@@ -151,17 +194,31 @@ export function mount(root, ctx) {
     const id = ++turning, wait = (ms) => new Promise((done) => setTimeout(done, ms));
     const loaded = Promise.race([document.fonts.load(`1em "${FACES[next[3]]}"`).catch(() => {}), wait(1200)]);
     verse.classList.add('is-turning');
-    Promise.all([loaded, wait(reducedMotion() || !verse.dataset.face ? 0 : 320)]).then(() => {
+    Promise.all([loaded, wait(reducedMotion() || !verse.dataset.face ? 0 : SWAP)]).then(() => {
       if (id !== turning) return;
       sing(n, next);
+      // The old couplet left upward, so the new one rises from below.
+      verse.classList.add('is-entering');
       verse.classList.remove('is-turning');
+      void verse.offsetWidth;
+      verse.classList.remove('is-entering');
     });
   };
 
+  // One motion language for both changes: a card leaves by sliding down past the front of the stack,
+  // and cards arrive from behind it. Every move starts where the card is now, so an interrupted one carries on.
+  const slot = (k) => {
+    const at = Math.min(k, SLOTS.length - 1);
+    return { transform: SLOTS[at], filter: at ? `brightness(${1 - at * 0.12})` : 'brightness(1)', opacity: '1' };
+  };
+  const now = (card) => {
+    const { transform, filter, opacity } = getComputedStyle(card);
+    card.getAnimations().forEach((a) => a.cancel());
+    return { transform, filter, opacity };
+  };
   const place = () => cards.forEach((card, k) => {
-    card.style.transform = SLOTS[Math.min(k, SLOTS.length - 1)];
+    Object.assign(card.style, slot(k));
     card.style.zIndex = String(SLOTS.length - k);
-    card.style.filter = k ? `brightness(${1 - k * 0.12})` : '';
     card.tabIndex = k ? -1 : 0;
     card.toggleAttribute('data-front', !k);
   });
@@ -178,20 +235,55 @@ export function mount(root, ctx) {
     const selected = tabList.children[i];
     tabList.scrollTo({ left: selected.offsetLeft - tabList.offsetLeft - 24, behavior: reducedMotion() ? 'auto' : 'smooth' });
     cta.href = ctx.taskHref(t);
-    slip.href = ctx.taskHref(t);
-    slip.querySelector('b').textContent = t.title;
-    slip.querySelector('.home-slip-text').textContent = promptLine(t);
-    deck.innerHTML = works.slice(0, SLOTS.length).map((w, k) => windowCard(t, w, ' data-dealing', k === 0)).join('');
-    cards = [...deck.children];
-    // Deal the new deck in from below, one card after another.
-    requestAnimationFrame(() => cards.forEach((card, k) => setTimeout(() => { card.removeAttribute('data-dealing'); place(); }, 60 + k * 90)));
+    const motion = !reducedMotion(), old = cards, id = ++dealt;
+    // The old deck leaves front card first, above the new one; the slip changes as the couplet does.
+    old.forEach((card, k) => {
+      if (!motion) return card.remove();
+      const z = String(20 - k);
+      card.removeAttribute('data-front');
+      card.animate([{ ...now(card), zIndex: z }, { transform: OUT, filter: 'brightness(1)', opacity: '0', zIndex: z }],
+        { duration: LEAVE, delay: k * 60, easing: EXIT, fill: 'forwards' }).finished.then(() => card.remove(), () => {});
+    });
+    slip.classList.toggle('is-turning', motion && old.length > 0);
+    setTimeout(() => {
+      if (id !== dealt) return;
+      slip.href = ctx.taskHref(t);
+      slip.querySelector('b').textContent = t.title;
+      slip.querySelector('.home-slip-text').textContent = promptLine(t);
+      slip.classList.remove('is-turning');
+    }, motion && old.length ? SWAP : 0);
+    // The new deck rises from behind, back cards first, so the front card is the last to settle.
+    const fresh = document.createElement('template');
+    fresh.innerHTML = works.slice(0, SLOTS.length).map((w, k) => windowCard(t, w, '', k === 0)).join('');
+    cards = [...fresh.content.children];
+    deck.append(...cards);
+    cards.forEach(fitPosters);
+    place();
+    if (motion) cards.forEach((card, k) => card.animate([{ transform: BEHIND, filter: 'brightness(.4)', opacity: '0' }, slot(k)],
+      { duration: MOVE, delay: (old.length ? 180 : 0) + (cards.length - 1 - k) * 90, easing: EASE, fill: 'backwards' }));
+  };
+  // The front card slides down past the stack while the rest step forward, then tucks in at the back.
+  const tuck = (moving) => {
+    const start = new Map(cards.map((card) => [card, now(card)]));
+    cards = [...cards.slice(moving.length), ...moving];
+    sinceShuffle = 0;
+    place();
+    if (reducedMotion()) return;
+    cards.forEach((card, k) => {
+      const m = moving.indexOf(card), to = slot(k);
+      if (m < 0) return card.animate([start.get(card), to], { duration: MOVE, delay: 120, easing: EASE, fill: 'backwards' });
+      const z = String(10 - m), down = { transform: OUT, filter: 'brightness(1)', opacity: '1' };
+      card.animate([
+        { ...start.get(card), zIndex: z, easing: EASE },
+        { ...down, zIndex: z, offset: .42 },
+        { ...down, zIndex: '0', offset: .421, easing: EASE },
+        { ...to, zIndex: '0' },
+      ], { duration: MOVE + 500, delay: m * 90, fill: 'backwards' });
+    });
   };
   const bringToFront = (card) => {
     const at = cards.indexOf(card);
-    if (at <= 0) return;
-    cards = [...cards.slice(at), ...cards.slice(0, at)];
-    sinceShuffle = 0;
-    place();
+    if (at > 0) tuck(cards.slice(0, at));
   };
   const setPlaying = (on) => {
     playing = on;
@@ -205,11 +297,14 @@ export function mount(root, ctx) {
     if (!root.contains(deck)) return clearInterval(timer);
     if (!playing || hovering || document.visibilityState !== 'visible') return;
     sinceShuffle += TICK;
-    if (sinceShuffle >= SHUFFLE && cards.length > 1) { sinceShuffle = 0; cards.push(cards.shift()); place(); }
-    if (!autoQuestion) return;
-    elapsed += TICK;
-    root.querySelector('[data-home-tab][aria-selected="true"]')?.style.setProperty('--progress', String(Math.min(elapsed / QUESTION, 1)));
-    if (elapsed >= QUESTION) show(decks.length > 1 ? pick([...decks.keys()], [current]) : current);
+    if (autoQuestion) {
+      elapsed += TICK;
+      root.querySelector('[data-home-tab][aria-selected="true"]')?.style.setProperty('--progress', String(Math.min(elapsed / QUESTION, 1)));
+      if (elapsed >= QUESTION) return show(decks.length > 1 ? pick([...decks.keys()], [current]) : current);
+    }
+    // No shuffle just before the question changes, so the two never overlap.
+    const soon = autoQuestion && QUESTION - elapsed < SHUFFLE / 2;
+    if (sinceShuffle >= SHUFFLE && cards.length > 1 && !soon) tuck([cards[0]]);
   }, TICK);
   const stage = root.querySelector('.home-stage');
   stage.addEventListener('pointerenter', () => { hovering = true; });
