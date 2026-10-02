@@ -498,6 +498,22 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
 .submissions-error { margin-top: 20px; }
 .submission-section { padding: 22px 0 40px; }
 .submission-summary { margin-bottom: 14px; color: var(--muted); font-size: 12px; }
+/* 我的作品: where each upload stands, the filters by stage, and the unverified quota. */
+.work-filters { margin: 0 0 14px; }
+.work-filters .chip { min-height: 27px; padding: 0 10px; font-size: 12px; }
+.upload-quota { display: flex; align-items: center; gap: 12px; }
+.quota { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.quota b { color: var(--ink-2); font: 500 12px var(--mono); }
+.quota.is-full, .quota.is-full b { color: var(--accent); }
+.btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.quota-note { display: flex; gap: 6px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink-2); font-size: 12.5px; line-height: 1.6; }
+.quota-note .i { flex: none; width: 14px; height: 14px; margin-top: 3px; color: var(--accent); }
+.timeline.is-compact { max-width: 420px; margin: 9px 0 0; }
+.timeline.is-compact li { padding: 13px 8px 0 0; }
+.timeline.is-compact b { color: var(--muted); font: 500 11.5px/1.4 var(--sans); }
+.timeline.is-compact li.is-done b { color: var(--ink-2); }
+.timeline.is-compact span { display: none; }
+.work-main .result-reason { margin-top: 6px; }
 .submission-empty .btn { margin-top: 14px; }
 .side-cta.btn { width: 100%; justify-content: center; margin-top: 4px; }
 .submission-empty { display: flex; min-height: 120px; padding: 26px; flex-direction: column; justify-content: center; align-items: center; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); font-size: 13px; text-align: center; }
@@ -517,6 +533,7 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
 /* The review queue lists questions with their full prompt folded away. */
 .review-question .prompt-peek { margin-top: 8px; }
 .submission-section .work-row { grid-template-columns: 116px minmax(0, 1fr) auto; gap: 16px; }
+.submission-section .work-row.is-pickable { grid-template-columns: 18px 116px minmax(0, 1fr) auto; }
 .account-empty { display: flex; flex: 1; min-height: 440px; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 50px 20px; }
 .account-empty > .i { width: 34px; height: 34px; color: var(--muted); margin-bottom: 22px; }
 .account-empty h2 { font: 500 26px/1.5 var(--serif); }
@@ -671,6 +688,8 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
   .submission-question > .btn { display: none; }
   .submission-section .work-row { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
   .submission-section .work-side { grid-column: 2; align-items: flex-start; }
+  .submission-section .work-row.is-pickable { grid-template-columns: 18px 76px minmax(0, 1fr); }
+  .submission-section .work-row.is-pickable .work-side { grid-column: 3; }
   .board-notes dl > div { grid-template-columns: 1fr; }
 }
 @media (max-width: 460px) {

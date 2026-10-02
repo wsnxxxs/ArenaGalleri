@@ -106,9 +106,9 @@ try {
   assert.equal(me.status, 200);
   assert.deepEqual(resolveApiMedia(me.data, 'me').works, []);
   const question = await call('questions', { method: 'POST', cookie, body: {
-    title: 'Smoke question', summary: 'Integration check.', category: '静态网页', prompt: 'Build one small page.', tags: ['界面'], templates: ['static'],
+    title: 'Smoke question', summary: 'Integration check.', category: '静态网页', domains: [boot.data.domains[0]], prompt: 'Build one small page.', templates: ['static'],
   } });
-  assert.equal(question.status, 200);
+  assert.equal(question.status, 200, JSON.stringify(question.data));
   assert.ok(question.data.question.id);
 
   // A real upload supplies an API media path; the frontend DTO mapping must resolve it.
@@ -120,13 +120,22 @@ try {
   const cover = `data:image/png;base64,${readFileSync(join(datapackRoot, 'assets', 'brands', 'qwen.png')).toString('base64')}`;
   const submitted = await call('works', { method: 'POST', cookie, body: {
     draftId: draft.data.draft.id, title: 'Smoke work', modelName: 'Smoke model', vendor: 'Smoke vendor',
-    effort: 'High', providerId: 'official', tool: 'CLI', confirmed: true, trial: { loaded: true, loadMs: 1 }, cover,
+    effort: 'High', providerId: 'official', harnessOther: 'CLI', generationMode: 'single-turn', humanIntervention: 'none',
+    confirmed: true, trial: { loaded: true, loadMs: 1 }, cover,
   } });
-  assert.equal(submitted.status, 200);
+  assert.equal(submitted.status, 200, JSON.stringify(submitted.data));
   const resolvedWork = resolveApiMedia(submitted.data, 'work').work;
   assert.match(submitted.data.work.cover, /^media\//);
   assert.equal(resolvedWork.cover, `${base}/${submitted.data.work.cover}`);
-  assert.equal((await fetch(resolvedWork.cover)).status, 200);
+  assert.equal((await fetch(resolvedWork.cover)).status, 404, 'unverified upload stays private');
+  assert.equal((await fetch(resolvedWork.cover, { headers: { cookie } })).status, 200, 'author can read own cover');
+  platform.auth.promote('smoke-user');
+  const reviewed = await call('admin/works/batch-review', { method: 'POST', cookie, body: {
+    works: [{ task: task.id, id: submitted.data.work.id }], status: 'verified',
+  } });
+  assert.equal(reviewed.status, 200, JSON.stringify(reviewed.data));
+  assert.equal(reviewed.data.results[0].ok, true, JSON.stringify(reviewed.data));
+  assert.equal((await fetch(resolvedWork.cover)).status, 200, 'verified Gallery upload is public');
   const freshBoot = await call('bootstrap');
   assert.equal(resolveApiMedia(freshBoot.data, 'bootstrap').works[0].cover, resolvedWork.cover);
 

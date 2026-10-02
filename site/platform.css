@@ -405,6 +405,8 @@ dialog.edit-work-sheet { width: min(720px, calc(100% - 32px)); }
 .timeline li.is-current::before { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .timeline li.is-current b { color: var(--accent); }
 .timeline li.is-next span { color: var(--muted); }
+.timeline li.is-failed::before { background: var(--accent); box-shadow: none; }
+.timeline li.is-failed b { color: var(--accent); }
 .timeline.is-row { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); max-width: 720px; margin: 26px 0 4px; }
 .timeline.is-row li { padding: 20px 16px 0 0; }
 .timeline.is-row li::before { top: 0; left: 0; }
@@ -491,6 +493,18 @@ dialog.review-sheet { width: min(980px, calc(100% - 32px)); }
 .review-form .fine { margin: 0 0 16px; }
 .review-form .sheet-actions { justify-content: flex-start; }
 .provenance-suggestion { font-size: 12.5px; color: var(--muted); }
+.review-meta-actions { display: flex; justify-content: flex-end; }
+.review-blocked > span { flex: 1 1 14em; color: var(--ink-2); }
+/* Batch decisions: a checkbox per row and a bar that stays in view while scrolling the queue. */
+.row-pick { display: grid; place-items: center; align-self: stretch; cursor: pointer; }
+.row-pick input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.review-question .row-pick { flex: 0 0 18px; }
+.bulk-bar { position: sticky; top: var(--topbar); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; background: var(--bg); color: var(--ink-2); font-size: 13px; }
+.bulk-bar .row-pick { width: 18px; }
+.bulk-bar [data-bulk-count] { margin-right: auto; }
+.bulk-list { max-height: 200px; overflow: auto; margin: 0 0 14px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; list-style: none; color: var(--ink); font-size: 13px; line-height: 1.7; }
+.bulk-list span { margin-left: 6px; color: var(--muted); font-size: 12px; }
+dialog.bulk-sheet { width: min(520px, calc(100% - 32px)); }
 
 /* ---- responsive ---- */
 @media (max-width: 1000px) {

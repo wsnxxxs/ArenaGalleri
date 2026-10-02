@@ -32,13 +32,16 @@ function checkRow({ state, label, detail }) {
 // Content moderation may be on without a working automatic check (no screenshots, no key);
 // then an admin reviews every upload. Older servers do not report the difference.
 export const moderated = () => Boolean(platform.site.contentModeration);
+// How many works a regular user may keep waiting for verification; the server may set a cap per user.
+export const pendingLimit = () => platform.me?.pendingLimit ?? platform.site.limits.pendingPerUser ?? 5;
 const automatic = () => moderated() && platform.site.autoModeration !== false;
 export const contentStage = () => ['内容审核', automatic() ? '自动检查，通过前仅你可见' : '管理员检查，通过前仅你可见'];
 
-// stages: [label, hint] pairs; current: index of the stage in progress, -1 for none.
-export function stageTrack(stages, current = -1, { row = false } = {}) {
-  return `<ol class="timeline${row ? ' is-row' : ''}" style="--n:${stages.length}">${stages.map(([label, hint], i) => {
-    const cls = current < 0 ? '' : i < current ? 'is-done' : i === current ? 'is-current' : 'is-next';
+// stages: [label, hint] pairs; current: index of the stage in progress, -1 for none, past the end when
+// all are done. failed: the current stage stopped there. compact: a one-line track inside a list row.
+export function stageTrack(stages, current = -1, { row = false, compact = false, failed = false } = {}) {
+  return `<ol class="timeline${row ? ' is-row' : ''}${compact ? ' is-compact' : ''}" style="--n:${stages.length}">${stages.map(([label, hint], i) => {
+    const cls = current < 0 ? '' : i < current ? 'is-done' : i === current ? (failed ? 'is-failed' : 'is-current') : 'is-next';
     return `<li${cls ? ` class="${cls}"` : ''}${i === current ? ' aria-current="step"' : ''}><b>${esc(label)}</b><span>${esc(hint)}</span></li>`;
   }).join('')}</ol>`;
 }
@@ -92,7 +95,7 @@ export function uploadFlow(root, ctx, options) {
     resumable: null, peek: task.promptVariants?.[0]?.id ?? null,
   };
 
-  const pendingFull = () => (platform.me?.pending ?? 0) >= (platform.site.limits.pendingPerUser ?? 5);
+  const pendingFull = () => (platform.me?.pending ?? 0) >= pendingLimit();
 
   // One line under the dropzone with what most often goes wrong; the rest folds away.
   function fileRules() {
@@ -276,7 +279,7 @@ export function uploadFlow(root, ctx, options) {
           <div class="aside-block">
             <h3>提交之后</h3>
             ${stageTrack(options.stages ?? workStages())}
-            <p class="fine">每人最多 ${limits.pendingPerUser} 件作品同时等待核验。</p>
+            <p class="fine">每人最多 ${pendingLimit()} 件作品同时等待核验。</p>
           </div>
         </aside>`}
       </section>
