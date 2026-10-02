@@ -32,6 +32,10 @@ export function representatives(results, keyOf, picks = {}) {
 const COVER_FALLBACKS = [['claude-opus-5.5', 'max'], ['gpt-6-astra', 'max']];
 export function taskCover(task, pick = null) {
   const works = task.results.filter((r) => r.status !== 'questioned');
+  if (task.id === 'show1-005') {
+    const selected = byId(works, 'gemini-4.x-high');
+    if (selected) return selected;
+  }
   const voted = byId(works, pick);
   if (voted) return voted;
   for (const [model, effort] of COVER_FALLBACKS) {
