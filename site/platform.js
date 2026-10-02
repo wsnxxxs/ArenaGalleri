@@ -5,6 +5,7 @@ import { compatibleBuild, fetchApi, resolveApiMedia, setDatapackVersion, staleBu
 import { loadTurnstile, mountTurnstile } from './turnstile.js';
 import { CONTACT } from './legal.js';
 import { openAuthDialog } from './auth-dialog.js';
+import { sticker, stickerName } from './stickers.js';
 
 export const platform = {
   available: false,
@@ -580,7 +581,8 @@ export function reactionBar(key, { locked = false } = {}) {
   const mine = new Set(platform.reactions.mine[key] ?? []);
   const pills = platform.site.emojis.filter((emoji) => counts[emoji]).map((emoji) => {
     const own = mine.has(emoji);
-    return `<button class="react" type="button" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${own}" ${locked ? 'disabled' : ''} title="${locked ? '存疑作品不能再互动' : own ? '撤回我的表情' : '也贴一个'}"><span class="emoji">${emoji}</span><span class="n">${counts[emoji]}</span></button>`;
+    const name = stickerName(emoji);
+    return `<button class="react" type="button" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${own}" aria-label="${name} ${counts[emoji]}" ${locked ? 'disabled' : ''} title="${locked ? '存疑作品不能再互动' : own ? `撤回「${name}」` : `也贴一个「${name}」`}">${sticker(emoji)}<span class="n">${counts[emoji]}</span></button>`;
   }).join('');
   if (locked && !pills) return '';
   return `<div class="reactions" data-reactions="${esc(key)}" data-locked="${locked ? 1 : 0}">${pills}${locked ? '' : `<button class="react-add" type="button" data-react-add data-key="${esc(key)}" aria-label="贴表情" title="贴表情">${icon('smile')}</button>`}</div>`;
@@ -597,12 +599,32 @@ async function toggleReaction(key, emoji) {
   const [task, ...rest] = key.split('/');
   try {
     const result = await api(`works/${encodeURIComponent(task)}/${encodeURIComponent(rest.join('/'))}/reactions`, { method: 'POST', body: { emoji } });
+    const added = result.mine.includes(emoji) && !(platform.reactions.mine[key] ?? []).includes(emoji);
     platform.reactions.counts[key] = result.counts;
     platform.reactions.mine[key] = result.mine;
     redrawReactions(key);
+    if (added) celebrate(key, emoji);
   } catch (error) {
     toast(error.message);
   }
+}
+
+// A fresh reaction pops in its pill, plays once, and a larger copy floats up from it.
+function celebrate(key, emoji) {
+  const pill = $$(`[data-reactions] [data-react="${CSS.escape(emoji)}"]`).find((el) => el.dataset.key === key && el.offsetParent);
+  if (!pill) return;
+  pill.classList.add('bump');
+  pill.querySelector('.stk')?.classList.add('on');
+  setTimeout(() => { pill.classList.remove('bump'); pill.querySelector('.stk')?.classList.remove('on'); }, 1600);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const box = pill.getBoundingClientRect();
+  const fly = document.createElement('div');
+  fly.className = 'react-fly';
+  fly.innerHTML = sticker(emoji, { on: true });
+  fly.style.left = `${box.left + 16}px`;
+  fly.style.top = `${box.top + box.height / 2}px`;
+  document.body.append(fly);
+  fly.addEventListener('animationend', (e) => { if (e.target === fly) fly.remove(); });
 }
 
 function openPicker(button) {
@@ -612,7 +634,7 @@ function openPicker(button) {
   const picker = document.createElement('div');
   picker.className = 'menu react-picker';
   picker.setAttribute('role', 'menu');
-  picker.innerHTML = platform.site.emojis.map((emoji) => `<button type="button" role="menuitem" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${mine.has(emoji)}" aria-label="${emoji}">${emoji}</button>`).join('');
+  picker.innerHTML = platform.site.emojis.map((emoji) => `<button type="button" role="menuitem" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${mine.has(emoji)}" aria-label="${stickerName(emoji)}" title="${stickerName(emoji)}">${sticker(emoji)}</button>`).join('');
   document.body.append(picker);
   const box = button.getBoundingClientRect();
   const width = picker.offsetWidth;

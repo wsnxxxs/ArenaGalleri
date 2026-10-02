@@ -238,9 +238,9 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .upload-pick span { color: var(--muted); font-size: 12px; }
 .upload-pick .i { width: 16px; height: 16px; color: var(--muted); }
 .upload-pick:hover { border-color: var(--accent); background: var(--accent-soft); }
-.received-emojis { display: flex; gap: 9px; }
+.received-emojis { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .received-emoji { display: flex; align-items: center; gap: 9px; min-width: 54px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; }
-.received-emoji span { font-size: 17px; }
+.received-emoji .stk { font-size: 26px; }
 .received-emoji b { color: var(--ink-2); font: 12px var(--mono); }
 
 /* Persistent question context on the left, scrollable collection on the right. */
@@ -626,7 +626,7 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
   .profile-name-row .btn { padding-inline: 10px; }
   .profile-section-head { flex-wrap: wrap; gap: 4px; }
   .activity-foot { flex-wrap: wrap; }
-  .received-emojis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); width: 100%; gap: 6px; }
+  .received-emojis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; gap: 6px; }
   .received-emoji { flex-direction: column; gap: 4px; min-width: 0; padding: 8px 4px; }
   :root { --gutter: 20px; --topbar: 59px; }
   .topbar:not(.sandbar), .app-layout { --topbar: 91px; }

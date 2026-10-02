@@ -1,5 +1,13 @@
 # HANDOFF.md · 当前状态
 
+## 表情互动换成原创动图贴纸（2026-10-03，已提交，未推送、未部署）
+
+- 用户提供本机 QQ 表情预览包，选定 339/387/424/405/478/321/351/476/479，要求学习后重绘以规避版权、替换现有 emoji，并清空已有互动。只参考动作与情绪，全部用原创 SVG + CSS 动画重画，未使用原图像素；两轮预览经用户确认（「太好笑」改 360° 翻滚，「按一下」改连续狂拍）。预览稿在 output/stickers-preview-v2.html。
+- 新增 site/stickers.js：9 个贴纸 id `lick 舔屏 / lol 太好笑 / press 按一下 / luck 好运来 / yes 同意 / drool 馋了 / knock 敲敲 / stare 盯 / no 不行`，渐变只在首次渲染时向 body 注入一次。platform.js 的表情条、选择器改用贴纸，新贴上时弹跳、播放一次并飘出放大副本；account.js 的作品列表摘要和「获得的表情」也改用贴纸，摘要只显示白名单内的 id。platform.css 替换 reactions 段并加入动画（默认停在首帧，悬停 / 聚焦 / 刚贴上时播放；减少动态效果时全部关闭）；studio.css 让「获得的表情」9 项可换行，手机 5 列。
+- 配套后端（arenaofbias-server，已同步提交）：EMOJIS 改为上述 9 个 id；追加迁移清空 reactions 全表，经用户确认 Show1 的 👍/👀/🤯 表态一并清零；个人中心收到的表情只计白名单 id。Show1 自身的 up/down/laugh 映射不变。前后端必须同时上线，否则旧后端会以 400 拒绝新 id。
+- 验证：check 49 文件 / 0 错；test 19/19；有读取权限的数据仓构建 182 件 / 60 site 文件（含 stickers.js）；CI=1 intake 0 错 / 10 条既有警告。后端 check 87 / 0、test 248/248。本地合成接口（output/reactions-20261003/harness.mjs，launch 名 reactions-fixture）用真实模块验证：选择器、贴上 / 高亮 / 撤回、计数、飘出副本自动移除、锁定作品禁用、桌面与 375px 无横向滚动、减少动态效果；截图在同目录。
+- 未验证：真实后端联调与生产迁移、浅色 / 暗色主题逐一目检、Safari / Firefox 动画表现。未推送、部署，生产数据未动。
+
 ## 网页 / 三维作品只收单个 HTML（2026-10-03，已提交，未推送、未部署）
 
 - 用户要求去掉 ZIP 上传，网页和三维作品只收 30 MB 以内的单个 .html。只改 site/categories.js、site/submit.js、site/publish.js。

@@ -4,6 +4,7 @@ import { api, arenaText, avatarFace, confirmDialog, moderationBadge, openBindEma
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf } from './categories.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
+import { sticker, stickerName } from './stickers.js';
 
 // The review queue runs one pipeline: 题目审核 → 内容审核 → 作品核验. The first group only
 // counts what needs a person; the second lists what has been decided.
@@ -43,8 +44,8 @@ function thumb(ctx, w, { link = true } = {}) {
 
 function reactionSummary(w) {
   const counts = platform.reactions.counts[`${w.task}/${w.id}`] ?? {};
-  const entries = Object.entries(counts).filter(([, n]) => n);
-  return entries.length ? `<span class="reaction-sum">${entries.map(([emoji, n]) => `<span>${emoji}<b>${n}</b></span>`).join('')}</span>` : '';
+  const entries = platform.site.emojis.filter((emoji) => counts[emoji]).map((emoji) => [emoji, counts[emoji]]);
+  return entries.length ? `<span class="reaction-sum">${entries.map(([emoji, n]) => `<span title="${stickerName(emoji)}">${sticker(emoji)}<b>${n}</b></span>`).join('')}</span>` : '';
 }
 
 // What a held work or question means for its author, by moderation status.
@@ -337,7 +338,7 @@ function profileOverview(state) {
   </section>
   <section class="profile-reactions" aria-labelledby="received-title">
     <div><h2 id="received-title">获得的表情</h2><p>作品收到了 <b>${received ? received.total : '—'}</b> 个回应</p></div>
-    <div class="received-emojis">${platform.site.emojis.map((emoji) => `<div class="received-emoji"><span>${emoji}</span><b>${received ? received.counts[emoji] ?? 0 : '—'}</b></div>`).join('')}</div>
+    <div class="received-emojis">${platform.site.emojis.map((emoji) => `<div class="received-emoji" title="${stickerName(emoji)}">${sticker(emoji)}<b>${received ? received.counts[emoji] ?? 0 : '—'}</b></div>`).join('')}</div>
   </section>`;
 }
 
