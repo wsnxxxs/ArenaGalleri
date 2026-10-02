@@ -138,9 +138,8 @@ function workRow(ctx, w, { bucket = null, questions = [], picked } = {}) {
   const admin = Boolean(bucket);
   const task = ctx.DATA.tasks.find((t) => t.id === w.task);
   const model = ctx.MODELS.get(w.model) ?? { name: w.modelName };
-  // A work still under moderation, or under a question not yet public, is missing from the
-  // public gallery; open its private preview.
-  const hidden = held(w) || !task;
+  // Works absent from the public catalog open the server-provided owner/admin preview.
+  const hidden = held(w) || !task?.results.some((result) => result.id === w.id);
   const variant = task?.promptVariants?.find((v) => v.id === w.promptVariant);
   const mine = admin ? null : authorStage(w, questions);
   const tone = { held: 'unverified', waiting: 'unverified', issue: 'questioned', verified: 'verified' }[mine?.group];
