@@ -14,6 +14,7 @@ const INTERVENTIONS = [
 ];
 
 const option = (value, text, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(text)}</option>`;
+let effortInputId = 0;
 
 function modelOptions(ctx, selected) {
   const byVendor = new Map();
@@ -43,7 +44,7 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '', expanded = 
   const variants = task?.promptVariants ?? [];
   const model = w.model && ctx.MODELS.has(w.model) ? w.model : w.modelName ? '__other' : '';
   const efforts = ['Default', ...(platform.site.efforts ?? [])];
-  const effort = !w.effort ? '' : efforts.includes(w.effort) ? w.effort : '__other';
+  const effortList = `work-efforts-${++effortInputId}`;
   const harness = w.harness ?? (w.harnessName ? '__other' : '');
   const provider = ctx.providerOf(w)?.id ?? '';
   const filled = ['summary', 'note'].some((key) => w[key]);
@@ -52,13 +53,12 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '', expanded = 
     ${variants.length ? `<label class="field"><span class="field-label">提示词版本<i>*</i></span><select class="input" name="promptVariant" required><option value="">选择生成时用的版本</option>${variants.map((v) => option(v.id, v.label, v.id === w.promptVariant)).join('')}</select><span class="field-hint">展厅会把同一模型的各版本合成一张卡片，可切换对比。</span></label>` : ''}
     <div class="field-row">
       <label class="field"><span class="field-label">模型<i>*</i></span><select class="input" name="modelId" required><option value="">选择模型</option>${modelOptions(ctx, w.model)}${option('__other', '其他模型（手动填写）', model === '__other')}</select></label>
-      <label class="field"><span class="field-label">推理档位<i>*</i></span><select class="input" name="effort" required><option value="">选择推理档位</option>${efforts.map((e) => option(e, e === 'Default' ? '默认（Default）' : e, e === w.effort)).join('')}${option('__other', '其他…', effort === '__other')}</select></label>
+      <label class="field"><span class="field-label">推理档位<i>*</i></span><input class="input" name="effort" required maxlength="20" list="${effortList}" value="${esc(w.effort ?? '')}" placeholder="选择或填写档位"><datalist id="${effortList}">${efforts.map((e) => `<option value="${esc(e)}">${e === 'Default' ? '默认（Default）' : esc(e)}</option>`).join('')}</datalist><span class="field-hint">可选常用档位，也可直接手填；使用默认设置请填 Default。</span></label>
     </div>
     <div class="field-row" data-other-model${model === '__other' ? '' : ' hidden'}>
       <label class="field"><span class="field-label">模型名称<i>*</i></span><input class="input" name="modelName" maxlength="60" placeholder="按官方写法，例如 GPT-6 Sol" value="${esc(model === '__other' ? w.modelName : '')}"></label>
       <label class="field"><span class="field-label">厂商</span><input class="input" name="vendor" maxlength="40" placeholder="例如 OpenAI" value="${esc(model === '__other' ? w.vendor ?? '' : '')}"></label>
     </div>
-    <label class="field" data-other-effort${effort === '__other' ? '' : ' hidden'}><span class="field-label">档位名称<i>*</i></span><input class="input" name="effortOther" maxlength="20" placeholder="例如 Extra" value="${esc(effort === '__other' ? w.effort : '')}"></label>
     <div class="field-row">
       <label class="field"><span class="field-label">Harness<i>*</i></span><select class="input" name="harnessId" required><option value="">选择 Harness</option>${harnessOptions(ctx, w.harness)}${option('__other', '其他（手动填写）', harness === '__other')}</select><span class="field-hint">生成用的工具或环境，例如 Claude Code、Cursor、官方网页对话。</span></label>
       <label class="field"><span class="field-label">服务商<i>*</i></span><select class="input" name="providerId" required><option value="">选择服务商</option>${providerOptions(ctx, provider)}</select><span class="field-hint">「官方」指模型厂商自己的 API、网页或 App。</span></label>
@@ -78,7 +78,7 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '', expanded = 
 
 // Shows the "other" inputs that belong to the changed select.
 export function onWorkFieldChange(form, target) {
-  const toggle = { modelId: '[data-other-model]', effort: '[data-other-effort]', harnessId: '[data-other-harness]' }[target.name];
+  const toggle = { modelId: '[data-other-model]', harnessId: '[data-other-harness]' }[target.name];
   if (!toggle) return;
   $(toggle, form).hidden = target.value !== '__other';
 }
@@ -104,8 +104,7 @@ export function readWorkFields(form, task, { requireComplete = true } = {}) {
   if (requireComplete && (task?.promptVariants ?? []).length && !data.promptVariant) return fail(form, 'promptVariant', '请选择生成时用的提示词版本');
   if (requireComplete && !data.modelId) return fail(form, 'modelId', '请选择模型');
   if (other && !text('modelName')) return fail(form, 'modelName', '请填写模型名称');
-  if (requireComplete && !data.effort) return fail(form, 'effort', '请选择推理档位');
-  if (data.effort === '__other' && !text('effortOther')) return fail(form, 'effortOther', '请填写档位名称');
+  if (requireComplete && !text('effort')) return fail(form, 'effort', '请选择或填写推理档位');
   if (requireComplete && !data.harnessId) return fail(form, 'harnessId', '请选择 Harness');
   if (data.harnessId === '__other' && !text('harnessOther')) return fail(form, 'harnessOther', '请填写 Harness 名称');
   if (requireComplete && !['official', 'unofficial'].includes(data.providerId)) return fail(form, 'providerId', '请选择服务商');
@@ -116,7 +115,7 @@ export function readWorkFields(form, task, { requireComplete = true } = {}) {
     summary: data.summary ?? '',
     ...(data.promptVariant !== undefined ? { promptVariant: data.promptVariant } : {}),
     ...(other ? { modelName: text('modelName'), vendor: text('vendor') } : { modelId: data.modelId }),
-    effort: data.effort === '__other' ? text('effortOther') : data.effort,
+    effort: text('effort'),
     ...(data.harnessId === '__other' ? { harnessOther: text('harnessOther') } : { harnessId: data.harnessId }),
     providerId: data.providerId,
     generationMode: data.generationMode,
