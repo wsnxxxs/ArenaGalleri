@@ -18,9 +18,10 @@ const POLL_LIMIT = 40;
 // What each format's dropzone accepts: the picker filter, the name check and its message.
 const FILES = {
   text: { accept: '.txt,.md,.markdown,text/plain,text/markdown', pattern: /\.(txt|md|markdown)$/i, prompt: '拖入 .txt 或 .md 文本文件', error: '文学作品请上传 .txt 或 .md 文本文件' },
-  static: { accept: '.zip,.html,.htm,application/zip,text/html', pattern: /\.(zip|html?)$/i, prompt: '拖入 ZIP 压缩包或单个 HTML 文件', error: '请选择 .zip 压缩包或 .html 文件' },
-  vite: { accept: '.zip,application/zip', pattern: /\.zip$/i, prompt: '拖入包含 dist/ 的 Vite 项目 ZIP', error: 'Vite 项目请上传包含 dist/ 的 ZIP 压缩包' },
+  static: { accept: '.html,.htm,text/html', pattern: /\.html?$/i, prompt: '拖入单个 HTML 文件', error: '网页和三维作品请上传单个 .html 文件' },
 };
+// A page is one HTML file of at most 30 MB, whatever the server would take.
+const HTML_BYTES = 30 * 1024 * 1024;
 
 const freshTrial = () => ({ booted: false, loaded: false, loadMs: null, errors: [], failed: [], blocked: [], paint: null, timedOut: false, manual: false });
 
@@ -84,7 +85,6 @@ export function uploadFlow(root, ctx, options) {
   const draftTask = options.draftTask ?? task.id;
   const offset = options.lead ? 1 : 0;
   const templates = templatesOf(task);
-  const templateLabel = (value) => value === 'vite' ? 'Vite 静态网页（含 dist/）' : TEMPLATE_LABELS[value];
   const waiting = options.waiting ?? ((result) => result.work?.moderation?.status === 'pending');
   let active = true;
   const state = {
@@ -95,21 +95,20 @@ export function uploadFlow(root, ctx, options) {
     resumable: null, peek: task.promptVariants?.[0]?.id ?? null,
   };
 
+  const maxBytes = () => (state.template === 'text' ? platform.site.limits.uploadBytes : Math.min(platform.site.limits.uploadBytes, HTML_BYTES));
   const pendingFull = () => (platform.me?.pending ?? 0) >= pendingLimit();
 
   // One line under the dropzone with what most often goes wrong; the rest folds away.
   function fileRules() {
-    const limits = platform.site.limits;
     if (state.template === 'text') return {
-      summary: ['UTF-8 编码', '最多 20 万字符', `最大 ${formatBytes(limits.uploadBytes)}`],
+      summary: ['UTF-8 编码', '最多 20 万字符', `最大 ${formatBytes(maxBytes())}`],
       rules: ['内容为模型生成的原文。Markdown 支持标题、段落、列表、引用、强调、代码、表格与 LaTeX 公式（$…$、$$…$$）；.txt 按纯文本显示，不解析公式。',
         'HTML 标签、链接和图片按原文字显示；平台用统一版式排版，预览、盲评与截图都用排版后的页面。'],
     };
     return {
-      summary: [state.template === 'vite' ? '需包含构建后的 <code>dist/</code>' : '根目录或 <code>dist/</code> 内需有 <code>index.html</code>', `最大 ${formatBytes(limits.uploadBytes)}`],
-      rules: ['Vite 等需要构建的项目，先构建再把 <code>dist/</code> 一起打包；平台不执行构建脚本。',
-        '<code>node_modules</code>、<code>.git</code> 会被忽略但计入大小；<code>.env</code> 等密钥文件会被拒绝。',
-        '解压后不超过 150 MB、2000 个文件。',
+      summary: ['单个 <code>.html</code> 文件', `最大 ${formatBytes(maxBytes())}`],
+      rules: ['脚本、样式、贴图和模型都写进这一个 HTML（内联或 data: URL）；不接受 ZIP，平台也不执行构建。',
+        '使用 <code>three</code> 这类裸模块名时，需在页面里用 <code>&lt;script type="importmap"&gt;</code> 指向下面的 CDN。',
         `作品不能联网，只能引用这些 CDN：${platform.site.cdn.map((host) => `<code>${esc(host)}</code>`).join('、')}。`],
     };
   }
@@ -139,7 +138,7 @@ export function uploadFlow(root, ctx, options) {
           <input type="file" accept="${FILES[state.template].accept}" hidden>
         </div>`;
     return `<div class="step-body">${taskLabel}
-      ${templates.length > 1 ? `<label class="field"><span class="field-label">提交格式</span><select class="input" data-template${state.uploading ? ' disabled' : ''}>${templates.map((value) => `<option value="${value}"${value === state.template ? ' selected' : ''}>${templateLabel(value)}</option>`).join('')}</select></label>` : ''}
+      ${templates.length > 1 ? `<label class="field"><span class="field-label">提交格式</span><select class="input" data-template${state.uploading ? ' disabled' : ''}>${templates.map((value) => `<option value="${value}"${value === state.template ? ' selected' : ''}>${TEMPLATE_LABELS[value]}</option>`).join('')}</select></label>` : ''}
       ${options.lead ? '' : promptPeek()}
       ${state.resumable && !state.uploading ? `<div class="notice resume-draft">${icon('clock')}<p>你之前上传过「${esc(state.resumable.sourceName)}」，试加载保留到 ${esc(formatTime(state.resumable.expiresAt))}。</p><button class="btn primary sm" type="button" data-act="resume">继续试加载</button><button class="btn sm" type="button" data-act="drop-draft">丢弃</button></div>` : ''}
       ${pendingFull() ? `<div class="notice">${icon('clock')}<p>你已有 ${platform.me.pending} 件作品在等待核验，核验之后再上传新的作品吧。</p></div>` : picker}
@@ -342,7 +341,7 @@ export function uploadFlow(root, ctx, options) {
 
   function upload(file) {
     if (!file || state.uploading) return;
-    if (file.size > platform.site.limits.uploadBytes) { state.error = `文件超过 ${formatBytes(platform.site.limits.uploadBytes)} 上限`; return draw(); }
+    if (file.size > maxBytes()) { state.error = `文件超过 ${formatBytes(maxBytes())} 上限`; return draw(); }
     if (!FILES[state.template].pattern.test(file.name)) { state.error = FILES[state.template].error; return draw(); }
     Object.assign(state, { uploading: true, progress: 0, loaded: 0, total: file.size, error: '' });
     draw();

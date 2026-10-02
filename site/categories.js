@@ -4,10 +4,10 @@
 // Domains say what a question is about (数学, 化学, 建筑…): one or two per question, for browsing only.
 export const CATEGORIES = [
   { name: '文学', label: '文本', slug: 'text', glyph: 'text', templates: ['text'] },
-  { name: '静态网页', label: '网页', slug: 'page', glyph: 'desktop', templates: ['static', 'vite'] },
-  { name: '建模', label: '三维', slug: 'model', glyph: 'cube', templates: ['static', 'vite'] },
+  { name: '静态网页', label: '网页', slug: 'page', glyph: 'desktop', templates: ['static'] },
+  { name: '建模', label: '三维', slug: 'model', glyph: 'cube', templates: ['static'] },
 ];
-export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '纯 HTML / JavaScript', vite: 'Vite 静态网页' };
+export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '单个 HTML 文件' };
 // The backend may send its own list in bootstrap (`domains`); this one stands in without it.
 export const DOMAINS = ['数学', '物理', '化学', '生物', '天文', '建筑', '自然景观', '交通与机械', '产品与品牌', '文学艺术', '游戏娱乐'];
 export const MAX_DOMAINS = 2;
@@ -15,7 +15,9 @@ export const MAX_DOMAINS = 2;
 export const categoryOf = (name) => CATEGORIES.find((c) => c.name === name) ?? null;
 export const categoryLabel = (name) => categoryOf(name)?.label ?? name ?? '';
 // Questions that predate formats take their category's; the category itself is never a tag.
-export const templatesOf = (task) => (task.templates?.length ? task.templates : categoryOf(task.category)?.templates ?? ['static', 'vite']);
+// Pages arrive as one HTML file only: questions stored with the retired ZIP format `vite` take `static`.
+export const templatesOf = (task) => [...new Set((task.templates?.length ? task.templates : categoryOf(task.category)?.templates ?? ['static'])
+  .map((type) => (type === 'vite' ? 'static' : type)))];
 export const domainsOf = (task) => task.domains ?? [];
 export const domainList = (platform) => (platform?.domains?.length ? platform.domains : DOMAINS);
 // Questions carry no tags of their own: a search looks through their words and every version of

@@ -1,5 +1,12 @@
 # HANDOFF.md · 当前状态
 
+## 网页 / 三维作品只收单个 HTML（2026-10-03，已提交，未推送、未部署）
+
+- 用户要求去掉 ZIP 上传，网页和三维作品只收 30 MB 以内的单个 .html。只改 site/categories.js、site/submit.js、site/publish.js。
+- categories.js：网页、三维的格式只剩 `static`（显示为「单个 HTML 文件」），删去 `vite`；templatesOf 把旧题目存的 `vite` 归并为 `static` 并去重，所以旧题 `["static","vite"]` 不再出现格式下拉框，上传固定发 `template=static`。submit.js：选择器只接受 .html/.htm，拒绝 .zip；网页类上限取 min(后端 uploadBytes, 30 MiB)，文本仍用后端上限；文件要求改为「资源内联、不接受 ZIP、裸模块名需写 importmap」。publish.js：发起网页 / 三维题时提交格式固定为 `["static"]`。
+- 链路兼容：查生产 bootstrap，3 道社区网页 / 三维题都是 `["static","vite"]`，文本题 `["text"]`，没有只收 vite 的题；后端 uploadBytes 已是 31457280，compatibleTemplates 接受 `["static"]`，createDraft 对 static 的 HTML 原样处理。已有 ZIP 作品、馆藏 `*-zip` 作品和未过期的 ZIP 草稿续传不受影响。后端仍接受直接调用 API 上传的 ZIP，未改后端；若要服务端也禁止，需在后端 inspectUpload / createDraft 拒绝 ZIP、defaultTemplates 改为 `['static']`。
+- 验证：check 48/0、test 19/19。author-mock（site 叠加 dist）中 Browser 验证：上传页 accept 为 .html，无格式下拉框，提示「最大 30.0 MB」；选 .zip 提示「网页和三维作品请上传单个 .html 文件」；30 MiB+1 字节的 .html 提示超限；发起题目选「三维」后格式固定为单个 HTML（templates=static）。未运行 build / intake（未改构建与数据），未联真实后端实际上传。见 [归档](docs/archive/2026-10-03-html-only-uploads-wsnxxxs.md)。
+
 ## 密码管理器弹窗兼容修复（2026-10-03，本地完成，未推送、未部署）
 
 - 用户将本轮范围收窄为 Firefox / Bitwarden 自动填充；账号登录规则、验证码和邮件发送不改。按要求由 Astra medium 子代理协作排查与实现。
