@@ -5,7 +5,7 @@ export function publicCatalog(data, buildInfo) {
   return {
     ...pick(data, ['title', 'subtitle', 'description', 'repo', 'schemaVersion']),
     buildInfo: pick(buildInfo, ['frontendCommit', 'datapack', 'catalogDigest', 'schemaVersion']),
-    models: data.models.map(model => pick(model, ['id', 'name', 'vendor', 'logo', 'brandUrl', 'brandName', 'vendorNote'])),
+    models: data.models.map(model => pick(model, ['id', 'name', 'vendor', 'logo', 'brandUrl', 'brandName', 'vendorNote', 'aliases'])),
     harnesses: (data.harnesses ?? []).map(item => pick(item, ['id', 'name', 'kind', 'maker', 'url', 'logo', 'aliases', 'listed'])),
     providers: (data.providers ?? []).map(item => pick(item, ['id', 'name', 'kind', 'operator', 'url', 'logo', 'aliases', 'listed'])),
     tasks: data.tasks.map(task => ({

@@ -174,7 +174,7 @@ function match(root, ctx, task) {
   function revealHead(side) {
     const work = state.result[side];
     if (!work) return `<span class="pane-letter">${letter(side)}</span><span class="arena-who">作品已不可用</span>`;
-    const model = ctx.MODELS.get(work.model) ?? { name: work.modelName };
+    const model = ctx.modelOf({ model: work.model, modelName: work.modelName, vendor: work.vendor });
     const chosen = state.result.choice === side;
     return `<span class="pane-letter">${letter(side)}</span>${brandMark(model, 'brand-mark sm')}
       <span class="arena-who revealed"><b>${esc(work.modelName)}</b>${work.effort ? `<span class="badge">${esc(work.effort)}</span>` : ''}<small>${esc(work.title)}${work.curated ? '' : ' · 投稿'}</small></span>

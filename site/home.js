@@ -89,7 +89,8 @@ export function mount(root, ctx) {
     if (m.vendor && m.logo) vendors.set(m.vendor, { m, n: (vendors.get(m.vendor)?.n ?? 0) + 1 });
   }));
   const vendorMarks = [...vendors.values()].sort((a, b) => b.n - a.n).slice(0, 7);
-  const vendorCount = new Set(ctx.DATA.models.map((m) => m.vendor)).size;
+  const exhibited = ctx.exhibitedModels();
+  const vendorCount = new Set(exhibited.map((m) => m.vendor)).size;
   const first = decks[0], firstCount = first ? answersOf(first).length : 0;
 
   // Every answer is a small browser window: the model in the title bar, its first screen below.
@@ -146,7 +147,7 @@ export function mount(root, ctx) {
           ${first ? `<a class="btn home-enter" data-home-cta href="${ctx.taskHref(first)}"><span>看看这<span data-home-n>${hanzi(firstCount)}</span>种</span>${icon('right')}</a>` : ''}
           <a class="home-link" href="#/questions">浏览全部题目${icon('right')}</a>
         </div>
-        <p class="home-proof"><span class="home-proof-marks" aria-hidden="true">${vendorMarks.map(({ m }) => brandMark(m, 'home-proof-mark')).join('')}</span><span>${vendorCount} 家厂商 · ${ctx.DATA.models.length} 个模型 · ${totalWorks} 份解答</span></p>
+        <p class="home-proof"><span class="home-proof-marks" aria-hidden="true">${vendorMarks.map(({ m }) => brandMark(m, 'home-proof-mark')).join('')}</span><span>${vendorCount} 家厂商 · ${exhibited.length} 个模型 · ${totalWorks} 份解答</span></p>
       </div>
       <div class="home-stage">
         <div class="home-deck-frame">

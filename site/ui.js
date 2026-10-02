@@ -56,7 +56,12 @@ export const LOGO = '<svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><r
 export const ext = (href, text, cls = 'btn') => `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener">${text}${icon('arrow')}</a>`;
 export const brandMark = (m, cls = 'brand-mark') => (m.logo
   ? `<span class="${cls}"><img src="${esc(m.logo)}" alt="" loading="lazy" decoding="async"></span>`
-  : `<span class="${cls}" aria-hidden="true">${esc((m.name ?? '?').slice(0, 1))}</span>`);
+  : `<span class="${cls}${m.unlisted ? ' is-unlisted' : ''}" aria-hidden="true">${esc((m.name ?? '?').slice(0, 1))}</span>`);
+// The vendor under a model name; a model outside the registry says so (see models.js).
+const UNLISTED = { declared: '厂商由投稿者填写', inferred: '厂商按模型名称推断' };
+export const vendorLine = (m) => (!m.unlisted ? esc(m.vendor ?? '')
+  : m.vendor ? `${esc(m.vendor)} · <span class="unlisted" title="注册表尚未收录这个模型，${UNLISTED[m.unlisted]}">未收录</span>`
+    : '<span class="unlisted" title="注册表尚未收录这个模型，也无法从名称判断厂商">未收录模型</span>');
 
 // ---- theme ------------------------------------------------------------------------------
 const THEME_COLOR = { light: '#f5f4f0', dark: '#121211' };

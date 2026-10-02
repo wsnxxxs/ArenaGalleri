@@ -20,6 +20,11 @@ function modelOptions(ctx) {
   return [...ctx.DATA.models].sort((a, b) => byName(a.name, b.name)).map((m) => `<option value="${esc(m.name)}" data-model-id="${esc(m.id)}">${esc(m.vendor)}</option>`).join('');
 }
 
+// A name that matches no registered model is a custom model and carries its own vendor.
+const registeredModel = (form, name) => [...$('datalist[data-models]', form).options].find((o) => o.value === name)?.dataset.modelId;
+// Its vendor field starts from the vendor its name suggests (see models.js); set by workFieldsHtml.
+let guessVendor = () => '';
+
 function harnessOptions(ctx, selected) {
   const listed = [...ctx.HARNESSES.values()].filter((h) => h.listed || h.id === selected);
   if (selected && !ctx.HARNESSES.has(selected)) listed.push({ id: selected, name: selected });
@@ -39,6 +44,9 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '', expanded = 
   const w = work ?? {};
   const variants = task?.promptVariants ?? [];
   const modelName = ctx.MODELS.get(w.model)?.name ?? w.modelName ?? '';
+  const custom = Boolean(modelName) && ![...ctx.DATA.models].some((m) => m.name === modelName);
+  guessVendor = (name) => ctx.modelOf({ modelName: name }).vendor;
+  const guess = custom && !w.vendor ? guessVendor(modelName) : '';
   const efforts = ['Default', ...(platform.site.efforts ?? [])];
   const inputId = ++workInputId;
   const modelList = `work-models-${inputId}`;
@@ -50,9 +58,10 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '', expanded = 
     <label class="field"><span class="field-label">作品标题<i>*</i></span><input class="input" name="title" maxlength="40" required placeholder="例如：云山古刹" value="${esc(w.title ?? '')}"></label>
     ${variants.length ? `<label class="field"><span class="field-label">提示词版本<i>*</i></span><select class="input" name="promptVariant" required><option value="">选择生成时用的版本</option>${variants.map((v) => option(v.id, v.label, v.id === w.promptVariant)).join('')}</select><span class="field-hint">展厅会把同一模型的各版本合成一张卡片，可切换对比。</span></label>` : ''}
     <div class="field-row">
-      <label class="field"><span class="field-label">模型名称<i>*</i></span><input class="input" name="modelName" required maxlength="60" list="${modelList}" value="${esc(modelName)}" placeholder="选择或填写模型名称"><datalist id="${modelList}" data-models>${modelOptions(ctx)}</datalist><span class="field-hint">优先选择已登记模型；找不到时可直接填写名称。</span></label>
+      <label class="field"><span class="field-label">模型名称<i>*</i></span><input class="input" name="modelName" required maxlength="60" list="${modelList}" value="${esc(modelName)}" placeholder="选择或填写模型名称"><datalist id="${modelList}" data-models>${modelOptions(ctx)}</datalist><span class="field-hint">优先从列表选择；列表里没有就直接输入新模型名称。</span></label>
       <label class="field"><span class="field-label">推理档位<i>*</i></span><input class="input" name="effort" required maxlength="20" list="${effortList}" value="${esc(w.effort ?? '')}" placeholder="选择或填写档位"><datalist id="${effortList}">${efforts.map((e) => `<option value="${esc(e)}">${e === 'Default' ? '默认（Default）' : esc(e)}</option>`).join('')}</datalist><span class="field-hint">可选常用档位，也可直接手填；使用默认设置请填 Default。</span></label>
     </div>
+    <label class="field" data-other-model${custom ? '' : ' hidden'}><span class="field-label">模型厂商</span><input class="input" name="vendor" maxlength="40" placeholder="例如 OpenAI、DeepSeek" value="${esc(custom ? w.vendor || guess : '')}" data-guess="${esc(guess)}"><span class="field-hint">这是未登记的自定义模型，填写厂商便于展厅归类；能从名称判断时已预填，可修改，不清楚可留空。</span></label>
     <div class="field-row">
       <label class="field"><span class="field-label">Harness<i>*</i></span><select class="input" name="harnessId" required><option value="">选择 Harness</option>${harnessOptions(ctx, w.harness)}${option('__other', '其他（手动填写）', harness === '__other')}</select><span class="field-hint">生成用的工具或环境，例如 Claude Code、Cursor、官方网页对话。</span></label>
       <label class="field"><span class="field-label">服务商<i>*</i></span><select class="input" name="providerId" required><option value="">选择服务商</option>${providerOptions(ctx, provider)}</select><span class="field-hint">「官方」指模型厂商自己的 API、网页或 App。</span></label>
@@ -70,8 +79,16 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '', expanded = 
     </div></details>`;
 }
 
-// Shows the "other" inputs that belong to the changed select.
+// Shows the "other" inputs that belong to the changed field.
 export function onWorkFieldChange(form, target) {
+  if (target.name === 'modelName') {
+    const name = target.value.trim();
+    $('[data-other-model]', form).hidden = !name || Boolean(registeredModel(form, name));
+    // Refill only a vendor the uploader has not typed themselves.
+    const vendor = form.elements.vendor;
+    if (!vendor.value.trim() || vendor.value === vendor.dataset.guess) vendor.value = vendor.dataset.guess = name ? guessVendor(name) : '';
+    return;
+  }
   const toggle = { harnessId: '[data-other-harness]' }[target.name];
   if (!toggle) return;
   $(toggle, form).hidden = target.value !== '__other';
@@ -94,7 +111,7 @@ export function readWorkFields(form, task, { requireComplete = true } = {}) {
   const data = Object.fromEntries(new FormData(form));
   const text = (name) => (data[name] ?? '').trim();
   const modelName = text('modelName');
-  const modelId = [...$('datalist[data-models]', form).options].find((o) => o.value === modelName)?.dataset.modelId;
+  const modelId = registeredModel(form, modelName);
   if (!text('title')) return fail(form, 'title', '请填写作品标题');
   if (requireComplete && (task?.promptVariants ?? []).length && !data.promptVariant) return fail(form, 'promptVariant', '请选择生成时用的提示词版本');
   if (requireComplete && !modelName) return fail(form, 'modelName', '请选择或填写模型名称');
@@ -108,7 +125,7 @@ export function readWorkFields(form, task, { requireComplete = true } = {}) {
     title: text('title'),
     summary: data.summary ?? '',
     ...(data.promptVariant !== undefined ? { promptVariant: data.promptVariant } : {}),
-    ...(modelId ? { modelId } : { modelName }),
+    ...(modelId ? { modelId } : { modelName, vendor: text('vendor') }),
     effort: text('effort'),
     ...(data.harnessId === '__other' ? { harnessOther: text('harnessOther') } : { harnessId: data.harnessId }),
     providerId: data.providerId,

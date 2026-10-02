@@ -153,6 +153,8 @@ img.is-loaded { opacity: 1; }
 a.brand-mark:hover { border-color: var(--ink-2); transform: translateY(-1px); }
 .brand-mark.sm { width: 20px; height: 20px; border-radius: 5px; font-size: 11px; }
 .brand-mark.sm img { width: 13px; height: 13px; }
+.brand-mark.is-unlisted { border-style: dashed; border-color: var(--line-2); background: transparent; color: var(--muted); }
+.unlisted { color: var(--muted); opacity: 0.75; }
 
 /* ---- top bar ---- */
 .topbar {

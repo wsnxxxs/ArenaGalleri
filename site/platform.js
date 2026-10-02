@@ -147,6 +147,15 @@ export function moderationBadge(moderation, hint = '', labels = {}) {
   const info = MODERATION[moderation?.status];
   return info ? `<span class="status status-${info.tone}" title="${esc(hint)}">${icon(info.icon)}${labels[moderation.status] ?? info.label}</span>` : '';
 }
+// Admin-facing names for the categories the backend returns: the schema enum plus rule signals.
+const RISK_LABELS = { sexual: '色情', violence: '暴力', hate: '仇恨', fraud: '诈骗', gambling: '赌博', 'malicious-ads': '恶意广告', privacy: '隐私',
+  'illegal-harm': '违法伤害', 'prompt-injection': '提示词注入', other: '其他', 'signal:injection': '规则命中：提示词注入',
+  'signal:password': '规则命中：密码输入框', 'signal:automation': '规则命中：检测自动化浏览器', 'signal:navigation': '规则命中：跳转外部地址',
+  'signal:mutable-cdn': '规则命中：可变 CDN', 'signal:unscanned': '规则命中：脚本过大未扫描' };
+export const riskLabels = (list = []) => list.map((id) => RISK_LABELS[id] ?? id);
+// A rejection nobody decided by hand, and one that came from an injection attempt aimed at the reviewer.
+export const autoRejected = (moderation) => moderation?.status === 'rejected' && moderation.source !== 'human';
+export const injected = (moderation) => Boolean(moderation?.categories?.includes('prompt-injection'));
 // Questions are always reviewed by a person, so a pending one waits for an admin.
 export const QUESTION_LABELS = { pending: '等待人工审核' };
 // Everything waiting on an admin: unverified or held works, and questions under review.

@@ -1,6 +1,6 @@
 // Leaderboard: the full page (#/leaderboard[/<category>|/<task>][/<domain>], or #/leaderboard/<domain>)
 // and the panel on each task page.
-import { $, brandMark, esc, icon, pad, store } from './ui.js';
+import { $, brandMark, esc, icon, pad, store, vendorLine } from './ui.js';
 import { api, platform } from './platform.js';
 import { domainsIn, domainList, domainsOf, tracksOf } from './categories.js';
 
@@ -35,7 +35,7 @@ export function mountBoard(container, ctx) {
   const filterable = !ctx.embedded;
   const filterActive = () => Boolean(filters.harness || filters.provider);
 
-  const mark = (row) => brandMark(ctx.MODELS.get(row.model) ?? { name: row.modelName }, 'brand-mark sm');
+  const modelOf = (row) => ctx.modelOf({ model: row.model, modelName: row.modelName, vendor: row.vendor });
   const filterSelect = (field, label, registry) => `<label class="result-sort">${label}<select data-board-filter="${field}" aria-label="按${label}筛选榜单">
     <option value="">全部${/^[A-Za-z]/.test(label) ? ' ' : ''}${label}</option><option value="unset"${filters[field] === 'unset' ? ' selected' : ''}>未注明</option>
     ${[...(registry?.values() ?? [])].filter((entry) => entry.listed || entry.id === filters[field])
@@ -74,9 +74,10 @@ export function mountBoard(container, ctx) {
     const at = (value) => (((value - low) / Math.max(high - low, 1)) * 100).toFixed(2);
     const body = rows.map((row) => {
       const from = at(row.score - row.interval), to = at(row.score + row.interval);
-      return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${esc([row.modelName, row.effort, row.vendor].join(' ').toLowerCase())}">
+      const m = modelOf(row);
+      return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${esc([row.modelName, row.effort, m.vendor].join(' ').toLowerCase())}">
       <td class="c-rank">${pad(row.rank)}</td>
-      <td class="c-model"><span class="board-model">${mark(row)}<span class="board-name"><b>${esc(row.modelName)}</b>${row.effort ? `<span class="badge">${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}<small>${[esc(row.vendor || '厂商未知'), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
+      <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b>${esc(row.modelName)}</b>${row.effort ? `<span class="badge">${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
       <td class="c-score"><b>${row.score}</b><small>±${row.interval}</small></td>
       <td class="c-range" aria-hidden="true"><span class="range"><s style="left:${at(1000)}%"></s><i style="left:${from}%;width:${(to - from).toFixed(2)}%;background:linear-gradient(90deg, ${tone(from)}, ${tone(to)})"></i><em style="left:${at(row.score)}%"></em></span></td>
       <td class="c-games">${row.games}</td>

@@ -1,6 +1,6 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
-import { api, arenaText, avatarFace, confirmDialog, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, setFaces, statusBadge, toast } from './platform.js';
+import { api, arenaText, autoRejected, avatarFace, confirmDialog, injected, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, riskLabels, setFaces, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf } from './categories.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
@@ -11,9 +11,9 @@ import { sticker, stickerName } from './stickers.js';
 const TODO_TABS = { questions: '题目', content: '内容', unverified: '核验' };
 const DONE_TABS = { done: '已处理', log: '记录' };
 // Decided uploads by what they show now; each filter answers one question an admin asks.
-const DONE_FILTERS = { all: '全部', public: '已公开', noarena: '不进盲评', off: '已撤下', questioned: '存疑', rejected: '已拒绝' };
+const DONE_FILTERS = { all: '全部', public: '已公开', noarena: '不进盲评', off: '已撤下', questioned: '存疑', rejected: '已拒绝', machine: '机审拒绝', injection: '疑似注入' };
 // Addresses that open the decided list on one filter, including the old decided tabs.
-const FILTER_TABS = { verified: 'public', off: 'off', questioned: 'questioned', rejected: 'rejected', noarena: 'noarena' };
+const FILTER_TABS = { verified: 'public', off: 'off', questioned: 'questioned', rejected: 'rejected', noarena: 'noarena', machine: 'machine', injection: 'injection' };
 const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的题目' };
 const ACCOUNT = { title: '个人中心', description: '每一道提问，每一份解答，都是你的创作足迹。' };
 const ACTIONS = { submit: '提交作品', verified: '通过核验', questioned: '标记存疑', unverified: '退回未验证', delete: '删除作品',
@@ -66,8 +66,8 @@ const held = (item) => Boolean(HELD.work[item.moderation?.status]);
 function contentNote(w) {
   if (!held(w)) return '';
   const m = w.moderation;
-  const text = [m.reason, m.categories?.length ? `类别：${m.categories.join('、')}` : '', m.error ? `错误：${m.error}` : ''].filter(Boolean).join(' · ')
-    || (m.status === 'pending' ? '自动审核进行中' : '');
+  const text = [autoRejected(m) ? (injected(m) ? '自动拒绝 · 提示词注入' : '自动拒绝') : '', m.reason, m.categories?.length ? `类别：${riskLabels(m.categories).join('、')}` : '',
+    m.error ? `错误：${m.error}` : ''].filter(Boolean).join(' · ') || (m.status === 'pending' ? '自动审核进行中' : '');
   return text ? `<p class="result-reason">${icon(m.status === 'rejected' ? 'alert' : 'guide')}<span>${esc(text)}</span></p>` : '';
 }
 function heldNote(kind, item) {
@@ -153,7 +153,7 @@ function adminAction(w, bucket) {
 function workRow(ctx, w, { bucket = null, questions = [], picked } = {}) {
   const admin = Boolean(bucket);
   const task = ctx.DATA.tasks.find((t) => t.id === w.task);
-  const model = ctx.MODELS.get(w.model) ?? { name: w.modelName };
+  const model = ctx.modelOf({ model: w.model, modelName: w.modelName, vendor: w.vendor });
   // Works absent from the public catalog open the server-provided owner/admin preview.
   const hidden = held(w) || !task?.results.some((result) => result.id === w.id);
   const variant = task?.promptVariants?.find((v) => v.id === w.promptVariant);
@@ -609,6 +609,8 @@ async function saveMeta(w, meta) {
 // Save information fixes before the decision; only verification needs a complete record.
 function openReview(ctx, w, { questions = [], onDecided } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task) ?? questions.find((q) => q.id === w.task);
+  // An unregistered model without a declared vendor shows what its name suggests.
+  const guess = w.model || w.vendor ? '' : ctx.modelOf({ modelName: w.modelName }).vendor;
   const sheet = openDialog({
     title: '核验作品',
     className: 'review-sheet',
@@ -618,7 +620,7 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
           <div class="actions"><a class="btn sm" href="${esc(w.scene)}" target="_blank" rel="noopener">打开作品${icon('arrow')}</a><a class="btn sm" href="#/${esc(w.task)}/${esc(w.id)}">在展厅中查看</a></div></div></div>
         <dl class="facts">
           <div><dt>投稿者</dt><dd>${esc(w.owner ?? '已注销的用户')} · ${formatTime(w.addedAt)}</dd></div>
-          <div><dt>声明的模型</dt><dd>${esc(w.modelName)}${w.vendor ? ` · ${esc(w.vendor)}` : ''}${w.model ? '' : '（未登记）'}</dd></div>
+          <div><dt>声明的模型</dt><dd>${esc(w.modelName)}${w.vendor ? ` · ${esc(w.vendor)}` : ''}${w.model ? '' : `（未收录${guess ? `，按名称推断为 ${esc(guess)}` : ''}，可在数据仓注册表补录）`}</dd></div>
           <div><dt>推理档位</dt><dd>${esc(w.effort || '默认 / 未设置')}</dd></div>
           <div><dt>Harness</dt><dd>${esc(ctx.harnessOf(w)?.name ?? '未注明')}</dd></div>
           <div><dt>服务商</dt><dd>${esc(ctx.providerOf(w)?.name ?? '未注明')}</dd></div>
@@ -732,7 +734,7 @@ function openContent(ctx, w, { questions = [], onDecided } = {}) {
           <div><dt>投稿者</dt><dd>${esc(w.owner ?? '已注销的用户')} · ${formatTime(w.addedAt)}</dd></div>
           <div><dt>审核来源</dt><dd>${esc(source)}</dd></div>
           <div><dt>结论</dt><dd>${esc(m.reason || '暂无')}</dd></div>
-          ${m.categories?.length ? `<div><dt>风险类别</dt><dd>${esc(m.categories.join('、'))}</dd></div>` : ''}
+          ${m.categories?.length ? `<div><dt>风险类别</dt><dd>${esc(riskLabels(m.categories).join('、'))}</dd></div>` : ''}
           ${m.error ? `<div><dt>未完成原因</dt><dd>${esc(m.error)}</dd></div>` : ''}
         </dl>
         ${listed ? '' : '<p class="fine">这是新题目的示例结果：题目和内容通过审核后，结果才会进入核验。</p>'}
@@ -952,7 +954,7 @@ function editQuestion(q) {
 
 const REVIEW_SUMMARY = {
   questions: '题目只能人工审核，通过后进入题库并开放投稿。确认提示词是一项具体、可比较的生成任务；拒绝时写明理由，作者会看到。示例结果的内容可以在题目里直接审核。',
-  content: '只判断能否公开。自动审核没能确定的投稿在这里由人决定：通过后转入「核验」，拒绝时写明理由，作者会看到。',
+  content: '只判断能否公开。自动审核没能确定的投稿在这里由人决定：通过后转入「核验」，拒绝时写明理由，作者会看到。针对审查模型的提示词注入会被自动拒绝、不进这里；要复查或改判，到「已处理」的「机审拒绝」「疑似注入」。',
   unverified: '内容已通过、还没核验的投稿，最早的在前。核对能否运行、是否符合题目、生成信息是否可信。通过即公开到展览馆，单轮生成且无人工介入的同时进入盲评；无法核实的标记存疑并写明原因。',
   done: '核验过的投稿，每行写明现在在哪里显示，按钮就是下一步。存疑与拒绝的原因对作者可见。馆藏作品由仓库收录流程管理，不在这里。',
   log: '最近的审核与管理操作。',
@@ -992,8 +994,10 @@ function review(root, ctx) {
   }
   // Uploads of one bucket: the queues oldest first, decided lists newest first. The decided
   // list (done) gathers four buckets and narrows them by the current filter.
-  const inDone = (w, bucket) => ({ all: ['verified', 'off', 'questioned', 'rejected'].includes(bucket), public: bucket === 'verified',
-    noarena: bucket === 'verified' && w.arena?.state !== 'in_pool', off: bucket === 'off', questioned: bucket === 'questioned', rejected: bucket === 'rejected' })[state.filter];
+  const inDone = (w, bucket, filter = state.filter) => ({ all: ['verified', 'off', 'questioned', 'rejected'].includes(bucket), public: bucket === 'verified',
+    noarena: bucket === 'verified' && w.arena?.state !== 'in_pool', off: bucket === 'off', questioned: bucket === 'questioned', rejected: bucket === 'rejected',
+    machine: bucket === 'rejected' && autoRejected(w.moderation), injection: bucket === 'rejected' && injected(w.moderation) })[filter];
+  const filterCount = (filter) => (state.works ?? []).filter((w) => w.source !== 'curated' && inDone(w, reviewBucket(ctx, w, state.questions ?? []), filter)).length;
   const queue = (bucket) => (state.works ?? []).filter((w) => {
     if (w.source === 'curated') return false;
     const own = reviewBucket(ctx, w, state.questions ?? []);
@@ -1048,7 +1052,7 @@ function review(root, ctx) {
       list = `${waiting ? `${bulk}<div class="work-list">${waiting}</div>` : empty(REVIEW_EMPTY.content)}
         ${auto ? `<h3 class="review-subhead">自动审核中 · ${queue('auto').length}<small>完成后会自动转入「核验」或回到这里，也可以提前人工审核</small></h3><div class="work-list is-muted">${auto}</div>` : ''}`;
     } else if (tab === 'done') {
-      const chips = `<div class="chips review-filters">${Object.entries(DONE_FILTERS).map(([id, text]) => `<button class="chip${id === state.filter ? ' on' : ''}" type="button" data-filter="${id}" aria-pressed="${id === state.filter}">${text}</button>`).join('')}</div>`;
+      const chips = `<div class="chips review-filters">${Object.entries(DONE_FILTERS).map(([id, text]) => `<button class="chip${id === state.filter ? ' on' : ''}" type="button" data-filter="${id}" aria-pressed="${id === state.filter}">${text} · ${filterCount(id)}</button>`).join('')}</div>`;
       list = `${chips}${rows('done') ? `${bulk}<div class="work-list">${rows('done')}</div>` : empty(state.filter === 'all' ? '还没有核验过的投稿' : `没有${DONE_FILTERS[state.filter]}的投稿`)}`;
     } else {
       list = rows(tab) ? `${bulk}<div class="work-list">${rows(tab)}</div>` : empty(REVIEW_EMPTY[tab]);

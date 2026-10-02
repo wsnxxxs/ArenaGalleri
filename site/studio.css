@@ -406,6 +406,7 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .result-model { font-size: 12px; gap: 6px; margin-bottom: 0; line-height: 1.6; }
 .result-model .brand-mark.sm { width: 15px; height: 15px; border-radius: 4px; border: 0; background: var(--mark-bg); }
 .result-model .brand-mark.sm img { width: 13px; height: 13px; }
+.result-model .brand-mark.sm.is-unlisted { border: 1px dashed var(--line-2); background: transparent; }
 .badge { font-size: 10px; padding: 0 5px; border: 1px solid var(--line-2); background: none; color: var(--muted); }
 .result h3 { margin-top: 7px; font: 550 16px/1.55 var(--sans); }
 .result h3 a { display: flex; align-items: baseline; justify-content: space-between; gap: 9px; }

@@ -15,6 +15,12 @@
 - 链路兼容：查生产 bootstrap，3 道社区网页 / 三维题都是 `["static","vite"]`，文本题 `["text"]`，没有只收 vite 的题；后端 uploadBytes 已是 31457280，compatibleTemplates 接受 `["static"]`，createDraft 对 static 的 HTML 原样处理。已有 ZIP 作品、馆藏 `*-zip` 作品和未过期的 ZIP 草稿续传不受影响。后端仍接受直接调用 API 上传的 ZIP，未改后端；若要服务端也禁止，需在后端 inspectUpload / createDraft 拒绝 ZIP、defaultTemplates 改为 `['static']`。
 - 验证：check 48/0、test 19/19。author-mock（site 叠加 dist）中 Browser 验证：上传页 accept 为 .html，无格式下拉框，提示「最大 30.0 MB」；选 .zip 提示「网页和三维作品请上传单个 .html 文件」；30 MiB+1 字节的 .html 提示超限；发起题目选「三维」后格式固定为单个 HTML（templates=static）。未运行 build / intake（未改构建与数据），未联真实后端实际上传。见 [归档](docs/archive/2026-10-03-html-only-uploads-wsnxxxs.md)。
 
+## Gallery 内置作品连接修复上线（2026-10-03）
+
+- 用户授权修复后，在后端最新 origin/main 上独立提交并推送 cefe842，仅持久保存作品路径 CSP 例外与说明；正式 Nginx 单文件部署、nginx -t / reload 均通过。主工作区其他未提交功能未纳入。
+- 目标 Claude 黑洞已在 Chrome 中实际渲染，控制面板折叠可用；四个作品/辅助路径均 200 且 CSP 仅 frame-ancestors 'self'；首页、主域、game、api 的状态与 CSP 保持。console 0 error / 1 条作品 shader warning，未逐件或手机验收。后端独立候选 check 87/0、test 247/247。
+- Gallery 源码与数据无改动，未运行 Gallery build/intake。截图与响应头保留在 output/gallery-csp-repair-20261003/；后端备份 /root/aob-gallery-csp-repair-20261002T172548Z。后端运行版本不变，仅 Nginx 配置使用已提交修复；后续发布必须基于包含 cefe842 的主分支，避免旧工作区覆盖。
+
 ## 密码管理器弹窗兼容修复（2026-10-03，本地完成，未推送、未部署）
 
 - 用户将本轮范围收窄为 Firefox / Bitwarden 自动填充；账号登录规则、验证码和邮件发送不改。按要求由 Astra medium 子代理协作排查与实现。
@@ -23,6 +29,41 @@
 - 验证：check 48 文件 / 0 错；test 19/19；使用有读取权限的数据仓本地 dist 构建 181 件 / 59 site 文件；CI=1 intake 0 错 / 10 条既有警告。Browser 隔离合成接口验证外部模拟扩展直接赋值后的登录提交、切换注册 autocomplete、Tab / Shift+Tab、Escape / 遮罩关闭、嵌套找回复焦、普通确认框保持原生 modal；桌面登录及 375px 注册目检通过，console 无 error / warn。
 - 未验证真实 Firefox + Bitwarden、生产 Turnstile、真实账号/邮件、浅色主题。未推送、部署或修改相邻后端；不合并既有未提交模型/审核功能。验证脚本与截图保留在忽略目录 output/autofill-fix-20261003/。归档见 docs/archive/2026-10-03-bitwarden-autofill-wsnxxxs.md。
 
+
+## Gallery 内置作品再次被 CSP 拦截（2026-10-03，仅调查）
+
+- 用户指定 `#/show1-007/claude-opus-5.5-max`。Chrome 原标签与新标签均复现 iframe「拒绝了我们的连接请求」；前端实际指向 `/results/show1-007/claude-opus-5.5-max/`，未设置 sandbox。
+- 公网目标作品返回 200，但 CSP 为完整 Gallery 外壳策略，含 `frame-ancestors 'none'`。此前验收通过的 Gemini 黑洞、`/_sandtable/`、`/_scenes/` 抽样也都返回同一错误策略，说明此前的作品路径放行已失效。
+- 只读 SSH 核对正式 `deploy/nginx/read-zones.conf`：已恢复 `map $host $aob_frontend_csp`，缺失作品路径例外；SHA-256 为 `e1e5258fcb2efbb16a81adcb8b1b6d59fe068beaaf846d200effbaf42dc1ee01`，与后端 HANDOFF 记录的修复上线哈希不同。文件 mtime 为 2026-10-02 22:48:18 +0800（Brisbane 10-03 00:48:18），晚于此前修复上线时间（Brisbane 10-02 21:31:48）。服务器配置中的修复已丢失；尚未定位覆盖它的具体操作。
+- 后端本地 `read-zones.conf` 仍保留正确的同源放行改动，但未提交；从不含此改动的源码再次部署会覆盖线上修复。应在后端仓库持久保存并部署该改动，随后核对作品响应头与浏览器；不应修改 Gallery iframe 或作品源码来规避。
+- 本轮未修改功能、相邻仓库或生产配置，未 reload、部署、commit、push。仅更新调查记录；未运行 check/test/build/intake（无功能或构建改动）。见 [调查归档](docs/archive/2026-10-03-gallery-csp-regression-investigation-wsnxxxs.md)。
+
+## 审核页「机审拒绝」「疑似注入」筛选（2026-10-03，已提交，未推送、未部署）
+
+- 背景：后端对针对审查模型的提示词注入改为直接拒绝（moderation.status=rejected，categories 含 prompt-injection），不进「内容」待办。原先这些作品只落在「已处理 → 已拒绝」，没有数量，也无法与人工拒绝区分；存疑同样没有数量。
+- site/platform.js 新增 riskLabels（类别与规则信号中文化）、autoRejected（rejected 且 source 非 human）、injected（categories 含 prompt-injection）。site/account.js：已处理新增「机审拒绝」「疑似注入」两个筛选（地址 machine / injection），所有筛选按钮显示数量；机审拒绝行显示「自动拒绝 · 提示词注入」；审核内容弹窗与行内的风险类别改为中文；内容页说明补充注入的去向。
+- 筛选数量由 /api/review 作品列表统计；后端 bootstrap.review 已有 autoRejected / injected，需要「已处理」页签提醒时再改读该字段。
+- 验证：`npm run check` 47 文件 / 0 错，`npm test` 19/19。未做浏览器目视，未联调后端。未 push。与下两节合并提交，见 [归档](docs/archive/2026-10-03-unlisted-models-and-review-filters-wsnxxxs.md)。
+
+## 未收录模型的厂商推断与标识（2026-10-03，已提交，未推送、未部署）
+
+- 用户反馈：所有未收录模型在榜单上都显示「厂商未知」，Claude Opus 4.6、Gemini 3.6 Flash 也一样。原因是后端删了 vendor 列，而且榜单把「未收录」和「厂商未知」当成同一种情况。
+- 新增 site/models.js `modelResolver`：注册模型直接返回注册表条目；未收录模型优先使用投稿者填写的厂商（大小写不同时规范成注册表里的写法，并沿用该厂商 Logo），没填时按名称开头的系列词（≥2 个字母）推断。注册表里同一系列只属于一家厂商才推断，当前 41 个系列中 doubao、seed、llama、glm 对应多家，不推断。结果带 `unlisted: declared | inferred | unknown`。
+- app.js 的 modelOf 改为调用 resolver（vendorOf、筛选和沙盘随之生效）；leaderboard、arena 揭晓、我的作品 / 审核行改用 ctx.modelOf。ui.js 新增 vendorLine，显示为「Anthropic · 未收录」或「未收录模型」，悬停说明厂商来源；推断不出厂商时字母图标用虚线（style.css、studio.css）。审核详情的「（未登记）」改为「（未收录，按名称推断为 X，可在数据仓注册表补录）」。work-fields.js 输入自定义名称时预填推断的厂商，用户自己填过的不覆盖。
+- 新增 test/models.test.mjs（合成数据）。check 47/0、test 19/19、build 182 件 / 58 site 文件、严格 intake 0 错 / 10 警告。在 scratchpad 的 mock（dist 叠加 site、合成榜单和作品）中用 Browser 验证：榜单 6 种情况（登记、推断 ×2、登记 HY3、未知、声明非登记厂商）的文字、Logo、虚线和 title 都正确；题目页卡片的厂商筛选里推断模型归入 Anthropic，声明 tencent 归入 Tencent，未知归入「其他」；编辑弹窗预填和不覆盖手填已验证；console 0。未验证管理员审核详情、浅色主题、手机宽度和真实后端。
+- 追加：数据仓拆开 .x 分组，上架 2026 年及以后的模型，Gallery 展示列表增至 125 个，缺失档位补为 High（详见数据仓 HANDOFF）。models.js 增加按名称匹配：先前用自定义名称上传的作品，名称与登记模型相同（忽略大小写、空格、-、_）时直接显示为该登记模型。用 DATAPACK_LOCAL_DIR 指向数据仓 dist 构建：181 件 / 58 site 文件，严格 intake 0 错 / 10 警告；check 47/0、test 19/19。mock 里 Claude Opus 4.6、Gemini 3.6 Flash 的榜单行显示为 Anthropic、Google，不再带「未收录」。按用户决定，模型索引、题库侧栏和首页的「X 家厂商 · Y 个模型」只算至少有一件已验证作品的登记模型（app.js 新增 exhibitedModels，home.js 也改用它）。题库「按作答模型筛选」、索引作品列表和题目卡片的模型数改按 registeredOf（modelOf(r).id）匹配，所以先前用自定义名称上传、名称与登记模型相同的作品能归入登记模型。
+- 用生产公开的 bootstrap 和 leaderboard 回放验证（scratchpad 下的 replay.mjs，launch 名 vendor-replay）：生产 69 件公开投稿全部能对上题目；56 件本来就有登记 id；13 件自定义名称里 9 件现在能匹配（Claude Opus 4.6、Claude Sonnet 4.6、Gemini 3.6 Flash 各 1 件，GPT-5.5 6 件）。索引显示 16 家厂商 · 45 个模型，没有「暂无作品」；按 Claude Opus 4.6 筛选只剩「小红帽 · 全新故事」；首页显示 45 个模型 · 250 份解答；榜单中 Opus 4.6 显示 Anthropic、Gemini 3.6 Flash 显示 Google、Xing4.0-29B 显示「未收录模型」。console 里只有投稿缩略图 404，原因是回放服务没有代理 /media。
+- 数据仓又登记了生产投稿用过的 4 个模型（Seed 2.1 Turbo、SenseNova 6.8 Flash Lite、Atria Dawn Preview、Xing4.0-29B-A4B，详见数据仓 HANDOFF）。scripts/public-catalog.mjs 的模型字段增加 aliases，models.js 的按名称匹配同时比对别名，所以投稿名「Xing4.0-29B」能通过别名 xing4.0-29b 归入登记模型。回放验证：生产 13 件自定义名称投稿全部归入登记模型；小红帽题目页 4 件分别显示 ByteDance Seed / SenseTime / Shanghai AI Lab / China Telecom；索引为 19 家厂商 · 49 个模型；题库筛选里有这 4 个模型（各 1 题）。check 47/0、test 19/19、build 181 件 / 58 site 文件、严格 intake 0 错 / 10 警告。
+- 后端说明写在 output/backend-model-registry-prompt.md（忽略目录），包括馆藏 58 件旧投票的档位更正、9 件同名投稿迁移到登记 id 并更正其投票、自定义厂商的保存与榜单返回。后端完成之前，这 9 件在榜单上仍按 x:名称 计分。
+- 待其他仓：后端重新保存 vendor 并在榜单行返回声明的厂商；数据仓统一 ByteDance / ByteDance Seed、Z.ai / Zhipu AI (Z.ai) 的写法，并补录常见的未收录模型。
+
+## 上传表单补回自定义模型厂商（2026-10-02，已提交，未推送、未部署）
+
+- 用户反馈上传作品时无法自定义模型。查证：单一「模型名称」输入其实接受自由文本，但外观像下拉框，而且 10-02 去掉了厂商输入；后端 0c7d94f（09-30）删除了 vendor 列，自定义模型的厂商固定为空。
+- 只改 site/work-fields.js：保留单一输入框，名称不匹配已登记模型时显示选填「模型厂商」，请求体随 `modelName` 发送 trim 后的 `vendor`；选中登记模型时隐藏该项，只发 `modelId`。编辑已有自定义作品时回填 `w.vendor`。提示改为「列表里没有就直接输入新模型名称」。卡片 / 审核页已经读取 `vendor`，未改。
+- 后端需重新保存自定义厂商，提示词已交给用户转给另一个 agent。旧 `vendor` 列名会被 db.mjs 迁移删掉，需要换新列名。后端完成前，前端发出的 vendor 会被接受但丢弃。
+- check 45/0、test 18/18、build 182 件 / 57 site 文件（固定包）、严格 intake 0 错 / 10 警告。用旧 author mock 叠加 site JS，在 Browser 中验证了以下情况：初始隐藏；选登记模型时隐藏并发 modelId；输入自定义名称时显示并发 modelName + vendor；清空后隐藏；编辑时回填；桌面与 375px 目检均无横向溢出。未连真实后端、未实际提交。
+- 同轮数据仓删除重复的 `boeing-787/deepseek-v4.1-flash-extra-high`，`cline` 显示名改为 Cline Desktop（见数据仓 HANDOFF）；新包尚未发布。
 
 ## 四仓协调发布完成（2026-10-02）
 

@@ -18,15 +18,17 @@ import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js'
 import { representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
+import { modelResolver } from './models.js';
 
 const root = $('#app');
 let DATA;
 let MODELS;
 let HARNESSES;
 let PROVIDERS;
+let resolveModel;
 
 // Uploads may name a model that is not in the registry; they carry their own name and vendor.
-const modelOf = (r) => MODELS.get(r.model) ?? { name: r.modelName ?? r.model, vendor: r.vendorName ?? '' };
+const modelOf = (r) => resolveModel({ model: r.model, modelName: r.modelName ?? r.model, vendor: r.vendorName ?? r.vendor });
 const vendorOf = (r) => modelOf(r).vendor || '其他';
 const harnessOf = (r) => (r.harness && HARNESSES.get(r.harness)) || (r.harnessName || r.harness ? { name: r.harnessName ?? r.harness } : null);
 // Provider is only official or not: anything named other than 'official' counts as unofficial.
@@ -46,7 +48,14 @@ const resultBadges = (r) => `${r.effort ? `<span class="badge">${esc(r.effort)}<
 const normal = (s) => String(s ?? '').normalize('NFKC').trim().toLowerCase();
 const modelKey = (r) => (MODELS.has(r.model) ? r.model : `x:${normal(r.modelName ?? r.model)}`);
 const entryKey = (r) => `${modelKey(r)}|${normal(r.effort)}`;
-const modelCount = (results) => new Set(results.map(modelKey)).size;
+// A work's registered model, including uploads that named one before it was registered.
+const registeredOf = (r) => modelOf(r).id;
+const modelCount = (results) => new Set(results.map((r) => registeredOf(r) ?? modelKey(r))).size;
+// The index and its counts show only registered models with a verified work.
+function exhibitedModels() {
+  const ids = new Set(DATA.tasks.flatMap((t) => t.results.filter((r) => r.status === 'verified').map(registeredOf)));
+  return DATA.models.filter((m) => ids.has(m.id));
+}
 const sortModes = { added: '加入时间（最新在前）', vendor: '模型厂商（A–Z）', name: '模型名字（A–Z）', score: '榜单评分（高到低）' };
 const sortChoices = () => Object.entries(sortModes).filter(([value]) => value !== 'score' || platform.available);
 let resultSort = Object.hasOwn(sortModes, store.get('result-sort')) ? store.get('result-sort') : 'added';
@@ -170,7 +179,8 @@ const counted = (t) => t.results.filter(interactive);
 
 function libraryStart(crumbs) {
   const works = DATA.tasks.reduce((sum, t) => sum + counted(t).length, 0);
-  const vendorCount = new Set(DATA.models.map((m) => m.vendor || '其他')).size;
+  const models = exhibitedModels();
+  const vendorCount = new Set(models.map((m) => m.vendor || '其他')).size;
   const control = (cls, attrs, pressed, body) => `<button class="${cls}" ${attrs} aria-pressed="${pressed}">${body}</button>`;
   const domains = domainsIn(DATA.tasks, domainList(platform));
   return `${header(crumbs, false, 'questions')}<div class="app-layout home-layout">
@@ -180,10 +190,10 @@ function libraryStart(crumbs) {
         ${control('side-link', 'data-home-view="tasks"', true, `${icon('grid')}全部题目<span class="nav-count">${DATA.tasks.length}</span>`)}
         ${tracksOf(DATA.tasks).map((x) => control('side-link', `data-home-category="${esc(x.name)}"`, false, `${icon(x.glyph)}${esc(x.label)}<span class="nav-count">${x.tasks.length}</span>`)).join('')}
         <span class="side-divider" aria-hidden="true"></span>
-        ${control('side-link', 'data-home-view="models"', false, `${icon('code')}模型索引<span class="nav-count">${DATA.models.length}</span>`)}
+        ${control('side-link', 'data-home-view="models"', false, `${icon('code')}模型索引<span class="nav-count">${models.length}</span>`)}
       </nav>
       ${domains.length ? `<section class="side-section" aria-label="按领域筛选"><h2>领域</h2><div class="chips">${domains.map((d) => control('chip', `data-home-domain="${esc(d.name)}"`, false, `${esc(d.name)}<span class="nav-count">${d.tasks.length}</span>`)).join('')}</div></section>` : ''}
-      <div class="side-bottom"><p>${vendorCount} 家厂商 · ${DATA.models.length} 个模型<br>同一份提示词，不同的表达。</p></div>
+      <div class="side-bottom"><p>${vendorCount} 家厂商 · ${models.length} 个模型<br>同一份提示词，不同的表达。</p></div>
     </aside>
     <main class="workspace page">`;
 }
@@ -191,7 +201,7 @@ function libraryStart(crumbs) {
 // Filter selects share the task page's toolbar: the option text carries the label and count.
 const selectControl = (name, aria, options) => `<label class="result-sort">${aria}<select data-${name} aria-label="${aria}">${options}</select></label>`;
 const option = (value, text, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(text)}</option>`;
-const answeredBy = (t, id) => counted(t).some((r) => r.model === id);
+const answeredBy = (t, id) => counted(t).some((r) => registeredOf(r) === id);
 // A card names its form, then its domains.
 const tagLine = (t) => `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}`;
 function sortedTasks() {
@@ -255,7 +265,8 @@ function renderLibrary(scopes = [], fresh = true) {
     </a>` : '';
 
   const modelsByVendor = new Map();
-  for (const model of DATA.models) {
+  const exhibited = exhibitedModels();
+  for (const model of exhibited) {
     const vendor = model.vendor || '其他';
     if (!modelsByVendor.has(vendor)) modelsByVendor.set(vendor, []);
     modelsByVendor.get(vendor).push(model);
@@ -276,9 +287,9 @@ function renderLibrary(scopes = [], fresh = true) {
   </div></div>`;
   const rows = vendors.map((vendor) => [vendor, modelsByVendor.get(vendor)]).map(([vendor, models]) => {
     const ids = new Set(models.map((m) => m.id));
-    const works = catalogued.filter(({ r }) => ids.has(r.model)).length;
+    const works = catalogued.filter(({ r }) => ids.has(registeredOf(r))).length;
     const items = models.map((m) => {
-      const mine = catalogued.filter(({ r }) => r.model === m.id);
+      const mine = catalogued.filter(({ r }) => registeredOf(r) === m.id);
       const mark = m.logo
         ? `<a class="brand-mark" href="${esc(m.brandUrl)}" target="_blank" rel="noopener" aria-label="${esc(m.brandName)} 官网" title="${esc(m.brandName)} 官网"><img src="${esc(versionedMedia(m.logo))}" alt="" loading="lazy" decoding="async"></a>`
         : brandMark(m);
@@ -302,7 +313,7 @@ function renderLibrary(scopes = [], fresh = true) {
         <div class="task-list">${newCard}${taskCards || (newCard ? '' : '<p class="muted">还没有题目。</p>')}</div>
         <div class="board-empty" data-home-empty hidden><h3>没有找到这道题</h3><p>${platform.available ? '换个关键词或筛选条件，或者把它发起成一道新题。' : '换个关键词或筛选条件，或浏览全部题目。'}</p><div class="board-empty-actions"><button class="btn" data-home-reset>清除筛选</button>${platform.available ? `<a class="btn primary" href="#/new">${icon('plus')}发起题目</a>` : ''}</div></div>
       </section>
-      <section data-home-panel="models" hidden><div class="collection-heading"><div class="collection-title"><h2 id="h-models">模型索引</h2><span data-model-count>${modelsByVendor.size} 家厂商 · ${DATA.models.length} 个模型</span></div>${searchControl('model', '搜索模型或厂商', homeState.modelQuery)}</div>
+      <section data-home-panel="models" hidden><div class="collection-heading"><div class="collection-title"><h2 id="h-models">模型索引</h2><span data-model-count>${modelsByVendor.size} 家厂商 · ${exhibited.length} 个模型</span></div>${searchControl('model', '搜索模型或厂商', homeState.modelQuery)}</div>
         ${modelToolbar}<div class="dir-rows">${rows}</div>
         <div class="board-empty" data-model-empty hidden><h3>没有找到这个模型</h3><p>换个关键词，或查看全部厂商。</p><div class="board-empty-actions"><button class="btn" data-model-reset>清除筛选</button></div></div></section>
       ${footer()}
@@ -1311,7 +1322,7 @@ function backLink(cls) {
 }
 
 // Everything a platform page needs from the gallery.
-const context = () => ({ DATA, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, entryKey, taskHref, viewHref, workKey, interactive, settleImages });
+const context = () => ({ DATA, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, entryKey, taskHref, viewHref, workKey, interactive, settleImages });
 
 // Uploads join their task's result list in the same shape as curated works.
 function uploadResult(w) {
@@ -1479,6 +1490,7 @@ try {
   globalThis.SAME_PROMPT_CONFIG.assetVersion ??= DATA.buildInfo?.datapack?.slice(0, 8) ?? '';
   await connectPlatform(DATA.buildInfo);
   MODELS = new Map(DATA.models.map((m) => [m.id, m]));
+  resolveModel = modelResolver(DATA.models);
   HARNESSES = new Map((DATA.harnesses ?? []).map((h) => [h.id, h]));
   PROVIDERS = new Map([['official', { id: 'official', name: '官方', listed: true }], ['unofficial', { id: 'unofficial', name: '非官方', listed: true }]]);
   if (!platform.available && resultSort === 'score') resultSort = 'added';
