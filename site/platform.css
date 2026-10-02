@@ -462,6 +462,9 @@ dialog.edit-work-sheet { width: min(720px, calc(100% - 32px)); }
 .review-meta > summary { cursor: pointer; font-weight: 600; }
 .review-meta > summary small { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .review-meta[open] > summary { margin-bottom: 12px; }
+.review-meta > .field { margin-bottom: 16px; }
+.review-meta > .field-hint { margin-bottom: 16px; }
+.review-meta > .more-fields { margin-bottom: 16px; }
 .review-blocked { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 16px; padding: 10px 12px; border-left: 2px solid var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); font-size: 13px; }
 .review-blocked p { flex: 1 1 14em; margin: 0; color: var(--ink-2); }
 .work-main .result-model { margin: 0 0 4px; }
@@ -487,12 +490,8 @@ dialog.review-sheet { width: min(980px, calc(100% - 32px)); }
 .review-text { margin: 0; color: var(--ink-2); font-size: 13px; white-space: pre-wrap; }
 .review-form { padding-left: 32px; border-left: 1px solid var(--line); }
 .review-form h4:first-child { margin-top: 0; }
-.review-list { display: grid; gap: 6px; margin: 0 0 6px; padding: 0; list-style: none; font-size: 13px; }
-.review-list label { display: flex; align-items: flex-start; gap: 8px; color: var(--ink-2); cursor: pointer; }
-.review-list input { margin-top: 4px; accent-color: var(--ink); }
 .review-form .fine { margin: 0 0 16px; }
 .review-form .sheet-actions { justify-content: flex-start; }
-.provenance-suggestion { font-size: 12.5px; color: var(--muted); }
 .review-meta-actions { display: flex; justify-content: flex-end; }
 .review-blocked > span { flex: 1 1 14em; color: var(--ink-2); }
 /* Batch decisions: a checkbox per row and a bar that stays in view while scrolling the queue. */

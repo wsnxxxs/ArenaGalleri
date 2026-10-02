@@ -1,5 +1,5 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
-import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
+import { $, $$, brandMark, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
 import { api, avatarFace, confirmDialog, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf } from './categories.js';
@@ -543,88 +543,6 @@ function mine(root, ctx) {
 }
 
 // ---- review queue -----------------------------------------------------------------------------
-function provenanceSelect(ctx, type, work) {
-  const harness = type === 'harness';
-  if (!harness) {
-    const selected = ctx.providerOf(work)?.id ?? '';
-    return `<div class="provenance-field"><label class="field"><span class="field-label">服务商<i>*</i></span>
-    <select class="input" name="providerChoice" required>
-      <option value=""${selected === '' ? ' selected' : ''}>选择服务商</option>
-      ${[...ctx.PROVIDERS.values()].map((entry) => `<option value="${esc(entry.id)}"${selected === entry.id ? ' selected' : ''}>${esc(entry.name)}</option>`).join('')}
-    </select></label></div>`;
-  }
-  const id = work[type];
-  const name = work.harnessName;
-  const registry = ctx.HARNESSES;
-  const selected = id ? id : name ? 'other' : 'unset';
-  const entries = [...registry.values()].filter((entry) => entry.listed || entry.id === id).sort((a, b) => byName(a.name, b.name));
-  if (id && !registry.has(id)) entries.push({ id, name: name || id, listed: false });
-  return `<div class="provenance-field"><label class="field"><span class="field-label">Harness</span>
-    <select class="input" name="${type}Choice" data-provenance-choice="${type}">
-      <option value="unset"${selected === 'unset' ? ' selected' : ''}>未注明</option>
-      ${entries.map((entry) => `<option value="${esc(entry.id)}"${selected === entry.id ? ' selected' : ''}>${esc(entry.name)}${entry.listed ? '' : '（已停用）'}</option>`).join('')}
-      <option value="other"${selected === 'other' ? ' selected' : ''}>其他（手动填写）</option>
-    </select></label>
-    <label class="field" data-provenance-other="${type}"${selected === 'other' ? '' : ' hidden'}><span class="field-label">其他${harness ? ' Harness' : '服务商'}名称</span>
-      <input class="input" name="${type}Other" maxlength="40" value="${selected === 'other' ? esc(name) : ''}" placeholder="手动填写名称">
-      <span class="provenance-suggestion" data-provenance-suggestion="${type}" hidden></span>
-    </label></div>`;
-}
-
-function normalizedSource(value) {
-  return String(value ?? '').normalize('NFKC').toLowerCase().replace(/[\s\-\u2010-\u2015\u2212\uff0d]+/g, '');
-}
-
-function sourceSuggestion(registry, value) {
-  const name = normalizedSource(value);
-  return name && [...registry.values()].find((entry) => [entry.name, ...(entry.aliases ?? [])].some((alias) => normalizedSource(alias) === name));
-}
-
-function updateProvenanceForm(form, ctx) {
-  const choice = form.elements.namedItem('harnessChoice');
-  const other = form.querySelector('[data-provenance-other="harness"]');
-  const input = form.elements.namedItem('harnessOther');
-  const suggestion = form.querySelector('[data-provenance-suggestion="harness"]');
-  other.hidden = choice.value !== 'other';
-  suggestion.hidden = true;
-  suggestion.replaceChildren();
-  const match = choice.value === 'other' && sourceSuggestion(ctx.HARNESSES, input.value);
-  if (match) {
-    suggestion.append('可能是 ', match.name, ' ');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'btn sm';
-    button.dataset.selectSource = 'harness';
-    button.dataset.sourceId = match.id;
-    button.textContent = `改选 ${match.name}`;
-    suggestion.append(button);
-    suggestion.hidden = false;
-  }
-}
-
-function changedProvenance(form, work, ctx) {
-  const body = {};
-  const harnessId = work.harness ?? null;
-  const harnessName = work.harnessName ?? '';
-  const initial = harnessId || (harnessName ? 'other' : 'unset');
-  const choice = form.elements.namedItem('harnessChoice').value;
-  const other = form.elements.namedItem('harnessOther').value.trim();
-  if (choice !== initial || (choice === 'other' && other !== harnessName)) {
-    if (choice === 'other') {
-      if (!other) throw new Error('请填写 Harness 名称');
-      body.harnessId = null;
-      body.harnessOther = other;
-    } else {
-      body.harnessId = choice === 'unset' ? null : choice;
-      body.harnessOther = '';
-    }
-  }
-  // An empty provider only blocks 通过核验 (checked by the caller); other decisions keep the old one.
-  const provider = form.elements.namedItem('providerChoice').value;
-  if (['official', 'unofficial'].includes(provider) && provider !== ctx.providerOf(work)?.id) body.providerId = provider;
-  return body;
-}
-
 function trialRows(trial) {
   if (!trial || trial.loaded === undefined) return '<li class="check is-info"><span><b>试加载</b>没有记录</span></li>';
   const rows = [
@@ -637,28 +555,31 @@ function trialRows(trial) {
   return rows.map(([state, label, detail]) => `<li class="check is-${state}">${icon(state === 'ok' ? 'check' : state === 'fail' ? 'close' : 'alert')}<span><b>${esc(label)}</b>${esc(detail)}</span></li>`).join('');
 }
 
-// The text of a work an admin may correct in place. Admin edits keep the content decision.
-function textFields(task, w) {
-  const variants = task?.promptVariants ?? [];
-  return `<div class="field-row">
-      <label class="field"><span class="field-label">作品标题<i>*</i></span><input class="input" name="title" maxlength="40" required value="${esc(w.title)}"></label>
-      ${variants.length ? `<label class="field"><span class="field-label">提示词版本</span><select class="input" name="promptVariant">${w.promptVariant ? '' : '<option value="">未选择</option>'}${variants.map((v) => `<option value="${esc(v.id)}"${v.id === w.promptVariant ? ' selected' : ''}>${esc(v.label)}</option>`).join('')}</select></label>` : ''}
-    </div>
-    <label class="field"><span class="field-label">简介</span><textarea class="input" name="summary" maxlength="200" rows="2">${esc(w.summary ?? '')}</textarea></label>
-    <label class="field"><span class="field-label">生成说明</span><textarea class="input" name="note" maxlength="1000" rows="3">${esc(w.note ?? '')}</textarea></label>`;
-}
-function changedText(form, w) {
-  const body = {};
-  const title = form.elements.namedItem('title').value.trim();
-  if (!title) throw new Error('请填写作品标题');
-  if (title !== w.title) body.title = title;
-  for (const key of ['summary', 'note']) {
-    const value = form.elements.namedItem(key).value.trim();
-    if (value !== (w[key] ?? '').trim()) body[key] = value;
-  }
-  const variant = form.elements.namedItem('promptVariant')?.value;
-  if (variant && variant !== w.promptVariant) body.promptVariant = variant;
-  return body;
+// Admins use the upload fields, but may save incomplete records or reject them.
+// Compare form values to the last save so untouched legacy blanks stay untouched.
+function reviewEditor(form, task, w) {
+  let saved = readWorkFields(form, task, { requireComplete: false }).body ?? {};
+  form.addEventListener('change', (event) => onWorkFieldChange(form, event.target));
+  return {
+    collect(requireComplete = false) {
+      const { body, error } = readWorkFields(form, task, { requireComplete });
+      if (!body) throw new Error(error);
+      const meta = Object.fromEntries(Object.entries(body).filter(([key, value]) => value !== saved[key]));
+      // Model and Harness alternatives are one choice; send their full new identity.
+      for (const keys of [['modelId', 'modelName', 'vendor'], ['harnessId', 'harnessOther']]) {
+        if (keys.some((key) => Object.hasOwn(meta, key))) {
+          for (const key of keys) if (Object.hasOwn(body, key)) meta[key] = body[key];
+        }
+      }
+      return meta;
+    },
+    async save(meta) {
+      const values = readWorkFields(form, task, { requireComplete: false }).body;
+      const changed = await saveMeta(w, meta);
+      saved = values;
+      return changed;
+    },
+  };
 }
 // Saves the changed fields of a dialog's form; returns whether anything was sent.
 async function saveMeta(w, meta) {
@@ -668,17 +589,9 @@ async function saveMeta(w, meta) {
   return true;
 }
 
-// Save registration fixes before the decision; only 通过核验 needs effort and provider.
+// Save information fixes before the decision; only verification needs a complete record.
 function openReview(ctx, w, { questions = [], onDecided } = {}) {
-  const task = ctx.DATA.tasks.find((t) => t.id === w.task);
-  const needsMeta = !w.effort || !ctx.providerOf(w);
-  const efforts = ['Default', ...(platform.site.efforts ?? [])];
-  const vendors = new Map();
-  for (const model of ctx.DATA.models) {
-    if (!vendors.has(model.vendor)) vendors.set(model.vendor, []);
-    vendors.get(model.vendor).push(model);
-  }
-  const options = [...vendors].sort(([a], [b]) => byName(a, b)).map(([vendor, models]) => `<optgroup label="${esc(vendor)}">${models.map((m) => `<option value="${esc(m.id)}"${m.id === w.model ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</optgroup>`).join('');
+  const task = ctx.DATA.tasks.find((t) => t.id === w.task) ?? questions.find((q) => q.id === w.task);
   const sheet = openDialog({
     title: '核验作品',
     className: 'review-sheet',
@@ -703,24 +616,8 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
       </div>
       <form class="review-form" novalidate>
         ${held(w) ? `<div class="review-blocked">${icon('alert')}<p>内容审核还没通过，通过后才能核验。</p><button type="button" class="btn sm primary" data-open-content>审核内容</button></div>` : ''}
-        <h4>核验清单</h4>
-        <ul class="review-list">
-          <li><label><input type="checkbox">作品能正常运行，内容符合本题提示词</label></li>
-          <li><label><input type="checkbox">模型与档位有可信依据（生成说明、记录链接）</label></li>
-          <li><label><input type="checkbox">画面中没有写出模型名称，不会破坏双盲</label></li>
-          <li><label><input type="checkbox">没有外部追踪、恶意代码或不当内容</label></li>
-        </ul>
-        <p class="fine">清单只是提醒，不会随结果保存。</p>
-        <details class="review-meta"${needsMeta ? ' open' : ''}><summary>作品信息<small>${needsMeta ? '缺推理档位或服务商，补齐后才能通过' : '标题、说明与登记信息可以直接修改'}</small></summary>
-          ${textFields(task, w)}
-          <div class="field-row">
-            <label class="field"><span class="field-label">登记为模型</span><select class="input" name="modelId"><option value="">保持声明：${esc(w.modelName)}</option>${options}</select></label>
-            <label class="field"><span class="field-label">推理档位<i>*</i></span><input class="input" name="effort" maxlength="20" required value="${esc(w.effort)}" placeholder="例如 High、Default" list="review-efforts"><datalist id="review-efforts">${efforts.map((e) => `<option value="${esc(e)}"></option>`).join('')}</datalist></label>
-          </div>
-          <div class="field-row provenance-fields">
-            ${provenanceSelect(ctx, 'harness', w)}
-            ${provenanceSelect(ctx, 'provider', w)}
-          </div>
+        <details class="review-meta" open><summary>作品信息<small>与上传表单一致，必填项补齐后才能通过核验</small></summary>
+          ${workFieldsHtml(ctx, task, w, { expanded: true })}
           <div class="review-meta-actions"><button type="button" class="btn sm" data-save-meta>只保存信息</button></div>
         </details>
         <label class="field"><span class="field-label">存疑原因<small>标记存疑时必填，作者与访客都能看到</small></span><textarea class="input" name="reason" rows="3" maxlength="500">${esc(w.status === 'questioned' ? w.reason : '')}</textarea></label>
@@ -736,48 +633,22 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
     </div>`,
   });
   const form = $('form', sheet.el);
-  // Everything in 作品信息 that differs from the work as loaded (or as last saved).
-  const collectMeta = () => {
-    const meta = { ...changedText(form, w), ...changedProvenance(form, w, ctx) };
-    if (form.modelId.value && form.modelId.value !== w.model) meta.modelId = form.modelId.value;
-    const effort = form.effort.value.trim();
-    if (effort && effort !== (w.effort ?? '')) meta.effort = effort;
-    return meta;
-  };
-  updateProvenanceForm(form, ctx);
-  form.addEventListener('input', (event) => {
-    if (event.target.matches('[data-provenance-choice], [name="harnessOther"]')) updateProvenanceForm(form, ctx);
-  });
-  form.addEventListener('change', (event) => {
-    if (event.target.matches('[data-provenance-choice]')) updateProvenanceForm(form, ctx);
-  });
+  const editor = reviewEditor(form, task, w);
   sheet.el.addEventListener('click', async (e) => {
     if (e.target.closest('a[href^="#"]')) { sheet.close(); return; }
     if (e.target.closest('[data-open-content]')) { sheet.close(); openContent(ctx, w, { questions }); return; }
-    const suggestion = e.target.closest('[data-select-source]');
-    if (suggestion) {
-      const choice = form.elements.namedItem(`${suggestion.dataset.selectSource}Choice`);
-      if (![...choice.options].some((option) => option.value === suggestion.dataset.sourceId)) {
-        const registry = ctx.HARNESSES;
-        const option = new Option(registry.get(suggestion.dataset.sourceId).name, suggestion.dataset.sourceId);
-        choice.add(option, choice.options[choice.options.length - 1]);
-      }
-      choice.value = suggestion.dataset.sourceId;
-      updateProvenanceForm(form, ctx);
-      return;
-    }
     const decide = e.target.closest('[data-decide]');
     if (e.target.closest('[data-remove]')) {
       if (await removeWork(w, { admin: true })) sheet.close();
       return;
     }
-    const error = $('.form-error', form);
+    const error = $('.form-error:not(.field-error)', form);
     if (e.target.closest('[data-save-meta]')) {
       const button = e.target.closest('[data-save-meta]');
       error.textContent = '';
       button.disabled = true;
       try {
-        toast(await saveMeta(w, collectMeta()) ? `已保存：${w.title}` : '信息没有改动');
+        toast(await editor.save(editor.collect()) ? `已保存：${w.title}` : '信息没有改动');
         await refreshPlatform('review');
       } catch (err) {
         error.textContent = err.message;
@@ -795,7 +666,7 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
         toast(`已撤下展览馆：${w.title}`);
         await refreshPlatform('review');
       } catch (error) {
-        $('.form-error', form).textContent = error.message;
+        $('.form-error:not(.field-error)', form).textContent = error.message;
         $$('[data-decide]', form).forEach((b) => { b.disabled = false; });
       }
       return;
@@ -803,9 +674,7 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
     let body, meta;
     try {
       if (status === 'questioned' && !form.reason.value.trim()) throw new Error('标记存疑时请写明原因，作者和访客都会看到');
-      if (status === 'verified' && !form.effort.value.trim()) throw new Error('请在作品信息里填写推理档位');
-      if (status === 'verified' && !['official', 'unofficial'].includes(form.providerChoice.value)) throw new Error('请在作品信息里选择服务商');
-      meta = collectMeta();
+      meta = editor.collect(status === 'verified');
       body = { status, reason: status === 'questioned' ? form.reason.value : '', ...(status === 'verified' ? { show_gallery: true } : {}) };
     } catch (err) {
       error.textContent = err.message;
@@ -814,14 +683,14 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
     }
     $$('[data-decide]', form).forEach((b) => { b.disabled = true; });
     try {
-      await saveMeta(w, meta);
+      await editor.save(meta);
       await api(`works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}/review`, { method: 'POST', body });
       sheet.close();
       const note = onDecided?.() ?? '';
       toast(`已${{ verified: '通过核验', questioned: '标记存疑' }[body.status]}：${w.title}${note}`);
       await refreshPlatform('review');
     } catch (error) {
-      $('.form-error', form).textContent = error.message;
+      $('.form-error:not(.field-error)', form).textContent = error.message;
       $$('[data-decide]', form).forEach((b) => { b.disabled = false; });
     }
   });
@@ -852,8 +721,9 @@ function openContent(ctx, w, { questions = [], onDecided } = {}) {
       </div>
       <form class="review-form" novalidate>
         <p class="fine">这一步只看能否公开：违法、色情、仇恨、诈骗、恶意脚本等。作品质量和生成信息在「核验」里判断。</p>
-        <details class="review-meta"><summary>作品信息<small>标题或说明有问题时可以直接改，决定前一起保存</small></summary>
-          ${textFields(listed, w)}
+        <details class="review-meta" open><summary>作品信息<small>可补充或纠正信息，内容通过后仍需核验</small></summary>
+          ${workFieldsHtml(ctx, task, w, { expanded: true })}
+          <div class="review-meta-actions"><button type="button" class="btn sm" data-save-meta>只保存信息</button></div>
         </details>
         <label class="field"><span class="field-label">理由<small>拒绝时必填，作者会看到</small></span><textarea class="input" name="reason" rows="3" maxlength="500"></textarea></label>
         <p class="form-error" role="alert"></p>
@@ -867,15 +737,30 @@ function openContent(ctx, w, { questions = [], onDecided } = {}) {
     </div>`,
   });
   const form = $('form', sheet.el);
+  const editor = reviewEditor(form, task, w);
   sheet.el.addEventListener('click', async (e) => {
+    const error = $('.form-error:not(.field-error)', form);
+    const save = e.target.closest('[data-save-meta]');
+    if (save) {
+      error.textContent = '';
+      save.disabled = true;
+      try {
+        toast(await editor.save(editor.collect()) ? `已保存：${w.title}` : '信息没有改动');
+        await refreshPlatform('review');
+      } catch (err) {
+        error.textContent = err.message;
+      }
+      save.disabled = false;
+      return;
+    }
     const act = e.target.closest('[data-content-act]')?.dataset.contentAct;
     if (!act) return;
     const reason = form.reason.value.trim();
-    const error = $('.form-error', form);
+    error.textContent = '';
     if (act === 'rejected' && !reason) { error.textContent = '请写明拒绝理由'; form.reason.focus(); return; }
     let meta;
     try {
-      meta = changedText(form, w);
+      meta = editor.collect();
     } catch (err) {
       error.textContent = err.message;
       $('.review-meta', form).open = true;
@@ -884,7 +769,7 @@ function openContent(ctx, w, { questions = [], onDecided } = {}) {
     $$('[data-content-act]', form).forEach((b) => { b.disabled = true; });
     const path = `works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}/moderation`;
     try {
-      await saveMeta(w, meta);
+      await editor.save(meta);
       if (act === 'retry') await api(`${path}/retry`, { method: 'POST' });
       else await api(path, { method: 'POST', body: { status: act, reason: reason || '人工复核通过' } });
       sheet.close();
@@ -1188,7 +1073,7 @@ function review(root, ctx) {
           <label class="field"><span class="field-label">推理档位<small>留空保持各自原值</small></span><input class="input" name="effort" maxlength="20" list="bulk-efforts"><datalist id="bulk-efforts">${['Default', ...(platform.site.efforts ?? [])].map((e) => `<option value="${esc(e)}"></option>`).join('')}</datalist></label>
           <label class="field"><span class="field-label">服务商<small>留空保持各自原值</small></span><select class="input" name="providerId"><option value="">保持原值</option>${[...ctx.PROVIDERS.values()].map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label>
         </div>
-        <p class="fine">填写的项会覆盖所选全部作品的对应信息。</p>`;
+        <p class="fine">填写的项会覆盖所选全部作品的对应信息；其他必填信息不完整的作品会保留待处理，需要逐件打开补齐。</p>`;
     }
     if (tab === 'questions' && status === 'approved') {
       const missing = items.filter((q) => !q.category || !domainsOf(q).length).length;
@@ -1216,13 +1101,23 @@ function review(root, ctx) {
       const meta = {};
       if (form.effort?.value.trim()) meta.effort = form.effort.value.trim();
       if (form.providerId?.value) meta.providerId = form.providerId.value;
+      const incomplete = [];
+      const ready = tab === 'unverified' && status === 'verified' ? items.filter((w) => {
+        const fields = document.createElement('form');
+        const task = ctx.DATA.tasks.find((t) => t.id === w.task) ?? state.questions?.find((q) => q.id === w.task);
+        fields.innerHTML = workFieldsHtml(ctx, task, { ...w, ...(meta.effort ? { effort: meta.effort } : {}), ...(meta.providerId ? { provider: meta.providerId } : {}) });
+        const { error: problem } = readWorkFields(fields, task);
+        if (problem) incomplete.push({ task: w.task, id: w.id, ok: false, error: { message: problem } });
+        return !problem;
+      }) : items;
       const body = tab === 'questions' ? { ids: items.map((q) => q.id), status, reason }
-        : { works: items.map(({ task, id }) => ({ task, id })), status, reason, ...(Object.keys(meta).length ? { meta } : {}) };
+        : { works: ready.map(({ task, id }) => ({ task, id })), status, reason, ...(Object.keys(meta).length ? { meta } : {}) };
       const button = $('[type="submit"]', form);
       button.disabled = true;
-      let results;
+      let results = [];
       try {
-        ({ results } = await api(path, { method: 'POST', body }));
+        if (ready.length) ({ results } = await api(path, { method: 'POST', body }));
+        results.push(...incomplete);
       } catch (err) {
         error.textContent = err.status === 404 ? '后端暂不支持批量处理。' : err.message;
         button.disabled = false;

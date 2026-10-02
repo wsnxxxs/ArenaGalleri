@@ -1,4 +1,4 @@
-// The description of an upload, shared by the submit page and the author's edit dialog.
+// The description of an upload, shared by submission, author editing and admin review.
 // Field names follow the API body of POST /api/works and PATCH /api/works/:task/:id.
 import { $, $$, byName, esc, icon } from './ui.js';
 import { platform } from './platform.js';
@@ -26,6 +26,7 @@ function modelOptions(ctx, selected) {
 
 function harnessOptions(ctx, selected) {
   const listed = [...ctx.HARNESSES.values()].filter((h) => h.listed || h.id === selected);
+  if (selected && !ctx.HARNESSES.has(selected)) listed.push({ id: selected, name: selected });
   return listed.sort((a, b) => byName(a.name, b.name)).map((h) => option(h.id, h.name, h.id === selected)).join('');
 }
 
@@ -36,11 +37,12 @@ function providerOptions(ctx, selected) {
 // work is an existing upload when editing; its values prefill the form. Required facts stay
 // in view; the optional ones fold away (open when editing a work that already has them).
 // extra is appended inside the fold, e.g. the submit page's cover picker.
-export function workFieldsHtml(ctx, task, work = null, { extra = '' } = {}) {
+// expanded keeps optional information visible during admin review.
+export function workFieldsHtml(ctx, task, work = null, { extra = '', expanded = false } = {}) {
   const w = work ?? {};
-  const variants = task.promptVariants ?? [];
+  const variants = task?.promptVariants ?? [];
   const model = w.model && ctx.MODELS.has(w.model) ? w.model : w.modelName ? '__other' : '';
-  const efforts = ['Default', ...platform.site.efforts];
+  const efforts = ['Default', ...(platform.site.efforts ?? [])];
   const effort = !w.effort ? '' : efforts.includes(w.effort) ? w.effort : '__other';
   const harness = w.harness ?? (w.harnessName ? '__other' : '');
   const provider = ctx.providerOf(w)?.id ?? '';
@@ -54,7 +56,7 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '' } = {}) {
     </div>
     <div class="field-row" data-other-model${model === '__other' ? '' : ' hidden'}>
       <label class="field"><span class="field-label">模型名称<i>*</i></span><input class="input" name="modelName" maxlength="60" placeholder="按官方写法，例如 GPT-6 Sol" value="${esc(model === '__other' ? w.modelName : '')}"></label>
-      <label class="field"><span class="field-label">厂商</span><input class="input" name="vendor" maxlength="40" placeholder="例如 OpenAI"></label>
+      <label class="field"><span class="field-label">厂商</span><input class="input" name="vendor" maxlength="40" placeholder="例如 OpenAI" value="${esc(model === '__other' ? w.vendor ?? '' : '')}"></label>
     </div>
     <label class="field" data-other-effort${effort === '__other' ? '' : ' hidden'}><span class="field-label">档位名称<i>*</i></span><input class="input" name="effortOther" maxlength="20" placeholder="例如 Extra" value="${esc(effort === '__other' ? w.effort : '')}"></label>
     <div class="field-row">
@@ -67,7 +69,7 @@ export function workFieldsHtml(ctx, task, work = null, { extra = '' } = {}) {
       <label class="field"><span class="field-label">人工介入<i>*</i></span><select class="input" name="humanIntervention" required><option value="">请选择</option>${INTERVENTIONS.map(([value, text]) => option(value, text, value === w.humanIntervention)).join('')}</select></label>
     </div>
     <p class="field-hint">只发了一次题目提示词、也没有改代码的作品会进入盲评；多轮或有人工介入的作品只在展厅展示。</p>
-    <details class="more-fields"${filled ? ' open' : ''}><summary>${icon('right')}补充信息<small>选填 · 简介与补充说明，填了核验更快</small></summary><div class="step-body">
+    <details class="more-fields"${expanded || filled ? ' open' : ''}><summary>${icon('right')}补充信息<small>选填 · 简介与补充说明，填了核验更快</small></summary><div class="step-body">
       <label class="field"><span class="field-label">简介</span><textarea class="input" name="summary" maxlength="200" rows="2" placeholder="一两句话介绍作品的看点">${esc(w.summary ?? '')}</textarea></label>
       <label class="field"><span class="field-label">补充说明</span><textarea class="input" name="note" maxlength="1000" rows="3" placeholder="对话轮次、追加了哪些提示、改了哪些代码等。">${esc(w.note ?? '')}</textarea></label>
       ${extra}
@@ -91,23 +93,24 @@ function fail(form, name, message) {
 }
 
 // Checks the form and returns { body } for the API, or { error } after marking the field.
-export function readWorkFields(form, task) {
+// Admin saves and negative decisions may keep existing missing selections.
+export function readWorkFields(form, task, { requireComplete = true } = {}) {
   $$('.field-error', form).forEach((el) => el.remove());
   $$('[aria-invalid]', form).forEach((el) => el.removeAttribute('aria-invalid'));
   const data = Object.fromEntries(new FormData(form));
   const text = (name) => (data[name] ?? '').trim();
   const other = data.modelId === '__other';
   if (!text('title')) return fail(form, 'title', '请填写作品标题');
-  if ((task.promptVariants ?? []).length && !data.promptVariant) return fail(form, 'promptVariant', '请选择生成时用的提示词版本');
-  if (!data.modelId) return fail(form, 'modelId', '请选择模型');
+  if (requireComplete && (task?.promptVariants ?? []).length && !data.promptVariant) return fail(form, 'promptVariant', '请选择生成时用的提示词版本');
+  if (requireComplete && !data.modelId) return fail(form, 'modelId', '请选择模型');
   if (other && !text('modelName')) return fail(form, 'modelName', '请填写模型名称');
-  if (!data.effort) return fail(form, 'effort', '请选择推理档位');
+  if (requireComplete && !data.effort) return fail(form, 'effort', '请选择推理档位');
   if (data.effort === '__other' && !text('effortOther')) return fail(form, 'effortOther', '请填写档位名称');
-  if (!data.harnessId) return fail(form, 'harnessId', '请选择 Harness');
+  if (requireComplete && !data.harnessId) return fail(form, 'harnessId', '请选择 Harness');
   if (data.harnessId === '__other' && !text('harnessOther')) return fail(form, 'harnessOther', '请填写 Harness 名称');
-  if (!['official', 'unofficial'].includes(data.providerId)) return fail(form, 'providerId', '请选择服务商');
-  if (!data.generationMode) return fail(form, 'generationMode', '请选择生成方式');
-  if (!data.humanIntervention) return fail(form, 'humanIntervention', '请选择人工介入程度');
+  if (requireComplete && !['official', 'unofficial'].includes(data.providerId)) return fail(form, 'providerId', '请选择服务商');
+  if (requireComplete && !data.generationMode) return fail(form, 'generationMode', '请选择生成方式');
+  if (requireComplete && !data.humanIntervention) return fail(form, 'humanIntervention', '请选择人工介入程度');
   return { body: {
     title: text('title'),
     summary: data.summary ?? '',
