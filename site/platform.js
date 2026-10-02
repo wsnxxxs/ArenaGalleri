@@ -4,6 +4,7 @@ import { $, $$, esc, icon } from './ui.js';
 import { compatibleBuild, fetchApi, resolveApiMedia, setDatapackVersion, staleBuild } from './platform-api.js';
 import { loadTurnstile, mountTurnstile } from './turnstile.js';
 import { CONTACT } from './legal.js';
+import { openAuthDialog } from './auth-dialog.js';
 
 export const platform = {
   available: false,
@@ -219,7 +220,7 @@ export function codeSender(sheet, form, request, widgetFor = formWidget(sheet, f
     let widget = null;
     try {
       widget = await widgetFor();
-      if (!sheet.el.open) return;
+      if (!sheet.el.isConnected) return;
       if (widget && !widget.token) { errorLine.textContent = '请先完成人机验证。'; send.disabled = false; return; }
       notice.textContent = `${await request(widget?.token)}没收到请检查垃圾邮件箱。`;
       countdown = 60;
@@ -240,9 +241,9 @@ function formWidget(sheet, form) {
   let widget = null;
   const challenge = $('.auth-turnstile', form);
   const ready = api('auth/turnstile').then(async ({ siteKey }) => {
-    if (!siteKey || !sheet.el.open) return null;
+    if (!siteKey || !sheet.el.isConnected) return null;
     await loadTurnstile();
-    if (!sheet.el.open) return null;
+    if (!sheet.el.isConnected) return null;
     challenge.hidden = false;
     widget = mountTurnstile(challenge, siteKey, (message) => { $('.auth-turnstile-status', form).textContent = message; });
     return widget;
@@ -311,7 +312,7 @@ function openReset(account = '') {
   return new Promise((resolve) => {
     let done = null;
     let verified = false;
-    const sheet = openDialog({
+    const sheet = openAuthDialog({
       title: '找回密码',
       className: 'auth-sheet code-sheet',
       onClose: () => resolve(done),
@@ -383,14 +384,14 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       widget = null;
       widgetTask = null;
     };
-    const sheet = openDialog({
+    const sheet = openAuthDialog({
       title: mode === 'login' ? '登录' : '注册',
       className: 'auth-sheet',
       onClose: () => { clearWidget(); resolve(user); },
-      body: `<form class="auth-form" novalidate>
+      body: `<form id="auth-form" class="auth-form" autocomplete="on" novalidate>
         ${reason ? `<p class="auth-reason">${esc(reason)}</p>` : ''}
-        <label class="field"><span class="field-label">用户名</span><input class="input" name="name" autocomplete="username" maxlength="24" required></label>
-        <label class="field"><span class="field-label">密码</span><input class="input" name="password" type="password" maxlength="128" required></label>
+        <label class="field" for="auth-username"><span class="field-label">用户名</span><input id="auth-username" class="input" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="24" required></label>
+        <label class="field" for="auth-password"><span class="field-label">密码</span><input id="auth-password" class="input" name="password" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" maxlength="128" required></label>
         <button class="auth-forgot" type="button" data-forgot>忘记密码？</button>
         <div data-register hidden>${EMAIL_FIELD}</div>
         <div class="auth-turnstile" hidden></div>
@@ -411,9 +412,9 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       widgetTask = (async () => {
         const { siteKey } = await api('auth/turnstile');
         if (siteKey !== null && (typeof siteKey !== 'string' || !siteKey)) throw new Error('人机验证加载失败，请刷新页面重试。');
-        if (generation !== widgetGeneration || !sheet.el.open || !siteKey) return null;
+        if (generation !== widgetGeneration || !sheet.el.isConnected || !siteKey) return null;
         await loadTurnstile();
-        if (generation !== widgetGeneration || !sheet.el.open) return null;
+        if (generation !== widgetGeneration || !sheet.el.isConnected) return null;
         challenge.hidden = false;
         const mounted = mountTurnstile(challenge, siteKey, (message) => {
           if (generation === widgetGeneration) challengeStatus.textContent = message;
@@ -433,7 +434,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       mode = next;
       const login = mode === 'login';
       sheet.setTitle(login ? '登录' : '注册');
-      form.name.placeholder = login ? '' : '2–24 位中文、字母、数字或下划线';
+      form.username.placeholder = login ? '' : '2–24 位中文、字母、数字或下划线';
       form.password.placeholder = login ? '' : '至少 8 位';
       form.password.autocomplete = login ? 'current-password' : 'new-password';
       $('[type="submit"]', form).textContent = login ? '登录' : '注册并登录';
@@ -442,10 +443,12 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       $('.auth-legal', form).hidden = login;
       $('[data-forgot]', form).hidden = !login;
       $$('[data-register]', form).forEach((el) => { el.hidden = login; });
+      form.email.disabled = login;
+      form.code.disabled = login;
       $('.form-error', form).textContent = '';
       const generation = widgetGeneration + 1;
       prepareWidget().catch((error) => {
-        if (generation === widgetGeneration && sheet.el.open) $('.form-error', form).textContent = error.message;
+        if (generation === widgetGeneration && sheet.el.isConnected) $('.form-error', form).textContent = error.message;
       });
     };
     setMode(mode);
@@ -455,12 +458,12 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       const data = await api('auth/email/send', { method: 'POST', body: { purpose: 'register', email: form.email.value.trim(), turnstileToken: token } });
       return `验证码已发送至 ${data.email}。`;
     }, () => widgetTask ?? prepareWidget());
-    $('[data-switch]', form).addEventListener('click', () => { setMode(mode === 'login' ? 'register' : 'login'); form.name.focus(); });
+    $('[data-switch]', form).addEventListener('click', () => { setMode(mode === 'login' ? 'register' : 'login'); form.username.focus(); });
     // Recovery opens above the sign-in sheet and hands the account back to it.
     $('[data-forgot]', form).addEventListener('click', async () => {
-      const account = await openReset(form.name.value.trim());
-      if (!account || !sheet.el.open) return;
-      form.name.value = account;
+      const account = await openReset(form.username.value.trim());
+      if (!account || !sheet.el.isConnected) return;
+      form.username.value = account;
       form.password.value = '';
       $('.form-error', form).textContent = '';
       form.password.focus();
@@ -473,7 +476,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       switchButton.disabled = true;
       let loginSent = false;
       try {
-        const body = { name: form.name.value, password: form.password.value };
+        const body = { name: form.username.value, password: form.password.value };
         if (mode === 'register') {
           Object.assign(body, { email: form.email.value.trim(), code: form.code.value.trim() });
           if (!body.email) throw new Error('请填写邮箱，注册需要绑定邮箱。');
@@ -499,7 +502,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
         if (loginSent) widget?.reset();
       }
     });
-    setTimeout(() => form.name.focus());
+    setTimeout(() => { if (sheet.el.isConnected) form.username.focus(); });
   });
 }
 

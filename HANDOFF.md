@@ -1,5 +1,14 @@
 # HANDOFF.md · 当前状态
 
+## 密码管理器弹窗兼容修复（2026-10-03，本地完成，未推送、未部署）
+
+- 用户将本轮范围收窄为 Firefox / Bitwarden 自动填充；账号登录规则、验证码和邮件发送不改。按要求由 Astra medium 子代理协作排查与实现。
+- Gallery 原生 `dialog.showModal()` 与 Bitwarden 官方仓库 issue #21388 描述的 Firefox 内联菜单失败路径一致（https://github.com/bitwarden/clients/issues/21388）；尚未在用户的 Firefox / Bitwarden 版本上复现，因此这是有上游依据的兼容修复，不能宣称真实扩展已验收。
+- 新增 `site/auth-dialog.js`，登录 / 注册 / 找回密码使用普通 DOM 弹层；保留 Escape、遮罩关闭、Tab 首尾循环、嵌套弹窗、焦点恢复、滚动锁及关闭清理。只将站点自己的背景设为 inert，扩展注入节点仍可交互。其他业务弹窗保持原生 dialog。用户名改为稳定的 username name/id，密码从初始 HTML 就带 current-password / new-password；登录时停用隐藏的注册字段，请求体仍为 name/password。
+- 验证：check 48 文件 / 0 错；test 19/19；使用有读取权限的数据仓本地 dist 构建 181 件 / 59 site 文件；CI=1 intake 0 错 / 10 条既有警告。Browser 隔离合成接口验证外部模拟扩展直接赋值后的登录提交、切换注册 autocomplete、Tab / Shift+Tab、Escape / 遮罩关闭、嵌套找回复焦、普通确认框保持原生 modal；桌面登录及 375px 注册目检通过，console 无 error / warn。
+- 未验证真实 Firefox + Bitwarden、生产 Turnstile、真实账号/邮件、浅色主题。未推送、部署或修改相邻后端；不合并既有未提交模型/审核功能。验证脚本与截图保留在忽略目录 output/autofill-fix-20261003/。归档见 docs/archive/2026-10-03-bitwarden-autofill-wsnxxxs.md。
+
+
 ## 四仓协调发布完成（2026-10-02）
 
 - 固定源码 3e441a3 已提交、推送，并在 2026-10-02T10:04:51Z 与 Show1 / 新后端协调上线；两端显式私有消费 pin 一致，公开仓没有真实配置或生成物入库。2384 文件集合与 SHA-256 全匹配，新旧目录整体切换，gallery.prev 保留。见[发布归档](docs/archive/2026-10-02-shared-session-release-wsnxxxs.md)。

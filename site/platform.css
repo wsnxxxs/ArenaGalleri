@@ -52,12 +52,18 @@
 .has-tray .toast { bottom: 108px; }
 
 /* ---- dialogs ---- */
-dialog.sheet {
+dialog.sheet, .auth-overlay .sheet {
   width: min(440px, calc(100% - 32px)); max-height: calc(100dvh - 48px); padding: 0; overflow: auto;
   border: 1px solid var(--line); border-radius: 16px; background: var(--raised); color: var(--ink); box-shadow: var(--shadow-lg);
 }
-dialog.sheet[open] { animation: sheet-in 0.28s var(--ease) both; }
+dialog.sheet[open], .auth-overlay .sheet { animation: sheet-in 0.28s var(--ease) both; }
 dialog.sheet::backdrop { background: rgb(12 12 11 / 42%); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.auth-overlay {
+  position: fixed; inset: 0; z-index: 130; display: grid; place-items: center;
+  background: rgb(12 12 11 / 42%); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.auth-overlay .sheet { border-radius: 10px; background: var(--surface); }
+body:has(.auth-overlay) { overflow: hidden; }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
 .sheet-in { padding: 22px 24px 24px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
@@ -91,7 +97,7 @@ select.input:disabled { opacity: 0.6; }
 .form-error { margin: 0 0 12px; color: var(--accent); font-size: 13px; }
 .form-error:empty { display: none; }
 
-dialog.sheet.auth-sheet { width: min(380px, calc(100% - 32px)); }
+dialog.sheet.auth-sheet, .auth-overlay .sheet.auth-sheet { width: min(380px, calc(100% - 32px)); }
 .auth-reason { margin: 0 0 14px; padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink-2); font-size: 13px; }
 .auth-turnstile:not([hidden]) { margin: 0 0 12px; }
 .auth-turnstile-status { margin: 0; color: var(--accent); font-size: 13px; }
