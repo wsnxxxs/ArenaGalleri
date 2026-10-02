@@ -64,12 +64,13 @@ export function checkDatapack(root, site) {
       if (!result.title?.trim() || !result.source?.trim()) errors.push(`${key}: missing title or source`);
       if (!result.addedAt || !/(?:Z|[+-]\d{2}:\d{2})$/.test(result.addedAt) || !Number.isFinite(Date.parse(result.addedAt))) errors.push(`${key}: invalid addedAt`);
       file(`${result.scene}index.html`, key);
-      file(`${result.previewLoader}index.html`, key);
+      if (result.previewMode !== 'screenshot') file(`${result.previewLoader}index.html`, key);
       for (const condition of ['first', 'mobile']) {
         if (!task.conditions.some(item => item.id === condition)) errors.push(`${key}: missing ${condition} condition`);
         file(result.captures?.[condition], key);
       }
       for (const image of result.gallery ?? []) file(image.src, key);
+      if (result.previewMode === 'screenshot') continue;
       const modelFile = file(result.previewModel, key);
       if (modelFile) {
         try {
