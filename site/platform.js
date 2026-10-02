@@ -99,7 +99,7 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
 
 // ---- status -------------------------------------------------------------------------------
 export const STATUS = {
-  verified: { label: '已验证', hint: '已核验，参与盲评并优先展示', icon: 'check' },
+  verified: { label: '已验证', hint: '已核验并优先展示；是否进入盲评以盲评开关为准', icon: 'check' },
   unverified: { label: '未验证', hint: '等待管理员核验：可以浏览和贴表情，暂不参与盲评', icon: 'clock' },
   questioned: { label: '存疑', hint: '核验存疑：仅供参考，不参与互动与盲评', icon: 'alert' },
 };
