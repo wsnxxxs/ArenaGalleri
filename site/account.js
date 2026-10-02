@@ -2,7 +2,7 @@
 import { $, $$, brandMark, byName, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
 import { api, avatarFace, confirmDialog, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
-import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf, tagsOf } from './categories.js';
+import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf } from './categories.js';
 
 // The review queue runs one pipeline: 题目审核 → 内容审核 → 作品核验. The first group only
 // counts what needs a person; the second lists what has been decided.
@@ -206,7 +206,7 @@ function questionRow(ctx, question) {
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
     <div class="submission-question-body"><h3>${hidden ? esc(question.title) : `<a href="#/${esc(question.id)}">${esc(question.title)}</a>`}${moderationBadge(question.moderation, HELD.question[question.moderation?.status], QUESTION_LABELS)}</h3>
       <p class="summary">${esc(question.summary)}</p>
-      <p class="work-meta">${[categoryLabel(question.category), ...domainsOf(question), ...tagsOf(question).map((tag) => `#${tag}`)].filter(Boolean).map(esc).join(' · ')}<span>${esc(question.date)}${hidden ? '' : ` · ${works} 件作品`}</span></p>
+      <p class="work-meta">${[categoryLabel(question.category), ...domainsOf(question)].filter(Boolean).map(esc).join(' · ')}<span>${esc(question.date)}${hidden ? '' : ` · ${works} 件作品`}</span></p>
       ${heldNote('question', question)}
     </div><div class="actions">${hidden ? '' : `<a class="btn sm" href="#/${esc(question.id)}">查看题目${icon('next')}</a>`}${works && !hidden ? '' : `<button class="icon-btn" data-delete-question="${esc(question.id)}" title="删除题目" aria-label="删除「${esc(question.title)}」">${icon('trash')}</button>`}</div>
   </article>`;
@@ -785,7 +785,7 @@ function reviewQuestionRow(q) {
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
     <div class="submission-question-body"><h3>${shown ? `<a href="#/${esc(q.id)}">${esc(q.title)}</a>` : esc(q.title)}${moderationBadge(q.moderation, '', QUESTION_LABELS)}</h3>
       <p class="summary">${esc(q.summary)}</p>
-      <p class="work-meta">${esc(q.ownerName ?? q.owner ?? '已注销的用户')}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.category ? `<span>${esc(categoryLabel(q.category))}</span>` : ''}${domainsOf(q).map((d) => `<span>${esc(d)}</span>`).join('')}${tagsOf(q).map((tag) => `<span>#${esc(tag)}</span>`).join('')}</p>
+      <p class="work-meta">${esc(q.ownerName ?? q.owner ?? '已注销的用户')}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.category ? `<span>${esc(categoryLabel(q.category))}</span>` : ''}${domainsOf(q).map((d) => `<span>${esc(d)}</span>`).join('')}</p>
       ${detail ? `<p class="result-reason">${icon(status === 'rejected' ? 'alert' : 'guide')}<span>${esc(detail)}</span></p>` : ''}
       ${samples.length ? `<ul class="question-samples">${samples.map(sampleRow).join('')}</ul>` : shown ? '' : '<p class="result-reason"><span>没有附带示例结果。</span></p>'}
       <details class="prompt-peek"><summary>${icon('guide')}完整提示词</summary><pre>${esc(q.prompt)}</pre></details>

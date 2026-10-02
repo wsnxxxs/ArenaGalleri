@@ -17,7 +17,7 @@ import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
-import { categoryLabel, categoryOf, domainList, domainsIn, domainsOf, tagsOf, tracksOf } from './categories.js';
+import { categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 
 const root = $('#app');
 let DATA;
@@ -191,11 +191,8 @@ function libraryStart(crumbs) {
 const selectControl = (name, aria, options) => `<label class="result-sort">${aria}<select data-${name} aria-label="${aria}">${options}</select></label>`;
 const option = (value, text, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(text)}</option>`;
 const answeredBy = (t, id) => counted(t).some((r) => r.model === id);
-// A card names its form and domains first, then fills up to three marks with its own tags.
-function tagLine(t) {
-  const domains = domainsOf(t), tags = tagsOf(t), room = Math.max(0, 3 - domains.length), more = tags.slice(room);
-  return `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domains.map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}${tags.slice(0, room).map((g) => `<li>#${esc(g)}</li>`).join('')}${more.length ? `<li class="tag-more" title="${esc(more.join(' · '))}">+${more.length}</li>` : ''}`;
-}
+// A card names its form, then its domains.
+const tagLine = (t) => `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}`;
 function sortedTasks() {
   const order = new Map(DATA.tasks.map((t, i) => [t.id, i]));
   return [...DATA.tasks].sort((a, b) => {
@@ -235,6 +232,7 @@ function renderLibrary(scopes = []) {
         </div>
         <h3><a href="${taskHref(t)}">${esc(t.title)}</a></h3>
         <p class="summary">${esc(t.summary)}</p>
+        <p class="prompt-hit" data-prompt-hit hidden></p>
         <div class="question-meta">
           <span class="question-date">${esc(t.date ?? '')}</span>
           <a href="${taskHref(t)}">${modelCount(works)} 个模型 · ${works.length} 件作品${icon('next')}</a>
@@ -296,7 +294,7 @@ function renderLibrary(scopes = []) {
 
   root.innerHTML = `${libraryStart([{ text: '题库' }])}
       <section data-home-panel="tasks">
-        <div class="collection-heading"><div class="collection-title"><h2 id="h-tasks">全部题目</h2><span data-home-count>${DATA.tasks.length} 道题目</span></div>${searchControl('home', '搜索题目', homeState.query)}</div>
+        <div class="collection-heading"><div class="collection-title"><h2 id="h-tasks">全部题目</h2><span data-home-count>${DATA.tasks.length} 道题目</span></div>${searchControl('home', '搜索题目或提示词', homeState.query)}</div>
         ${taskToolbar}
         <div class="task-list">${newCard}${taskCards || (newCard ? '' : '<p class="muted">还没有题目。</p>')}</div>
         <div class="board-empty" data-home-empty hidden><h3>没有找到这道题</h3><p>${platform.available ? '换个关键词或筛选条件，或者把它发起成一道新题。' : '换个关键词或筛选条件，或浏览全部题目。'}</p><div class="board-empty-actions"><button class="btn" data-home-reset>清除筛选</button>${platform.available ? `<a class="btn primary" href="#/new">${icon('plus')}发起题目</a>` : ''}</div></div>
@@ -306,14 +304,27 @@ function renderLibrary(scopes = []) {
         <div class="board-empty" data-model-empty hidden><h3>没有找到这个模型</h3><p>换个关键词，或查看全部厂商。</p><div class="board-empty-actions"><button class="btn" data-model-reset>清除筛选</button></div></div></section>
       ${footer()}
     </main></div>`;
+  // While searching, questions matched by their own words come first and those matched only inside
+  // a prompt follow, each showing the stretch of prompt that matched; the chosen sort holds within each.
   const filter = () => {
     let count = 0;
+    const promptOnly = new Set();
     for (const card of $$('[data-task-card]', root)) {
       const task = DATA.tasks.find((t) => t.id === card.dataset.taskCard);
-      card.hidden = Boolean((homeState.category && task.category !== homeState.category) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.model && !answeredBy(task, homeState.model))
-        || ![task.title, task.summary, categoryLabel(task.category), ...domainsOf(task), ...(task.tags ?? [])].join(' ').toLowerCase().includes(homeState.query.toLowerCase()));
+      const match = searchMatch(task, homeState.query);
+      card.hidden = Boolean(!match || (homeState.category && task.category !== homeState.category) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.model && !answeredBy(task, homeState.model)));
+      const hit = $('[data-prompt-hit]', card);
+      hit.hidden = !match?.snippet;
+      if (match?.snippet) {
+        const { before, hit: word, after } = match.snippet;
+        hit.innerHTML = `<span>提示词</span>${esc(before)}<mark>${esc(word)}</mark>${esc(after)}`;
+        promptOnly.add(task.id);
+      }
       if (!card.hidden) count++;
     }
+    const order = sortedTasks().sort((a, b) => promptOnly.has(a.id) - promptOnly.has(b.id));
+    const list = $('.task-list', root), cards = $$('[data-task-card]', list);
+    if (order.some((t, i) => cards[i].dataset.taskCard !== t.id)) list.append(...order.map((t) => cards.find((card) => card.dataset.taskCard === t.id)));
     $('#h-tasks').textContent = [homeState.category && categoryLabel(homeState.category), homeState.domain, MODELS.get(homeState.model)?.name].filter(Boolean).join(' · ') || '全部题目';
     $('[data-home-count]').textContent = `${count} 道题目`;
     $('[data-home-empty]').hidden = count > 0;
@@ -360,9 +371,6 @@ function renderLibrary(scopes = []) {
     else if (el.matches('[data-home-sort]')) {
       homeState.sort = el.value;
       store.set('question-sort', el.value);
-      const cards = new Map($$('[data-task-card]', root).map((card) => [card.dataset.taskCard, card]));
-      $('.task-list', root).append(...sortedTasks().map((t) => cards.get(t.id)));
-      return;
     } else return;
     filter();
   };
@@ -576,7 +584,7 @@ function renderTask(t) {
       <h1>${esc(t.title)}</h1>
       <p class="side-intro">${esc(t.summary)}</p>
       <p class="side-byline">${t.owner ? `${esc(t.owner)} 发起 · ` : `No.${pad(DATA.tasks.indexOf(t) + 1)} · `}${esc(t.date ?? '')}</p>
-      <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}${tagsOf(t).map((g) => `<li>#${esc(g)}</li>`).join('')}</ul>
+      <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}</ul>
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}

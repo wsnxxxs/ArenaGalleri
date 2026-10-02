@@ -17,8 +17,45 @@ export const categoryLabel = (name) => categoryOf(name)?.label ?? name ?? '';
 // Questions that predate formats take their category's; the category itself is never a tag.
 export const templatesOf = (task) => (task.templates?.length ? task.templates : categoryOf(task.category)?.templates ?? ['static', 'vite']);
 export const domainsOf = (task) => task.domains ?? [];
-export const tagsOf = (task) => (task.tags ?? []).filter((tag) => tag !== task.category && !domainsOf(task).includes(tag));
 export const domainList = (platform) => (platform?.domains?.length ? platform.domains : DOMAINS);
+// Questions carry no tags of their own: a search looks through their words and every version of
+// the prompt, where a stack such as Three.js is already named. Each space-separated word must appear.
+// Letters fold to lower case and spaces, dots, hyphens and underscores drop out, so threejs finds
+// Three.js; `at` maps each folded character back to the original for the snippet.
+function fold(text) {
+  let folded = '';
+  const at = [];
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i].toLowerCase();
+    if (/[\s.\-_]/.test(char)) continue;
+    folded += char;
+    for (let n = 0; n < char.length; n++) at.push(i);
+  }
+  return { folded, at };
+}
+const SNIPPET = { before: 18, after: 36 };
+
+// Null when a word is missing. Otherwise `inPrompt` says some word was found only in a prompt, with
+// the stretch of prompt around the first such word.
+export function searchMatch(task, query) {
+  const words = query.split(/\s+/).map((word) => fold(word).folded).filter(Boolean);
+  if (!words.length) return { inPrompt: false };
+  // The separator survives folding, so a word cannot run from the title into the summary.
+  const own = fold([task.title, task.summary, categoryLabel(task.category), ...domainsOf(task)].join('|')).folded;
+  const prompts = [task.prompt ?? '', ...(task.promptVariants ?? []).map((variant) => variant.prompt ?? '')]
+    .filter(Boolean).map((text) => ({ text, ...fold(text) }));
+  const promptOnly = words.filter((word) => !own.includes(word));
+  if (promptOnly.some((word) => !prompts.some(({ folded }) => folded.includes(word)))) return null;
+  if (!promptOnly.length) return { inPrompt: false };
+  const word = promptOnly[0];
+  const { text, folded, at } = prompts.find((prompt) => prompt.folded.includes(word));
+  const index = folded.indexOf(word);
+  const start = at[index], end = at[index + word.length - 1] + 1;
+  const from = Math.max(0, start - SNIPPET.before), to = Math.min(text.length, end + SNIPPET.after);
+  const flat = (part) => part.replace(/\s+/g, ' ');
+  return { inPrompt: true, snippet: { before: `${from > 0 ? '…' : ''}${flat(text.slice(from, start))}`, hit: flat(text.slice(start, end)), after: `${flat(text.slice(end, to))}${to < text.length ? '…' : ''}` } };
+}
+export const matchesQuery = (task, query) => searchMatch(task, query) !== null;
 
 // Categories present in the data, known ones first; an unknown category still gets a view.
 export function tracksOf(tasks) {

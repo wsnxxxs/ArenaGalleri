@@ -12,7 +12,7 @@ test('the display catalog keeps prompts and runtime paths without private source
   const raw = { title: 'Gallery', repo: 'https://example.test/gallery', schemaVersion: 1,
     sourceCommit: privateValue, sourceDirty: true, modelPool: [{ id: privateValue }], futureInternalField: privateValue,
     models: [{ id: 'model', name: 'Model', logo: 'logo.svg', priceOut: 10, privateNote: privateValue }],
-    tasks: [{ id: 'task', category: '建模', domains: ['化学'], prompt: 'The public prompt', promptUrl: privateValue, futureInternalField: privateValue,
+    tasks: [{ id: 'task', category: '建模', domains: ['化学'], tags: ['Three.js'], prompt: 'The public prompt', promptUrl: privateValue, futureInternalField: privateValue,
       promptVariants: [{ id: 'short', label: 'Short', prompt: 'The short prompt', promptUrl: privateValue, source: privateValue }],
       conditions: [{ id: 'first', label: 'First', secret: privateValue }], results: [result] }] };
   const info = { frontendCommit: 'a'.repeat(40), datapack: 'b'.repeat(40), schemaVersion: 1, privateNote: privateValue };
@@ -20,6 +20,7 @@ test('the display catalog keeps prompts and runtime paths without private source
   assert.equal(display.tasks[0].prompt, raw.tasks[0].prompt);
   assert.equal(display.tasks[0].category, '建模', 'the leaderboard groups tasks by category');
   assert.deepEqual(display.tasks[0].domains, ['化学'], 'the library filters tasks by domain');
+  assert.equal(display.tasks[0].tags, undefined, 'tags are no longer shown; search reads the prompt');
   assert.deepEqual(display.tasks[0].promptVariants, [{ id: 'short', label: 'Short', prompt: 'The short prompt' }]);
   assert.equal(display.tasks[0].results[0].promptVariant, 'short');
   assert.equal(display.tasks[0].results[0].scene, result.scene);

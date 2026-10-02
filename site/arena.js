@@ -4,7 +4,7 @@
 import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
 import { api, needsEmail, platform, reactionBar, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
-import { domainsOf, tracksOf } from './categories.js';
+import { domainsOf, matchesQuery, tracksOf } from './categories.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', skip: '你跳过了这一组' };
@@ -51,7 +51,7 @@ function lobby(root, ctx) {
   function list() {
     const query = view.query.trim().toLowerCase();
     const scoped = ctx.DATA.tasks.filter((t) => (!view.track || t.category === view.track)
-      && (!query || [t.title, t.summary, ...domainsOf(t)].join(' ').toLowerCase().includes(query)));
+      && matchesQuery(t, query));
     const open = scoped.filter(ready);
     const closed = scoped.filter((t) => !ready(t));
     const meta = `${open.length} 道题可以开始${closed.length ? ` · ${closed.length} 道作品不足` : ''}`;

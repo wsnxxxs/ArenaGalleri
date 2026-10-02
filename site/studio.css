@@ -361,6 +361,10 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .task-body h3 { font: 550 18px/1.5 var(--sans); letter-spacing: -.02em; }
 .task-body h3 a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .task-body .summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 12px; line-height: 1.7; margin: 7px 0 13px; }
+/* Where a search found its word inside the prompt rather than the question itself. */
+.task-body .prompt-hit:not([hidden]) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: -6px 0 13px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.prompt-hit span { margin-right: 6px; color: var(--ink-2); }
+.prompt-hit mark { padding: 0 2px; border-radius: 3px; color: var(--accent); background: var(--accent-soft); }
 .question-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; color: var(--muted); font-size: 11px; }
 .question-meta > span, .question-meta > a { display: flex; align-items: center; gap: 4px; }
 .question-meta > a { color: var(--ink-2); white-space: nowrap; }
@@ -462,14 +466,6 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .publish-form .field { margin-bottom: 23px; }
 .publish-form textarea { resize: vertical; }
 .publish-form textarea[name="prompt"] { min-height: 250px; font: 13px/1.8 var(--mono); }
-.tag-input-row { display: flex; gap: 8px; }
-.tag-input-row .input { min-width: 0; flex: 1; }
-.tag-editor, .tag-suggestions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-.tag-editor:empty { display: none; }
-.tag-editor .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 5px; color: var(--accent); background: var(--accent-soft); font: 12px/1.6 var(--sans); }
-.tag-editor .i { width: 12px; height: 12px; }
-.tag-suggestions button { border: 0; padding: 2px 0; color: var(--muted); background: none; font-size: 11px; }
-.tag-suggestions button:hover { color: var(--accent); }
 .format-options { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 9px; }
 .format-options label { display: flex; align-items: center; gap: 7px; color: var(--ink-2); font-size: 13px; }
 .format-options input { accent-color: var(--accent); }
