@@ -446,6 +446,22 @@ dialog.edit-work-sheet { width: min(720px, calc(100% - 32px)); }
 .review-tabs a:hover { color: var(--ink); }
 .review-tabs a[aria-current="page"] { background: var(--raised); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-sm), 0 0 0 1px var(--line); }
 .review-tabs span { color: var(--muted); font: 11px var(--mono); }
+/* Review queue: pending queues first, decided lists after. */
+.review-nav { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 22px; }
+.review-nav .review-tabs { margin-bottom: 0; align-items: center; flex-wrap: wrap; }
+.review-tabs .seg-caption { padding: 0 6px 0 8px; font: 500 11px var(--mono); letter-spacing: 0.08em; }
+.review-subhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 34px 0 10px; font-size: 15px; }
+.review-subhead small { color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.work-list.is-muted .work-thumb { opacity: 0.72; }
+.review-history { margin-top: 28px; }
+.review-history > summary { cursor: pointer; margin-bottom: 12px; color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
+.question-samples .btn { margin-left: 8px; }
+.review-meta { margin: 16px 0; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.review-meta > summary { cursor: pointer; font-weight: 600; }
+.review-meta > summary small { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.review-meta[open] > summary { margin-bottom: 12px; }
+.review-blocked { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 16px; padding: 10px 12px; border-left: 2px solid var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); font-size: 13px; }
+.review-blocked p { flex: 1 1 14em; margin: 0; color: var(--ink-2); }
 .work-main .result-model { margin: 0 0 4px; }
 .work-main h3 { font-size: 17px; }
 .work-main h3 a { text-decoration: none; }
