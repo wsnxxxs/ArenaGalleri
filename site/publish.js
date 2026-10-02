@@ -23,7 +23,7 @@ export function mount(root, ctx) {
     const category = categoryOf(question.category);
     if (!category) return '<span class="field-label">允许的提交格式 *</span><p class="fine">选择作答形式后显示可用格式。</p>';
     const [only] = category.templates;
-    if (category.templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '上传 .txt 或 .md 文件，站内按统一版式展示。' : ''}</p>`;
+    if (category.templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '上传 .txt 或 .md 文件，站内按统一版式展示；.md 支持表格与 LaTeX 公式。' : ''}</p>`;
     return `<span class="field-label">允许的提交格式 *</span><div class="format-options">
       ${category.templates.map((value) => `<label><input type="checkbox" name="templates" value="${value}"${question.templates.includes(value) ? ' checked' : ''}>${TEMPLATE_LABELS[value]}</label>`).join('')}
     </div><p class="fine">Vite 项目需要包含构建后的 dist/ 目录。</p>`;

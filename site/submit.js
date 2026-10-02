@@ -99,7 +99,7 @@ export function uploadFlow(root, ctx, options) {
     const limits = platform.site.limits;
     if (state.template === 'text') return {
       summary: ['UTF-8 编码', '最多 20 万字符', `最大 ${formatBytes(limits.uploadBytes)}`],
-      rules: ['内容为模型生成的原文。Markdown 支持标题、段落、列表、引用、强调与代码。',
+      rules: ['内容为模型生成的原文。Markdown 支持标题、段落、列表、引用、强调、代码、表格与 LaTeX 公式（$…$、$$…$$）；.txt 按纯文本显示，不解析公式。',
         'HTML 标签、链接和图片按原文字显示；平台用统一版式排版，预览、盲评与截图都用排版后的页面。'],
     };
     return {
