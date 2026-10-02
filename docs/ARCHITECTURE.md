@@ -29,9 +29,11 @@
 
 `site/arena.js` 是画廊原有界面模块，不是另一前端的合并副本。
 
-平台页模块的 `mount(root, ctx)` 返回 `{ ready, onPlatformChange, destroy }`。`ready` 是首批数据画完的 Promise，可省略。路由切换时，`#app[data-enter]` 先隐藏内容区（`wait`），等 `ready` 完成或 200ms 后只淡入一次（`play`）；页面之后的重画不再淡入。返回上一页时，等 `ready` 后再恢复一次滚动位置；如果读者在等待期间自己滚动过，就不再恢复。
+平台页模块的 `mount(root, ctx)` 返回 `{ ready, onPlatformChange, destroy }`。`ready` 是首批数据画完的 Promise；已经从记忆画好时为 null，也可以省略。点链接切换页面是一次 View Transition：在回调里拆掉旧页、画新页，等 `ready` 完成，最多等 300ms（`HOLD`），然后交叉淡入。等待期间旧画面保持不动。顶栏（`#app > .topbar`）和侧栏（`.app-sidebar`）有各自的 `view-transition-name`，内容相同的话过渡时看不出变化。浏览器不支持 View Transition、标签页在后台，或者是首屏、同页重画时，直接绘制。数据超过 HOLD 才到的页面先显示自己的载入状态，到了再原地补上。返回上一页时，等 `ready` 后再恢复一次滚动位置；如果读者在等待期间自己滚动过，就不再恢复。
 
-启动先读本地展示目录，再核对后台 bootstrap。数据版本仍用于写请求兼容，API 契约不可用时保留静态浏览。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。
+页面进入时读取的数据（`me`、`auth/me`、`review`、`admin/questions`、各榜单）用 `platform.js` 的 `apiRemembered` 读取，按账号记住上一次的结果。回到页面时先用 `recall` 画出上次的内容，后台刷新；结果有变化才重画。同页操作或平台状态变化引起的刷新一律重画。
+
+启动时并行读取本地展示目录和后台 bootstrap，bootstrap 8 秒没有响应就按静态档案运行。数据版本仍用于写请求兼容，API 契约不可用时保留静态浏览。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。
 
 题库只对有解答的题读取代表作品榜单，空题直接显示等待首份答案，避免无用请求触发共享读取限制。同题长短版本保持题目 ID，卡片按模型、推理档位与来源分组；每份作品保留独立 ID，并排预览两栏各自选择已收录版本。
 

@@ -90,8 +90,9 @@ h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; line-heig
 img[loading="lazy"], .result-media img, .mosaic img { opacity: 0; transition: opacity 0.5s ease, transform 0.8s var(--ease), filter 0.5s ease; }
 img.is-loaded { opacity: 1; }
 
-/* Theme switch cross-fades through the View Transitions API where available. */
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.35s; animation-timing-function: ease; }
+/* Route and theme changes cross-fade through the View Transitions API where available. */
+::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 0.25s; animation-timing-function: ease; }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; } }
 
 /* ---- controls ---- */
 .btn {

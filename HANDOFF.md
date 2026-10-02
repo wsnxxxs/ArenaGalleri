@@ -1,6 +1,17 @@
 # HANDOFF.md · 当前状态
 
-## 页面切换加载过程整理 · 第一步（2026-10-03，本地完成，未提交、未推送、未部署）
+## 页面切换加载过程整理 · 第二步（2026-10-03，已提交，未推送、未部署）
+
+- 用户确认后提交第一步 7a82988，接着做第二步。顶栏不再整页闪烁、旧页面保留到新页面就绪，这两点都改用 View Transition 实现，不重写页面外壳。原因是各页面仍然自己输出含顶栏的整页 HTML，真正保留外壳 DOM 要改所有页面，留到第三步统一生命周期时再做。第一步的 `data-enter` 机制由 View Transition 取代，已经删除。
+- 改动：
+  - app.js route() 拆成 route 与 show。点链接时用 `startViewTransition`，回调里画新页并等 ready，最多等 300ms。首屏、同页重画、不支持或后台标签直接绘制。数据到达后的滚动恢复保留。首屏 data.json 与 bootstrap 并行请求。
+  - studio.css：`#app > .topbar`、`.app-sidebar` 加 view-transition-name。style.css：过渡统一 0.25s（主题切换原来是 0.35s），减少动态效果时取消动画。
+  - platform.js：bootstrap 8 秒超时（`requestBootstrap`）；新增 `apiRemembered` / `recall`，按账号记住页面进入时读取的数据。
+  - account.js 个人中心与审核页、leaderboard.js 榜单：回到页面先显示记住的内容，ready 为 null；后台刷新后结果有变化才重画。榜单从记忆绘制时出错不再抛出未捕获异常。
+  - docs/ARCHITECTURE.md、docs/DESIGN.md 已按新机制改写。
+- 验证：check 49/0、test 19/19。author-mock 中，Browser 面板可见时确认：切换时 root、topbar、sidebar 三层过渡；首屏 bootstrap 与 data.json 同时发出（31ms）；返回「我的作品」滚动从 972 恢复到 972；记住的榜单在 mount 时同步画出、ready 为 null，没记住的返回 Promise。mock 每次请求生成新的 joinedAt，所以个人中心在 mock 里总会刷新重画一次，真实后端不会这样。Browser 面板经常被系统置于后台，rAF 暂停，帧时间测不准，未做逐帧视觉验收。未测减少动态效果、手机、浅色主题、Safari / Firefox、管理员审核页（mock 不是管理员）和真实后端；未运行 build / intake（没改构建和数据）。
+
+## 页面切换加载过程整理 · 第一步（2026-10-03，已提交 7a82988，未推送、未部署）
 
 - 用户反馈页面之间的加载不优雅、不流畅。先审查，再按用户要求把已有的未提交工作合并为 fe340e4（模型厂商推断、审核筛选，并补了归档），然后开始改。
 - 审查结论：没有哪一层负责「新页面准备好了」。具体有四个问题：平台页一次切换整页重画 3～4 次，`.page` 淡入跟着重放；各处加载占位不统一，高度会塌陷；返回时等不到数据就恢复滚动，实测从 972 落到 40；`.page` 动画在 style.css 和 studio.css 里各定义了一次，前一份实际不生效。第二步（外壳不随路由重建、旧页面保留到新页面就绪、数据缓存、首屏并行请求）和第三步（统一页面生命周期）尚未开始。

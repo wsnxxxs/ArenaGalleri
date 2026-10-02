@@ -29,12 +29,15 @@ const listeners = new Set();
 export const onPlatformChange = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
 const emit = (reason) => listeners.forEach((listener) => listener(reason));
 
+// The first bootstrap read starts alongside the gallery's own data; a platform that does not answer
+// in time leaves the gallery a static archive.
+export const requestBootstrap = () => fetchApi('bootstrap', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
 let frontendBuildInfo = null;
-export async function connectPlatform(buildInfo = frontendBuildInfo) {
+export async function connectPlatform(buildInfo = frontendBuildInfo, request = requestBootstrap()) {
   frontendBuildInfo = buildInfo;
   setDatapackVersion(buildInfo?.datapack);
   try {
-    const response = await fetchApi('bootstrap', { cache: 'no-store' });
+    const response = await request;
     if (response.status === 409) { platform.available = false; platform.mismatch = true; return false; }
     if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return false;
     const bootstrap = await response.json();
@@ -97,6 +100,18 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
       : /^arena\/matches\/[^/]+\/vote$/.test(path) ? 'reveal'
       : path === 'works' || /\/review$/.test(path) ? 'work' : null;
   return resolveApiMedia(data, endpoint);
+}
+
+// The last answer to each read a page makes on arrival, per account: going back to the page draws
+// it at once, and the page refreshes it behind the scenes.
+const remembered = new Map();
+const memoryKey = (path) => `${platform.user?.id ?? ''} ${path}`;
+export const recall = (path) => remembered.get(memoryKey(path));
+export async function apiRemembered(path, options) {
+  const key = memoryKey(path);
+  const data = await api(path, options);
+  remembered.set(key, data);
+  return data;
 }
 
 // Check the lightweight session endpoint on return; reload bootstrap only if the account changed.

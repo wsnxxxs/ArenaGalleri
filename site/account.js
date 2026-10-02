@@ -1,6 +1,6 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
-import { api, arenaText, autoRejected, avatarFace, confirmDialog, injected, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, riskLabels, setFaces, statusBadge, toast } from './platform.js';
+import { api, apiRemembered, arenaText, autoRejected, avatarFace, confirmDialog, injected, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, recall, refreshPlatform, requireUser, reviewCount, riskLabels, setFaces, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf } from './categories.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
@@ -419,23 +419,28 @@ function mine(root, ctx) {
   const empty = { questions: null, works: null, votes: 0, activity: null, receivedReactions: null, joinedAt: null, email: undefined, error: '' };
   // The first draw already shows this account's loading state, so the first load does not redraw it.
   const state = { owner: platform.user?.id ?? null, editing: false, filter: 'all', ...empty };
+  const settle = (data, account) => Object.assign(state, { questions: data.questions, works: data.works, votes: data.votes, activity: data.activity, receivedReactions: data.receivedReactions, joinedAt: data.joinedAt, email: account.user?.email ?? null, error: '' });
+  // A return to the page draws what it showed last time, and the arrival load redraws only if that changed.
+  const known = platform.user ? [recall('me'), recall('auth/me')] : [];
+  if (known.length && known.every(Boolean)) settle(...known);
   let active = true, request = 0;
-  async function load() {
+  async function load(arriving = false) {
     const version = ++request;
     if (state.owner !== (platform.user?.id ?? null)) {
       Object.assign(state, { owner: platform.user?.id ?? null, ...empty });
       draw();
     }
     if (!platform.user) return draw();
+    const before = JSON.stringify(state);
     try {
-      const [data, account] = await Promise.all([api('me'), api('auth/me')]);
+      const [data, account] = await Promise.all([apiRemembered('me'), apiRemembered('auth/me')]);
       if (!active || version !== request) return;
-      Object.assign(state, { questions: data.questions, works: data.works, votes: data.votes, activity: data.activity, receivedReactions: data.receivedReactions, joinedAt: data.joinedAt, email: account.user?.email ?? null, error: '' });
+      settle(data, account);
     } catch (error) {
       if (!active || version !== request) return;
       state.error = error.message;
     }
-    draw();
+    if (!arriving || JSON.stringify(state) !== before) draw();
     watch();
   }
   let poll = 0, polls = 0;
@@ -556,7 +561,8 @@ function mine(root, ctx) {
     if (work) await removeWork(work, { admin: false });
   };
   draw();
-  return { ready: load(), onPlatformChange: load, destroy() { active = false; request++; clearTimeout(poll); root.onsubmit = null; } };
+  const loading = load(true);
+  return { ready: state.works === null ? loading : null, onPlatformChange: () => load(), destroy() { active = false; request++; clearTimeout(poll); root.onsubmit = null; } };
 }
 
 // ---- review queue -----------------------------------------------------------------------------
@@ -975,22 +981,27 @@ const BULK = {
 
 function review(root, ctx) {
   const state = { works: null, audit: [], questions: null, questionsError: '', error: '', tab: null, filter: FILTER_TABS[ctx.param] ?? 'all', picked: new Set() };
+  const settle = (data, questions) => Object.assign(state, { works: data.works, audit: data.audit, error: '',
+    questions: questions.list ?? state.questions ?? [], questionsError: questions.error ?? '' });
+  // A return to the queue draws what it showed last time, and the arrival load redraws only if that changed.
+  const known = platform.user?.role === 'admin' ? recall('review') : null;
+  if (known) settle(known, { list: recall('admin/questions')?.questions });
   let active = true, request = 0;
-  async function load() {
+  async function load(arriving = false) {
     const version = ++request;
     if (platform.user?.role !== 'admin') return draw();
+    const before = JSON.stringify(state);
     try {
       // An older API has no question review; the works tabs keep working without it.
-      const [data, questions] = await Promise.all([api('review'),
-        api('admin/questions').then((body) => ({ list: body.questions }), (error) => ({ error: error.status === 404 ? '后端暂不支持题目审核。' : error.message }))]);
+      const [data, questions] = await Promise.all([apiRemembered('review'),
+        apiRemembered('admin/questions').then((body) => ({ list: body.questions }), (error) => ({ error: error.status === 404 ? '后端暂不支持题目审核。' : error.message }))]);
       if (!active || version !== request) return;
-      Object.assign(state, { works: data.works, audit: data.audit, error: '',
-        questions: questions.list ?? state.questions ?? [], questionsError: questions.error ?? '' });
+      settle(data, questions);
     } catch (error) {
       if (!active || version !== request) return;
       state.error = error.message;
     }
-    draw();
+    if (!arriving || JSON.stringify(state) !== before) draw();
   }
   // Uploads of one bucket: the queues oldest first, decided lists newest first. The decided
   // list (done) gathers four buckets and narrows them by the current filter.
@@ -1256,5 +1267,6 @@ function review(root, ctx) {
     else await removeWork(work, { admin: true });
   };
   draw();
-  return { ready: load(), onPlatformChange: load, destroy() { active = false; request++; root.onchange = null; } };
+  const loading = load(true);
+  return { ready: state.works === null ? loading : null, onPlatformChange: () => load(), destroy() { active = false; request++; root.onchange = null; } };
 }

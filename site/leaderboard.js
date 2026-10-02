@@ -1,7 +1,7 @@
 // Leaderboard: the full page (#/leaderboard[/<category>|/<task>][/<domain>], or #/leaderboard/<domain>)
 // and the panel on each task page.
 import { $, brandMark, esc, icon, pad, store, vendorLine } from './ui.js';
-import { api, platform } from './platform.js';
+import { apiRemembered, platform, recall } from './platform.js';
 import { domainsIn, domainList, domainsOf, tracksOf } from './categories.js';
 
 const UNITS = { config: '按配置', model: '按模型' };
@@ -105,20 +105,30 @@ export function mountBoard(container, ctx) {
     if (none) none.hidden = shown > 0 || !rows.length;
   }
 
+  let drawn = false;
+  function draw(data) {
+    container.innerHTML = table(data) + (ctx.embedded ? boardNotes() : '');
+    applyQuery();
+    ctx.onData?.(data);
+    drawn = true;
+  }
+  // A board seen before draws at once from memory; the fresh one replaces it only if it differs.
   async function load() {
     controller?.abort();
     controller = new AbortController();
+    const params = new URLSearchParams({ by: unit, ...(ctx.task ? { task: ctx.task.id } : { ...(ctx.category ? { category: ctx.category } : {}), ...(ctx.domain ? { domain: ctx.domain } : {}) }) });
+    if (filterable) for (const [field, value] of Object.entries(filters)) if (value) params.set(field, value);
+    const path = `leaderboard?${params}`;
+    const known = recall(path);
+    let fromMemory = false;
     container.setAttribute('aria-busy', 'true');
     try {
-      const params = new URLSearchParams({ by: unit, ...(ctx.task ? { task: ctx.task.id } : { ...(ctx.category ? { category: ctx.category } : {}), ...(ctx.domain ? { domain: ctx.domain } : {}) }) });
-      if (filterable) for (const [field, value] of Object.entries(filters)) if (value) params.set(field, value);
-      const data = await api(`leaderboard?${params}`, { signal: controller.signal });
+      if (known) { draw(known); fromMemory = true; }
+      const data = await apiRemembered(path, { signal: controller.signal });
       if (destroyed) return;
-      container.innerHTML = table(data) + (ctx.embedded ? boardNotes() : '');
-      applyQuery();
-      ctx.onData?.(data);
+      if (JSON.stringify(data) !== JSON.stringify(known)) draw(data);
     } catch (error) {
-      if (error.name === 'AbortError' || destroyed) return;
+      if (error.name === 'AbortError' || destroyed || fromMemory) return;
       container.innerHTML = `<p class="muted">榜单暂时无法载入：${esc(error.message)}</p>`;
     } finally {
       container.removeAttribute('aria-busy');
@@ -140,8 +150,9 @@ export function mountBoard(container, ctx) {
   };
   container.addEventListener('click', onClick);
   container.addEventListener('change', onChange);
+  const loading = load();
   return {
-    ready: load(),
+    ready: drawn ? null : loading,
     reload: load,
     search(value) {
       query = value.trim().toLowerCase();

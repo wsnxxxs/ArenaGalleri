@@ -12,7 +12,7 @@
 //   #/me · #/review           personal center · review queue (platform)
 //   #/terms · #/privacy       terms of use and disclaimer · privacy policy
 import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, store, syncThemeUi, themeButton, versionedMedia } from './ui.js';
-import { STATUS, accountControl, api, arenaText, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, setFaces, statusBadge, toast } from './platform.js';
+import { STATUS, accountControl, api, arenaText, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, requestBootstrap, setFaces, statusBadge, toast } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { representatives, standard, taskCover } from './featured.js';
@@ -1377,24 +1377,42 @@ function mergePlatform() {
 let exhibition = null;
 let page = null;
 let routeVersion = 0;
-// A new route keeps its content hidden while the page gathers its first data, so it fades in
-// once with that data; past this wait it shows the page's own loading state instead.
-const ENTER_WAIT = 200;
-function reveal(version) {
-  if (version !== routeVersion || root.dataset.enter !== 'wait') return;
-  root.dataset.enter = 'play';
-  setTimeout(() => { if (version === routeVersion) delete root.dataset.enter; }, 300);
-}
-// `from` is the address being left; a redraw in place (sign-in, a review) passes none.
+// Following a link is one view transition: the old screen stays up while the new page draws and
+// gathers its first data, for at most HOLD, then the two cross-fade. The top bar and the sidebar
+// keep their own layers (studio.css), so an unchanged shell stays still. Past HOLD the page shows
+// its own loading state and fills in when the data arrives.
+const HOLD = 300;
+const delay = (ms) => new Promise((done) => setTimeout(done, ms));
+// `from` is the address being left; a redraw in place (sign-in, a review) passes none, and the
+// first route of a visit passes ''.
 async function route({ keepScroll = false, from = null } = {}) {
   const version = ++routeVersion;
-  const entering = !keepScroll && from !== null;
-  if (entering) {
-    root.dataset.enter = 'wait';
-    setTimeout(() => reveal(version), ENTER_WAIT);
-  } else delete root.dataset.enter;
   const visit = keepScroll || from === null ? null : retrace(from);
   const scrollBack = keepScroll ? scrollY : visit?.scroll ?? 0;
+  let shown;
+  if (from && document.startViewTransition && document.visibilityState === 'visible') {
+    // A newer route or a theme switch skips this transition; the page is drawn all the same.
+    const transition = document.startViewTransition(async () => {
+      shown = await show(version, visit, scrollBack);
+      await Promise.race([shown?.ready, delay(HOLD)]);
+    });
+    transition.ready.catch(() => {});
+    await transition.updateCallbackDone.catch(() => {});
+  } else shown = await show(version, visit, scrollBack);
+  if (version !== routeVersion || !shown?.ready) return;
+  // A page that loads its data is only as tall as its loading state at first, so the way back
+  // lands its scroll again once the data is drawn, unless the reader has scrolled meanwhile.
+  const landed = scrollY;
+  await shown.ready.catch(() => {});
+  if (version !== routeVersion) return;
+  settleImages();
+  if (shown.scrolls && scrollBack && scrollY === landed) scrollTo(0, scrollBack);
+}
+
+// Tears down the page on screen and draws the one at the address. Resolves to nothing when a
+// newer route has taken over.
+async function show(version, visit, scrollBack) {
+  if (version !== routeVersion) return;
   const parts = location.hash.replace(/^#\/?/, '').split('#')[0].split('/').filter(Boolean).map(decodeURIComponent);
   const [taskId, a, vs, b] = parts;
   const platformPage = Object.hasOwn(PLATFORM_PAGES, taskId ?? '') ? taskId : null;
@@ -1479,16 +1497,7 @@ async function route({ keepScroll = false, from = null } = {}) {
   settleImages();
   const scrolls = !viewer && !page?.fullscreen;
   if (scrolls) scrollTo(0, scrollBack);
-  if (!page?.ready) return reveal(version);
-  // A page that loads its data is only as tall as its loading state at first, so the way back
-  // lands its scroll again once the data is drawn, unless the reader has scrolled meanwhile.
-  const landed = scrollY;
-  await page.ready.catch(() => {});
-  if (version !== routeVersion) return;
-  if (root.dataset.enter === 'wait') reveal(version);
-  else delete root.dataset.enter;
-  settleImages();
-  if (scrolls && scrollBack && scrollY === landed) scrollTo(0, scrollBack);
+  return { ready: page?.ready, scrolls };
 }
 
 // Signing in or out, a review or an upload: merge the new state and redraw what shows it.
@@ -1502,6 +1511,8 @@ onPlatformChange((reason) => {
 });
 
 try {
+  const bootstrap = requestBootstrap();
+  bootstrap.catch(() => {});
   const res = await fetch('data.json', { cache: 'no-cache' });
   if (res.status === 429) {
     const error = new Error('请稍后刷新页面。');
@@ -1512,7 +1523,7 @@ try {
   DATA = await res.json();
   // 媒体缓存钥匙：数据包提交号前 8 位，nginx 长缓存依赖它换包失效。
   globalThis.SAME_PROMPT_CONFIG.assetVersion ??= DATA.buildInfo?.datapack?.slice(0, 8) ?? '';
-  await connectPlatform(DATA.buildInfo);
+  await connectPlatform(DATA.buildInfo, bootstrap);
   MODELS = new Map(DATA.models.map((m) => [m.id, m]));
   resolveModel = modelResolver(DATA.models);
   HARNESSES = new Map((DATA.harnesses ?? []).map((h) => [h.id, h]));
