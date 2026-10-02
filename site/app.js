@@ -1377,9 +1377,22 @@ function mergePlatform() {
 let exhibition = null;
 let page = null;
 let routeVersion = 0;
+// A new route keeps its content hidden while the page gathers its first data, so it fades in
+// once with that data; past this wait it shows the page's own loading state instead.
+const ENTER_WAIT = 200;
+function reveal(version) {
+  if (version !== routeVersion || root.dataset.enter !== 'wait') return;
+  root.dataset.enter = 'play';
+  setTimeout(() => { if (version === routeVersion) delete root.dataset.enter; }, 300);
+}
 // `from` is the address being left; a redraw in place (sign-in, a review) passes none.
 async function route({ keepScroll = false, from = null } = {}) {
   const version = ++routeVersion;
+  const entering = !keepScroll && from !== null;
+  if (entering) {
+    root.dataset.enter = 'wait';
+    setTimeout(() => reveal(version), ENTER_WAIT);
+  } else delete root.dataset.enter;
   const visit = keepScroll || from === null ? null : retrace(from);
   const scrollBack = keepScroll ? scrollY : visit?.scroll ?? 0;
   const parts = location.hash.replace(/^#\/?/, '').split('#')[0].split('/').filter(Boolean).map(decodeURIComponent);
@@ -1432,7 +1445,7 @@ async function route({ keepScroll = false, from = null } = {}) {
   } else if (!t) notFound(`没有 id 为「${taskId}」的题目。`);
   else if (inExhibition) {
     document.body.classList.remove('has-tray');
-    root.innerHTML = '<main class="empty-page wrap"><p>正在打开预览…</p></main>';
+    root.innerHTML = `${galleryStageHeader(t, a)}<main class="page empty-page wrap"><p class="muted">正在打开预览…</p></main>`;
     try {
       const create = a === 'sandtable'
         ? (await import('./sandtable.js')).createSandtable
@@ -1464,7 +1477,18 @@ async function route({ keepScroll = false, from = null } = {}) {
   }
   syncThemeUi();
   settleImages();
-  if (!viewer && !page?.fullscreen) scrollTo(0, scrollBack);
+  const scrolls = !viewer && !page?.fullscreen;
+  if (scrolls) scrollTo(0, scrollBack);
+  if (!page?.ready) return reveal(version);
+  // A page that loads its data is only as tall as its loading state at first, so the way back
+  // lands its scroll again once the data is drawn, unless the reader has scrolled meanwhile.
+  const landed = scrollY;
+  await page.ready.catch(() => {});
+  if (version !== routeVersion) return;
+  if (root.dataset.enter === 'wait') reveal(version);
+  else delete root.dataset.enter;
+  settleImages();
+  if (scrolls && scrollBack && scrollY === landed) scrollTo(0, scrollBack);
 }
 
 // Signing in or out, a review or an upload: merge the new state and redraw what shows it.

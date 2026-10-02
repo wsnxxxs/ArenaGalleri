@@ -417,7 +417,8 @@ function pickTask(ctx) {
 // ---- personal center: profile, activity, questions, works -------------------------------------
 function mine(root, ctx) {
   const empty = { questions: null, works: null, votes: 0, activity: null, receivedReactions: null, joinedAt: null, email: undefined, error: '' };
-  const state = { owner: null, editing: false, filter: 'all', ...empty };
+  // The first draw already shows this account's loading state, so the first load does not redraw it.
+  const state = { owner: platform.user?.id ?? null, editing: false, filter: 'all', ...empty };
   let active = true, request = 0;
   async function load() {
     const version = ++request;
@@ -555,8 +556,7 @@ function mine(root, ctx) {
     if (work) await removeWork(work, { admin: false });
   };
   draw();
-  load();
-  return { onPlatformChange: load, destroy() { active = false; request++; clearTimeout(poll); root.onsubmit = null; } };
+  return { ready: load(), onPlatformChange: load, destroy() { active = false; request++; clearTimeout(poll); root.onsubmit = null; } };
 }
 
 // ---- review queue -----------------------------------------------------------------------------
@@ -1256,6 +1256,5 @@ function review(root, ctx) {
     else await removeWork(work, { admin: true });
   };
   draw();
-  load();
-  return { onPlatformChange: load, destroy() { active = false; request++; root.onchange = null; } };
+  return { ready: load(), onPlatformChange: load, destroy() { active = false; request++; root.onchange = null; } };
 }

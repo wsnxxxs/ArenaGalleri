@@ -86,9 +86,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; line-heig
 .wrap { width: min(100%, var(--wrap) + var(--gutter) * 2); margin-inline: auto; padding-inline: var(--gutter); }
 .i { width: 1.15em; height: 1.15em; flex: none; }
 
-/* Content fades up on each route; images fade in once decoded. */
-.page { animation: rise 0.5s var(--ease) both; }
-@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+/* Images fade in once decoded; the route fade lives in studio.css. */
 img[loading="lazy"], .result-media img, .mosaic img { opacity: 0; transition: opacity 0.5s ease, transform 0.8s var(--ease), filter 0.5s ease; }
 img.is-loaded { opacity: 1; }
 

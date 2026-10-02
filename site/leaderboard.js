@@ -140,8 +140,8 @@ export function mountBoard(container, ctx) {
   };
   container.addEventListener('click', onClick);
   container.addEventListener('change', onChange);
-  load();
   return {
+    ready: load(),
     reload: load,
     search(value) {
       query = value.trim().toLowerCase();
@@ -198,7 +198,7 @@ export function mount(root, ctx) {
     nav: ctx.sideNav('榜单范围', [['#/leaderboard', 'rank', '综合', !track && !task && !domain, ctx.DATA.tasks.length],
       ...tracks.map((x) => [`#/leaderboard/${encodeURIComponent(x.slug)}`, x.glyph, x.label, x === track, x.tasks.length])]) })}
     <section class="block wrap">
-      <div data-board></div>
+      <div data-board><p class="muted">正在载入榜单…</p></div>
       ${boardNotes()}
     </section>
   ${ctx.pageEnd()}`;
@@ -226,6 +226,7 @@ export function mount(root, ctx) {
   root.addEventListener('input', onInput);
   document.title = `榜单 · ${scopeTitle} · ${ctx.DATA.title}`;
   return {
+    ready: board.ready,
     onPlatformChange: () => board.reload(),
     destroy: () => {
       board.destroy();

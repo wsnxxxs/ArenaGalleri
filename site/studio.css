@@ -4,7 +4,9 @@
 html { scrollbar-width: thin; scrollbar-color: var(--line-2) var(--bg); }
 body { font-size: 14px; }
 a { text-decoration: none; }
-.page { animation: studio-in .25s ease both; }
+/* A route fades its content in once: hidden while the page gathers its first data, then shown. Redraws do not fade. */
+#app[data-enter="wait"] .page { opacity: 0; }
+#app[data-enter="play"] .page { animation: studio-in .25s ease both; }
 @keyframes studio-in { from { opacity: 0; } }
 .btn { min-height: 38px; padding: 7px 15px; background: var(--surface); color: var(--ink-2); font-size: 13px; line-height: 1.5; }
 .btn:hover { background: var(--surface-2); border-color: var(--muted); color: var(--ink); }
