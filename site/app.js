@@ -573,8 +573,6 @@ function renderTask(t) {
     Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, variants: new Map(), open: new Set() });
     taskScores = new Map();
   }
-  taskBoard?.destroy?.();
-  taskBoard = null;
   taskState.cond = t.conditions.some((c) => c.id === taskState.cond) ? taskState.cond : t.conditions[0]?.id;
   const vendorCounts = new Map();
   for (const r of t.results) vendorCounts.set(vendorOf(r), (vendorCounts.get(vendorOf(r)) ?? 0) + 1);
@@ -733,6 +731,24 @@ function renderTask(t) {
         setTimeout(() => { copy.textContent = '复制'; }, 1500);
       }, () => { copy.textContent = '复制失败'; });
     }
+  };
+}
+
+// The task page as the router sees it: its panel from the address, the card models as its first
+// load, and its board, models and compare tray gone with it.
+function taskPage(t) {
+  renderTask(t);
+  activatePanel(location.hash.split('#')[2], false);
+  return {
+    ready: updateResultPreviews(t),
+    destroy() {
+      taskBoard?.destroy?.();
+      taskBoard = null;
+      ++previewVersion;
+      resultPreviews?.destroy();
+      resultPreviews = null;
+      document.body.classList.remove('has-tray');
+    },
   };
 }
 
@@ -927,7 +943,6 @@ const lightbox = (() => {
 // ---- viewer ---------------------------------------------------------------------------
 // Kept alive across hash changes inside the same task so switching one pane
 // does not reload the other.
-let viewer = null;
 const wide = () => matchMedia('(min-width: 1100px)').matches;
 
 // Provenance of an upload in the guide drawer: its review state and how it was made.
@@ -1212,8 +1227,9 @@ function createViewer(t) {
   return {
     task: t,
     update,
+    fullscreen: true,
     // Review state or reactions changed elsewhere; the frames stay as they are.
-    refresh() {
+    onPlatformChange() {
       $('.vselect', el).innerHTML = options();
       $$('[data-pane-pick]', stage).forEach((select) => { select.innerHTML = options(); });
       state.panes = state.panes.filter(byId);
@@ -1374,7 +1390,6 @@ function mergePlatform() {
   }
 }
 
-let exhibition = null;
 let page = null;
 let routeVersion = 0;
 // Following a link is one view transition: the old screen stays up while the new page draws and
@@ -1409,6 +1424,20 @@ async function route({ keepScroll = false, from = null } = {}) {
   if (shown.scrolls && scrollBack && scrollY === landed) scrollTo(0, scrollBack);
 }
 
+// Every address shows one page. A page is whatever its renderer returns, all fields optional:
+//   ready             a promise for its first data (route waits on it, see above)
+//   fullscreen        it keeps its own scroll
+//   onPlatformChange  it redraws itself when the session or reviews change; without it the
+//                     router draws the page again in place
+//   destroy           it lets go of timers, listeners and frames
+// Pages may also set root.on* handlers; tearing a page down clears them.
+function teardown() {
+  page?.destroy?.();
+  page = null;
+  root.onclick = root.onchange = root.oninput = root.onsubmit = root.onkeydown = null;
+  lightbox.close();
+}
+
 // Tears down the page on screen and draws the one at the address. Resolves to nothing when a
 // newer route has taken over.
 async function show(version, visit, scrollBack) {
@@ -1419,83 +1448,56 @@ async function show(version, visit, scrollBack) {
   const t = platformPage ? null : DATA.tasks.find((x) => x.id === taskId);
   const inExhibition = t && hasExhibition(t) && (a === 'exhibition' || a === 'sandtable');
   const inViewer = t && a && !inExhibition;
-  exhibition?.destroy();
-  exhibition = null;
-  page?.destroy?.();
-  page = null;
-  taskBoard?.destroy?.();
-  taskBoard = null;
-  ++previewVersion;
-  resultPreviews?.destroy();
-  resultPreviews = null;
+  const ids = inViewer ? [a, vs === 'vs' ? b : null].filter(Boolean) : [];
+  const works = ids.filter((id, i) => t.results.some((r) => r.id === id) && ids.indexOf(id) === i);
 
-  if (viewer && (!inViewer || viewer.task !== t)) {
-    viewer.destroy();
-    viewer = null;
-  }
-  root.onclick = null;
-  root.onchange = null;
-  root.oninput = null;
-  root.onsubmit = null;
-  root.onkeydown = null;
-  lightbox.close();
-  if (!(t && !inViewer)) document.body.classList.remove('has-tray');
-
-  if (!taskId) {
-    renderLanding(root, context());
-  } else if (taskId === 'questions') {
-    page = renderLibrary(parts.slice(1), Boolean(visit && !visit.returning));
-  } else if (taskId === 'terms' || taskId === 'privacy') {
-    page = renderLegal(root, context(), taskId);
-  } else if (platformPage) {
-    if (!platform.available) platformOffline(platformPage);
-    else {
-      root.innerHTML = `${header([{ text: PAGE_TITLES[platformPage] }], false, PAGE_SECTIONS[platformPage])}<main class="page wrap empty-page"><p class="muted">正在打开…</p></main>`;
+  // The viewer stays up while the address moves between works of its task, so switching one pane
+  // does not reload the other.
+  if (works.length && page?.task === t) page.update(works);
+  else {
+    teardown();
+    if (!taskId) page = renderLanding(root, context());
+    else if (taskId === 'questions') page = renderLibrary(parts.slice(1), Boolean(visit && !visit.returning));
+    else if (taskId === 'terms' || taskId === 'privacy') page = renderLegal(root, context(), taskId);
+    else if (platformPage) {
+      if (!platform.available) platformOffline(platformPage);
+      else {
+        root.innerHTML = `${header([{ text: PAGE_TITLES[platformPage] }], false, PAGE_SECTIONS[platformPage])}<main class="page wrap empty-page"><p class="muted">正在打开…</p></main>`;
+        try {
+          const module = await import(PLATFORM_PAGES[platformPage]);
+          if (version !== routeVersion) return;
+          page = module.mount(root, { ...context(), route: platformPage, param: a ?? null });
+        } catch (error) {
+          if (version !== routeVersion) return;
+          root.innerHTML = `${header()}<main class="page wrap empty-page"><h1>页面加载失败</h1><p>${esc(error.message)}</p><a class="btn" href="#/">回到首页</a></main>`;
+        }
+      }
+    } else if (!t) notFound(`没有 id 为「${taskId}」的题目。`);
+    else if (inExhibition) {
+      root.innerHTML = `${galleryStageHeader(t, a)}<main class="page empty-page wrap"><p class="muted">正在打开预览…</p></main>`;
       try {
-        const module = await import(PLATFORM_PAGES[platformPage]);
+        const create = a === 'sandtable'
+          ? (await import('./sandtable.js')).createSandtable
+          : (await import('./exhibition.js')).createExhibition;
         if (version !== routeVersion) return;
-        page = module.mount(root, { ...context(), route: platformPage, param: a ?? null });
+        const curated = curatedTask(t);
+        const stage = create(root, curated, { label, vendorOf, cover, header: galleryStageHeader(t, a), initial: (vs ?? '').split(',').filter((id) => curated.results.some((r) => r.id === id)) });
+        // The 3D views show curated works only, so a review elsewhere changes nothing here.
+        page = { destroy: () => stage.destroy(), onPlatformChange() {} };
       } catch (error) {
         if (version !== routeVersion) return;
-        root.innerHTML = `${header()}<main class="page wrap empty-page"><h1>页面加载失败</h1><p>${esc(error.message)}</p><a class="btn" href="#/">回到首页</a></main>`;
+        root.innerHTML = `<main class="empty-page wrap"><h1>展厅加载失败</h1><p>${esc(error.message)}</p><a class="btn" href="${taskHref(t)}">返回作品</a></main>`;
       }
-    }
-  } else if (!t) notFound(`没有 id 为「${taskId}」的题目。`);
-  else if (inExhibition) {
-    document.body.classList.remove('has-tray');
-    root.innerHTML = `${galleryStageHeader(t, a)}<main class="page empty-page wrap"><p class="muted">正在打开预览…</p></main>`;
-    try {
-      const create = a === 'sandtable'
-        ? (await import('./sandtable.js')).createSandtable
-        : (await import('./exhibition.js')).createExhibition;
-      if (version !== routeVersion) return;
-      const curated = curatedTask(t);
-      exhibition = create(root, curated, { label, vendorOf, cover, header: galleryStageHeader(t, a), initial: (vs ?? '').split(',').filter((id) => curated.results.some((r) => r.id === id)) });
-    } catch (error) {
-      if (version !== routeVersion) return;
-      root.innerHTML = `<main class="empty-page wrap"><h1>展厅加载失败</h1><p>${esc(error.message)}</p><a class="btn" href="${taskHref(t)}">返回作品</a></main>`;
-    }
-  } else if (!inViewer) {
-    renderTask(t);
-    activatePanel(location.hash.split('#')[2], false);
-    await updateResultPreviews(t);
-    if (version !== routeVersion) return;
-  } else {
-    const ids = [a, vs === 'vs' ? b : null].filter(Boolean);
-    const valid = ids.filter((id, i) => t.results.some((r) => r.id === id) && ids.indexOf(id) === i);
-    if (!valid.length) {
-      viewer?.destroy();
-      viewer = null;
-      notFound(`「${t.title}」下没有 id 为「${a}」的作品。`);
-    }
+    } else if (!inViewer) page = taskPage(t);
+    else if (!works.length) notFound(`「${t.title}」下没有 id 为「${a}」的作品。`);
     else {
-      viewer ??= createViewer(t);
-      viewer.update(valid);
+      page = createViewer(t);
+      page.update(works);
     }
   }
   syncThemeUi();
   settleImages();
-  const scrolls = !viewer && !page?.fullscreen;
+  const scrolls = !page?.fullscreen;
   if (scrolls) scrollTo(0, scrollBack);
   return { ready: page?.ready, scrolls };
 }
@@ -1505,8 +1507,6 @@ onPlatformChange((reason) => {
   mergePlatform();
   refreshAccountControls();
   if (page?.onPlatformChange) return page.onPlatformChange(reason);
-  if (viewer) return viewer.refresh();
-  if (exhibition) return;
   route({ keepScroll: true });
 });
 

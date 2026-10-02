@@ -29,7 +29,7 @@
 
 `site/arena.js` 是画廊原有界面模块，不是另一前端的合并副本。
 
-平台页模块的 `mount(root, ctx)` 返回 `{ ready, onPlatformChange, destroy }`。`ready` 是首批数据画完的 Promise；已经从记忆画好时为 null，也可以省略。点链接切换页面是一次 View Transition：在回调里拆掉旧页、画新页，等 `ready` 完成，最多等 300ms（`HOLD`），然后交叉淡入。等待期间旧画面保持不动。顶栏（`#app > .topbar`）和侧栏（`.app-sidebar`）有各自的 `view-transition-name`，内容相同的话过渡时看不出变化。浏览器不支持 View Transition、标签页在后台，或者是首屏、同页重画时，直接绘制。数据超过 HOLD 才到的页面先显示自己的载入状态，到了再原地补上。返回上一页时，等 `ready` 后再恢复一次滚动位置；如果读者在等待期间自己滚动过，就不再恢复。
+每个地址只对应一个页面：路由在 `app.js` 的 `show()` 里只保存一个 `page`。首页、题库、条款、题目页、作品查看器、展厅 / 沙盘和各平台页的渲染函数都返回同样的对象，字段都可以省略：`ready` 是首批数据画完的 Promise，已经从记忆画好时为 null；`fullscreen` 表示页面自己管理滚动；`onPlatformChange(reason)` 表示登录或审核状态变化时页面自己重画，没有这个字段时路由会原地重画整页；`destroy()` 用来释放定时器、监听器和 iframe。页面可以直接设置 `root.on*` 事件，拆页时由路由统一清掉。作品查看器在同一道题的作品之间切换时不拆掉，只调用 `update`，已经打开的那一栏不会重新载入。点链接切换页面是一次 View Transition：在回调里拆掉旧页、画新页，等 `ready` 完成，最多等 300ms（`HOLD`），然后交叉淡入。等待期间旧画面保持不动。顶栏（`#app > .topbar`）和侧栏（`.app-sidebar`）有各自的 `view-transition-name`，内容相同的话过渡时看不出变化。浏览器不支持 View Transition、标签页在后台，或者是首屏、同页重画时，直接绘制。数据超过 HOLD 才到的页面先显示自己的载入状态，到了再原地补上。返回上一页时，等 `ready` 后再恢复一次滚动位置；如果读者在等待期间自己滚动过，就不再恢复。
 
 页面进入时读取的数据（`me`、`auth/me`、`review`、`admin/questions`、各榜单）用 `platform.js` 的 `apiRemembered` 读取，按账号记住上一次的结果。回到页面时先用 `recall` 画出上次的内容，后台刷新；结果有变化才重画。同页操作或平台状态变化引起的刷新一律重画。
 

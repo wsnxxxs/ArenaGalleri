@@ -297,7 +297,6 @@ export function mount(root, ctx) {
   // Cards shuffle and a random other question comes up on its own, pausing while the pointer or focus is on the hero.
   const TICK = 100;
   const timer = setInterval(() => {
-    if (!root.contains(deck)) return clearInterval(timer);
     if (!playing || hovering || document.visibilityState !== 'visible') return;
     sinceShuffle += TICK;
     if (autoQuestion) {
@@ -318,7 +317,6 @@ export function mount(root, ctx) {
   // The scroll cue on the fold fades once the page has moved; its click glides to the next section.
   const cue = root.querySelector('.home-scroll');
   const onScroll = () => {
-    if (!root.contains(cue)) return removeEventListener('scroll', onScroll);
     cue.classList.toggle('is-gone', scrollY > 60);
   };
   addEventListener('scroll', onScroll, { passive: true });
@@ -364,4 +362,11 @@ export function mount(root, ctx) {
   if (decks.length) show(pick([...decks.keys()]));
   else hero.classList.add('is-empty');
   document.title = `${ctx.DATA.title} · ${ctx.DATA.subtitle}`;
+  return {
+    destroy() {
+      clearInterval(timer);
+      removeEventListener('scroll', onScroll);
+      near.disconnect();
+    },
+  };
 }

@@ -1,6 +1,25 @@
 # HANDOFF.md · 当前状态
 
-## 页面切换加载过程整理 · 第二步（2026-10-03，已提交，未推送、未部署）
+## 四仓协调发布（2026-10-03，源码就绪，联调部署进行中）
+
+- 本轮整合主分支与本地功能并通过源码门禁；固定构建与上线验收尚待完成，实际结果随后追加到本轮归档。
+
+## 核验增加娱乐作品勾选（2026-10-02，分支 review-entertainment-option，未合并）
+
+- 审核弹窗「通过核验」旁增加「娱乐作品（进竞技场收件箱）」，默认不勾。通过时显式发送 `entertainment: true` 或 `false`。
+- `npm run check` 46 个文件 0 错，`npm test` 18/18。仓库没有 typecheck 和 lint 脚本。`npm run build` 本轮未跑：构建会去取私有数据包。
+- 勾选往返用本机 Edge 打开真实 `openReview`：不勾请求体 `entertainment: false`，勾上为 `true`。脚本 `scripts/check-review-entertainment.mjs`。未连生产。
+
+
+## 页面切换加载过程整理 · 第三步（2026-10-03，本地完成，未提交、未推送、未部署）
+
+- 用户确认后提交第二步 794f5cb，接着做第三步：统一页面生命周期。三步合并的归档见 [归档](docs/archive/2026-10-03-route-loading-wsnxxxs.md)。
+- app.js：路由只保存一个 `page`。首页、题库、条款、题目页（新增 `taskPage`）、作品查看器、展厅 / 沙盘和平台页都返回同样的对象（ready / fullscreen / onPlatformChange / destroy）。原来 route 开头逐个清理 viewer、exhibition、taskBoard、resultPreviews、previewVersion、has-tray，现在由各页面的 destroy 负责；拆页统一走 `teardown()`。查看器在同一道题的作品之间切换时只调用 `update`。onPlatformChange 简化为「页面自己处理，否则原地重画」。删掉了全局的 viewer / exhibition 变量。
+- home.js：返回 destroy，清掉轮播定时器、scroll 监听和 IntersectionObserver，不再靠每次 tick 检查 `root.contains` 自行退出。
+- 没有做：顶栏和侧栏的 DOM 仍随页面重建。各页面的顶栏内容（面包屑、返回目标、当前板块）都不同，要保留 DOM 就得做一个能原地更新的顶栏组件，并改所有页面的模板；第二步的 View Transition 已经让它们在视觉上不动，所以这一项没做，由用户决定是否需要。
+- 验证：check 49/0、test 19/19。author-mock 中，面板在后台时逐一打开首页、题库、首页、条款、题目页、个人中心、审核、盲评、沙盘和 404：首页定时器离开后归零；is-viewer 离开沙盘后清除；没有 error 或 unhandledrejection。查看器从单栏切到并排、再换右栏时，是同一个 viewer，左栏 iframe 保留。调用 refreshPlatform 时：查看器与 iframe 保留；题目页和个人中心原地重画。面板可见时连续 5 次切换启动了 5 个 View Transition，面板渲染暂停期间 DOM 不更新，恢复后停在最后一个地址。未测手机、浅色主题、Safari / Firefox、管理员审核和真实后端；未运行 build / intake（没改构建和数据）。
+
+## 页面切换加载过程整理 · 第二步（2026-10-03，已提交 794f5cb，未推送、未部署）
 
 - 用户确认后提交第一步 7a82988，接着做第二步。顶栏不再整页闪烁、旧页面保留到新页面就绪，这两点都改用 View Transition 实现，不重写页面外壳。原因是各页面仍然自己输出含顶栏的整页 HTML，真正保留外壳 DOM 要改所有页面，留到第三步统一生命周期时再做。第一步的 `data-enter` 机制由 View Transition 取代，已经删除。
 - 改动：

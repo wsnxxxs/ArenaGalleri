@@ -613,7 +613,7 @@ async function saveMeta(w, meta) {
 }
 
 // Save information fixes before the decision; only verification needs a complete record.
-function openReview(ctx, w, { questions = [], onDecided } = {}) {
+export function openReview(ctx, w, { questions = [], onDecided } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task) ?? questions.find((q) => q.id === w.task);
   // An unregistered model without a declared vendor shows what its name suggests.
   const guess = w.model || w.vendor ? '' : ctx.modelOf({ modelName: w.modelName }).vendor;
@@ -646,6 +646,7 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
           <div class="review-meta-actions"><button type="button" class="btn sm" data-save-meta>只保存信息</button></div>
         </details>
         <p class="fine">${w.status === 'verified' ? `现在：${esc(doneLine(w))}` : '通过后公开到展览馆；单轮生成且无人工介入的作品同时进入盲评。'}</p>
+        ${w.status === 'verified' ? '' : '<label class="field"><span class="field-label"><input type="checkbox" name="toInbox"> 娱乐作品（进竞技场收件箱）</span><small>勾选后不进展览馆，也不进任何池子</small></label>'}
         <label class="field"><span class="field-label">存疑原因<small>标记存疑时必填，作者与访客都能看到</small></span><textarea class="input" name="reason" rows="3" maxlength="500">${esc(w.status === 'questioned' ? w.reason : '')}</textarea></label>
         <p class="form-error" role="alert"></p>
         <div class="sheet-actions">
@@ -702,6 +703,8 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
       if (status === 'questioned' && !form.reason.value.trim()) throw new Error('标记存疑时请写明原因，作者和访客都会看到');
       meta = editor.collect(status === 'verified');
       body = { status, reason: status === 'questioned' ? form.reason.value : '' };
+      const toInbox = form.elements.namedItem('toInbox');
+      if (status === 'verified' && toInbox) body.entertainment = toInbox.checked;
     } catch (err) {
       error.textContent = err.message;
       $('.review-meta', form).open = true;
