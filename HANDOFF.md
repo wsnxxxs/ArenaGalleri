@@ -1,5 +1,11 @@
 # HANDOFF.md · 当前状态
 
+## 核验增加娱乐作品勾选（2026-10-02，分支 review-entertainment-option，未合并）
+
+- 审核弹窗「通过核验」旁增加「娱乐作品（进竞技场收件箱）」，默认不勾。通过时显式发送 `entertainment: true` 或 `false`。
+- `npm run check` 46 个文件 0 错，`npm test` 18/18。仓库没有 typecheck 和 lint 脚本。`npm run build` 本轮未跑：构建会去取私有数据包。
+- 勾选往返用本机 Edge 打开真实 `openReview`：不勾请求体 `entertainment: false`，勾上为 `true`。脚本 `scripts/check-review-entertainment.mjs`。未连生产。
+
 ## 四仓协调发布完成（2026-10-02）
 
 - 固定源码 3e441a3 已提交、推送，并在 2026-10-02T10:04:51Z 与 Show1 / 新后端协调上线；两端显式私有消费 pin 一致，公开仓没有真实配置或生成物入库。2384 文件集合与 SHA-256 全匹配，新旧目录整体切换，gallery.prev 保留。见[发布归档](docs/archive/2026-10-02-shared-session-release-wsnxxxs.md)。
