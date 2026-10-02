@@ -1,5 +1,19 @@
 # HANDOFF.md · 当前状态
 
+## 四仓发布准备（2026-10-02，用户已授权提交、推送、部署）
+
+- 整理此前九条待推送提交与返回页面的会话检测，身份按认证 GitHub 用户 wsnxxxs / noreply。只提交源码和文档，私有 pin、凭据与生成物不入库。
+- 本轮 check 45/0、test 18/18。新数据包、固定版本构建、联调与线上验收尚待执行；不将准备记录称为已发布。见[准备归档](docs/archive/2026-10-02-shared-session-release-preparation-wsnxxxs.md)。
+
+## 共用会话收尾：返回页面时检查账号（2026-10-02，本地完成，未提交、未推送、未部署）
+
+- 仅修改 site/platform.js 并追加本节。窗口 focus、visibilitychange 变为 visible、pageshow 且 persisted 时复用 api('auth/me')；只有返回的 user id 与 platform.user?.id 不同（含 null 登录 / 登出切换）才 refreshPlatform('session')，继续现有 onPlatformChange → refreshAccountControls 链路。未增加每次返回的 bootstrap 请求。
+- 检查至少间隔 5 秒，同一时间只允许一个在途检查（含随后 bootstrap 刷新）；platform.available=false 时跳过，网络失败静默保留现状。沿用现有 API 基址和 include，不改其他账号流程、UI 或数据配置。
+- npm run check 45 文件 / 0 错、npm test 18/18、npm run build 182 件 / 57 site 文件、CI=1 npm run check:intake 0 错 / 8 既有提示、git diff --check 通过。构建复用已验证的本地数据包，未改私有配置、生产 pin 或作品资源。
+- 生产构建的本地隔离浏览器验收通过：第二标签页的合成登录 Cookie 后，Gallery 模拟 focus 更新为头像和账号入口；第二标签页登出后模拟可见事件更新为未登录按钮；persisted=true 的 pageshow 模拟恢复也更新账号。每次 id 变化只增加一次 auth/me 和一次 bootstrap；同账号返回及恢复网络只增加轻量检查，bootstrap 计数保持。连续三类事件受节流，6500ms 慢请求超过节流间隔后再次派发事件仍仅一个在途请求；隐藏事件、非 persisted pageshow、平台不可用均不请求。浏览器离线时账号和控件保持、不弹提示，恢复联网后可继续检查。桌面截图已目检。
+- 验收使用合成 Cookie / API 与手动派发返回事件；无头 CLI 切换目标页不产生真实 OS focus，故不把上述模拟称为生产两站登录或真实 BFCache 恢复验收。未接真实账号、SMTP、Turnstile 或生产 API，未做无关作品全量交互 / 手机回归。控制页 favicon 404 与预期离线网络错误保留在日志，不声明零网络错误。
+- 证据在忽略目录 output/playwright/shared-session-followup-20261002/browser-results.json、http-results.json 和 signed-in.png；本轮浏览器与临时服务已关闭。Show1 独立 API lint 和后端认证 / 发布文档同步见各自 HANDOFF。未 commit、push、部署或写归档；上线后仍按后端部署文档验收两站登录互通。
+
 ## 通过即公开：审核页简化（2026-10-02，本地提交，未推送、未部署）
 
 - 用户拍板新规则：核验通过即公开到展览馆，单轮生成且无人工介入的作品自动进入盲评；管理员只处理例外。查证 show_arena 只决定 Gallery 正式盲评池（Show1 站点作品列表用 show_entertainment，前端未调用 /api/show1/works），改默认不影响另一站点。

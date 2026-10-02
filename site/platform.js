@@ -97,6 +97,27 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
   return resolveApiMedia(data, endpoint);
 }
 
+// Check the lightweight session endpoint on return; reload bootstrap only if the account changed.
+let sessionCheckedAt = 0;
+let sessionChecking = false;
+async function checkSession() {
+  if (!platform.available || sessionChecking || Date.now() - sessionCheckedAt < 5000) return;
+  sessionCheckedAt = Date.now();
+  sessionChecking = true;
+  try {
+    const { user } = await api('auth/me');
+    if ((user?.id ?? null) !== (platform.user?.id ?? null)) await refreshPlatform('session');
+  } catch { /* A network failure does not prove the session changed. */ }
+  finally { sessionChecking = false; }
+}
+window.addEventListener('focus', checkSession);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') void checkSession();
+});
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) void checkSession();
+});
+
 // ---- status -------------------------------------------------------------------------------
 export const STATUS = {
   verified: { label: '已验证', hint: '已核验并公开；单轮生成且无人工介入的作品参与盲评', icon: 'check' },
