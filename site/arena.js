@@ -4,7 +4,7 @@
 import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
 import { api, needsEmail, platform, reactionBar, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
-import { tracksOf } from './categories.js';
+import { domainsOf, tracksOf } from './categories.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', skip: '你跳过了这一组' };
@@ -42,7 +42,7 @@ function lobby(root, ctx) {
     const open = ready(t);
     return `<li class="arena-task${open ? '' : ' is-closed'}"><a ${open ? `href="#/arena/${esc(t.id)}"` : 'aria-disabled="true"'}>
       <span class="num">No.${pad(ctx.DATA.tasks.indexOf(t) + 1)}</span>
-      <span class="arena-task-title"><b>${esc(t.title)}</b><small>${esc(t.summary)}</small></span>
+      <span class="arena-task-title"><b>${esc(t.title)}</b><small>${esc([domainsOf(t).join('、'), t.summary].filter(Boolean).join(' · '))}</small></span>
       <span class="arena-task-meta">可盲评 ${p.works} 件<br>${p.entries} 个配置</span>
       <span class="arena-task-go">${open ? `开始${icon('right')}` : '作品不足'}</span>
     </a></li>`;
@@ -51,7 +51,7 @@ function lobby(root, ctx) {
   function list() {
     const query = view.query.trim().toLowerCase();
     const scoped = ctx.DATA.tasks.filter((t) => (!view.track || t.category === view.track)
-      && (!query || `${t.title} ${t.summary}`.toLowerCase().includes(query)));
+      && (!query || [t.title, t.summary, ...domainsOf(t)].join(' ').toLowerCase().includes(query)));
     const open = scoped.filter(ready);
     const closed = scoped.filter((t) => !ready(t));
     const meta = `${open.length} 道题可以开始${closed.length ? ` · ${closed.length} 道作品不足` : ''}`;
@@ -75,7 +75,7 @@ function lobby(root, ctx) {
     const open = openTasks();
     const track = tracks.find((x) => x.name === view.track);
     const link = (name, glyph, text, count) => `<button class="side-link" data-arena-track="${esc(name)}" aria-pressed="${view.track === name}">${icon(glyph)}${esc(text)}<span class="nav-count">${count}</span></button>`;
-    root.innerHTML = `${ctx.pageStart({ title: '盲评', section: 'arena', heading: track ? `${track.name}题目` : '全部题目',
+    root.innerHTML = `${ctx.pageStart({ title: '盲评', section: 'arena', heading: track ? `${track.label}题目` : '全部题目',
       caption: `<label class="collection-search">${icon('search')}<input type="search" data-arena-search aria-label="搜索题目" placeholder="搜索题目" value="${esc(view.query)}"></label>`,
       description: '同一道题，两件匿名作品。只凭体验选出你更认可的一件，投票后揭晓模型身份。',
       meta: `<dl class="side-stats">
@@ -84,7 +84,7 @@ function lobby(root, ctx) {
             ${platform.user ? `<div><dt>你已评</dt><dd>${pad(platform.me?.votes ?? 0)}</dd></div>` : ''}
           </dl>${open.length ? `<button class="btn primary side-cta" data-random>${icon('blind')}随机一道题</button>` : ''}
           ${platform.user ? '' : '<p class="side-note">未登录可以体验，选择不计入榜单。<button class="link" data-auth="login">登录</button></p>'}`,
-      nav: `<nav class="side-nav section-nav" aria-label="盲评题型">${link('', 'grid', '全部', open.length)}${tracks.map((x) => link(x.name, x.glyph, x.name, x.tasks.filter(ready).length)).join('')}</nav>` })}
+      nav: `<nav class="side-nav section-nav" aria-label="盲评题型">${link('', 'grid', '全部', open.length)}${tracks.map((x) => link(x.name, x.glyph, x.label, x.tasks.filter(ready).length)).join('')}</nav>` })}
       <section class="block wrap">
         <div data-arena-list>${list()}</div>
         <details class="board-notes">
