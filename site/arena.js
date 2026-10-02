@@ -177,7 +177,7 @@ function match(root, ctx, task) {
     const model = ctx.MODELS.get(work.model) ?? { name: work.modelName };
     const chosen = state.result.choice === side;
     return `<span class="pane-letter">${letter(side)}</span>${brandMark(model, 'brand-mark sm')}
-      <span class="arena-who revealed"><b>${esc(work.modelName)}</b>${work.effort ? `<span class="badge">${esc(work.effort)}</span>` : ''}<small>${esc(work.title)}${work.curated ? '' : ' · 投稿'}</small></span>
+      <span class="arena-who revealed"><b>${esc(work.modelName)}</b>${work.effort ? `<span class="badge">${esc(work.effort)}</span>` : ''}<small>${esc(work.title)}</small></span>
       ${chosen ? '<span class="chosen-tag">你的选择</span>' : ''}
       ${reactionBar(`${task.id}/${work.id}`, { locked: work.status === 'questioned' })}
       <a class="pane-close" href="#/${esc(task.id)}/${esc(work.id)}" title="在展厅中打开" aria-label="在展厅中打开 ${esc(work.title)}">${icon('arrow')}</a>`;

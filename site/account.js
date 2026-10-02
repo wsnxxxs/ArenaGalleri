@@ -130,11 +130,15 @@ const FACE_ACTIONS = {
   restore: ['恢复公开', { show_gallery: true, show_arena: true }, '已恢复公开'],
   hide: ['撤下', { show_gallery: false, show_arena: false }, '已撤下'],
 };
-const faceButton = (w, action, primary = false) => `<button class="btn sm${primary ? ' primary' : ''}" data-face="${action}" data-work="${esc(w.id)}">${FACE_ACTIONS[action][0]}</button>`;
+// Datapack ids repeat across tasks, so their review rows are keyed by task/id; upload ids are unique.
+const pickId = (w) => (w.source === 'curated' ? `${w.task}/${w.id}` : w.id);
+const faceButton = (w, action, primary = false) => `<button class="btn sm${primary ? ' primary' : ''}" data-face="${action}" data-work="${esc(pickId(w))}">${FACE_ACTIONS[action][0]}</button>`;
 const pickBox = (id, title, picked) => `<label class="row-pick"><input type="checkbox" data-pick="${esc(id)}"${picked ? ' checked' : ''} aria-label="选择「${esc(title)}」"></label>`;
 // What the admin does next with a work, by bucket; one primary action per row.
 function adminAction(w, bucket) {
   const id = esc(w.id);
+  if (w.source === 'curated') return bucket === 'off' ? faceButton(w, 'restore', true)
+    : w.arena?.state === 'in_pool' ? faceButton(w, 'arena-off') : w.arena?.state === 'off' ? faceButton(w, 'arena-on', true) : '';
   return {
     content: `<button class="btn sm primary" data-content="${id}">审核内容</button>`,
     auto: `<button class="btn sm" data-content="${id}">人工审核</button>`,
@@ -160,14 +164,14 @@ function workRow(ctx, w, { bucket = null, questions = [], picked } = {}) {
   const tone = { held: 'unverified', waiting: 'unverified', issue: 'questioned', verified: 'verified' }[mine?.group];
   const href = hidden ? esc(w.scene) : `#/${esc(w.task)}/${esc(w.id)}`;
   return `<article class="work-row${picked === undefined ? '' : ' is-pickable'}" data-status="${w.status}">
-    ${picked === undefined ? '' : pickBox(w.id, w.title, picked)}
+    ${picked === undefined ? '' : pickBox(pickId(w), w.title, picked)}
     ${thumb(ctx, w, { link: false })}
     <div class="work-main">
       <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(w.modelName)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}${mine
         ? `<span class="status status-${tone}">${icon({ issue: 'alert', verified: 'check' }[mine.group] ?? 'clock')}${mine.badge}</span>`
         : `${moderationBadge(w.moderation, HELD.work[w.moderation?.status])}${statusBadge(w.status, { always: true, reason: w.reason })}`}</p>
       <h3><a href="${href}"${hidden ? ' target="_blank" rel="noopener"' : ''}>${esc(w.title)}</a></h3>
-      <p class="work-meta">${esc(task?.title ?? questions.find((q) => q.id === w.task)?.title ?? w.task)}${variant ? ` · ${esc(variant.label)}` : ''}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
+      <p class="work-meta">${esc(task?.title ?? questions.find((q) => q.id === w.task)?.title ?? w.task)}${variant ? ` · ${esc(variant.label)}` : ''}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin && w.source !== 'curated' ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
       ${mine
         ? `${stageTrack(mine.stages, mine.current, { row: true, compact: true, failed: mine.failed })}<p class="result-reason">${icon(mine.failed ? 'alert' : mine.group === 'verified' ? 'check' : 'clock')}<span>${esc(mine.note)}</span></p>`
         : `${contentNote(w) || (bucket === 'rejected' ? `<p class="result-reason">${icon('alert')}<span>所属题目未通过审核，作品不会公开。</span></p>` : '')}
@@ -955,7 +959,7 @@ const REVIEW_SUMMARY = {
   questions: '题目只能人工审核，通过后进入题库并开放投稿。确认提示词是一项具体、可比较的生成任务；拒绝时写明理由，作者会看到。示例结果的内容可以在题目里直接审核。',
   content: '只判断能否公开。自动审核没能确定的投稿在这里由人决定：通过后转入「核验」，拒绝时写明理由，作者会看到。',
   unverified: '内容已通过、还没核验的投稿，最早的在前。核对能否运行、是否符合题目、生成信息是否可信。通过即公开到展览馆，单轮生成且无人工介入的同时进入盲评；无法核实的标记存疑并写明原因。',
-  done: '核验过的投稿，每行写明现在在哪里显示，按钮就是下一步。存疑与拒绝的原因对作者可见。馆藏作品由仓库收录流程管理，不在这里。',
+  done: '核验过的投稿，每行写明现在在哪里显示，按钮就是下一步。存疑与拒绝的原因对作者可见。数据包里的作品视同已核验，也在这里调整展示。',
   log: '最近的审核与管理操作。',
 };
 const REVIEW_EMPTY = { questions: '没有待审核的题目', content: '没有等待人工审核内容的投稿', unverified: '没有等待核验的投稿' };
@@ -996,7 +1000,6 @@ function review(root, ctx) {
   const inDone = (w, bucket) => ({ all: ['verified', 'off', 'questioned', 'rejected'].includes(bucket), public: bucket === 'verified',
     noarena: bucket === 'verified' && w.arena?.state !== 'in_pool', off: bucket === 'off', questioned: bucket === 'questioned', rejected: bucket === 'rejected' })[state.filter];
   const queue = (bucket) => (state.works ?? []).filter((w) => {
-    if (w.source === 'curated') return false;
     const own = reviewBucket(ctx, w, state.questions ?? []);
     return bucket === 'done' ? inDone(w, own) : own === bucket;
   }).sort((a, b) => (['content', 'auto', 'unverified'].includes(bucket) ? 1 : -1) * (Date.parse(a.addedAt) - Date.parse(b.addedAt)));
@@ -1005,7 +1008,7 @@ function review(root, ctx) {
   const doneBulk = () => (state.tab === 'done' ? { noarena: 'arena-on', off: 'restore' }[state.filter] : null);
   // What the batch checkboxes of the current queue can select.
   const pickable = () => (state.tab === 'questions' ? (state.questions ?? []).filter(questionWaiting).map((q) => q.id)
-    : state.tab === 'done' ? (doneBulk() ? queue('done').filter((w) => doneBulk() !== 'arena-on' || w.arena?.state === 'off').map((w) => w.id) : [])
+    : state.tab === 'done' ? (doneBulk() ? queue('done').filter((w) => doneBulk() !== 'arena-on' || w.arena?.state === 'off').map(pickId) : [])
       : BULK[state.tab] ? queue(state.tab).map((w) => w.id) : []);
   function draw() {
     if (!platform.user) return signedOut(root, ctx, '请先登录管理员账号');
@@ -1033,7 +1036,7 @@ function review(root, ctx) {
     const questions = state.questions ?? [];
     const questionTitles = new Map([...ctx.DATA.tasks, ...questions].map((q) => [q.id, q.title]));
     const rows = (bucket) => queue(bucket).map((w) => workRow(ctx, w, { bucket: bucket === 'done' ? reviewBucket(ctx, w, questions) : bucket, questions,
-      picked: bucket === tab && ids.includes(w.id) ? state.picked.has(w.id) : undefined })).join('');
+      picked: bucket === tab && ids.includes(pickId(w)) ? state.picked.has(pickId(w)) : undefined })).join('');
     const empty = (text) => `<div class="board-empty"><p class="board-empty-title">${text}</p></div>`;
     let list;
     if (tab === 'log') {
@@ -1235,10 +1238,10 @@ function review(root, ctx) {
       return draw();
     }
     const bulkFace = e.target.closest('[data-bulk-face]');
-    if (bulkFace) return switchFaces(bulkFace.dataset.bulkFace, (state.works ?? []).filter((w) => state.picked.has(w.id)));
+    if (bulkFace) return switchFaces(bulkFace.dataset.bulkFace, (state.works ?? []).filter((w) => state.picked.has(pickId(w))));
     const face = e.target.closest('[data-face]');
     if (face) {
-      const work = state.works?.find((w) => w.id === face.dataset.work);
+      const work = state.works?.find((w) => pickId(w) === face.dataset.work);
       face.disabled = true;
       return work && switchFaces(face.dataset.face, [work]);
     }
