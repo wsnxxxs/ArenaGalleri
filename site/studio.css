@@ -25,6 +25,8 @@ a { text-decoration: none; }
 .top-back { display: inline-flex; align-items: center; gap: 3px; flex: none; height: 30px; padding: 0 10px 0 5px; border: 1px solid var(--line-2); border-radius: 6px; color: var(--ink-2); font-size: 12px; text-decoration: none; white-space: nowrap; }
 .top-back .i { width: 16px; height: 16px; }
 .top-back:hover { background: var(--surface-2); border-color: var(--muted); color: var(--ink); }
+/* Wide screens go up by the breadcrumb; "返回" stands in for it on narrow ones. */
+.topbar:not(.sandbar) .top-back { display: none; }
 .site-nav { gap: 3px; margin: 0 7px 0 0; padding-right: 17px; border-right: 1px solid var(--line); }
 .site-nav .topbar-link { padding: 7px 11px; font-size: 12px; }
 .site-nav .topbar-link:hover, .site-nav .topbar-link[aria-current="page"] { color: var(--ink); background: var(--surface-2); }
@@ -614,9 +616,8 @@ dialog.sheet { border-radius: 10px; background: var(--surface); }
   .topbar:not(.sandbar) .topbar-in { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 59px 32px; gap: 0 10px; }
   .topbar:not(.sandbar) .topbar-tools { grid-column: 2; grid-row: 1; }
   .topbar:not(.sandbar) .crumbs { grid-column: 1 / -1; grid-row: 2; align-self: stretch; padding: 0 0 8px; border-left: 0; font-size: 11px; }
-  .topbar:not(.sandbar) .top-back { grid-column: 1; grid-row: 2; align-self: start; height: 24px; }
-  .topbar:not(.sandbar) .top-back .back-place { display: none; }
-  .topbar:not(.sandbar) .top-back + .crumbs { grid-column: 2; padding-top: 4px; }
+  .topbar:not(.sandbar) .top-back { display: inline-flex; grid-column: 1 / -1; grid-row: 2; align-self: start; justify-self: start; height: 24px; }
+  .topbar:not(.sandbar) .top-back + .crumbs { display: none; }
   .app-layout { display: flex; flex-direction: column; }
   .app-layout > .workspace { flex: 1; }
   .app-sidebar { position: relative; top: auto; align-self: stretch; min-width: 0; min-height: 0; max-height: none; overflow: visible; padding: 26px 20px 19px; border-right: 0; border-bottom: 1px solid var(--line); }

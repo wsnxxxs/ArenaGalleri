@@ -100,12 +100,13 @@ const previewControl = () => `<div class="preview-setting" role="group" aria-lab
   <button data-preview-mode="model" aria-pressed="${previewMode === 'model'}" title="小模型预览 · 可随鼠标转动">小模型</button>
 </div>`;
 const SITE_NAV = [['questions', '题库'], ['arena', '盲评'], ['leaderboard', '排行榜'], ['new', '发起题目']];
-// Breadcrumbs follow the real hierarchy: each section is its own root.
+// Breadcrumbs follow the real hierarchy: each section is its own root. The crumb one level up is
+// the way back, so it returns to that page as the reader left it.
 const LIBRARY = { text: '题库', href: '#/questions' };
 function breadcrumbTrail(crumbs = []) {
   const items = crumbs.length ? crumbs : [{ text: DATA.subtitle }];
   return items.map((c, i) => `${i ? '<span class="sep" aria-hidden="true">/</span>' : ''}${c.href
-    ? `<a href="${esc(c.href)}" title="${esc(c.text)}"${c.href === LIBRARY.href ? ' data-home-view="tasks"' : ''}>${esc(c.text)}</a>`
+    ? `<a href="${esc(back?.up === c.href ? back.href : c.href)}" title="${esc(c.text)}"${back?.up === c.href ? ' data-back' : ''}${c.href === LIBRARY.href ? ' data-home-view="tasks"' : ''}>${esc(c.text)}</a>`
     : `<span aria-current="page" title="${esc(c.text)}">${esc(c.text)}</span>`}`).join('');
 }
 // Shown under the top bar while the platform and the archive disagree on the data version.
@@ -130,13 +131,13 @@ function header(crumbs = [], showPreviewSetting = false, current = '', { notice 
     </div>
   </div></header>${platform.stale && notice ? platformNotice() : ''}`;
 }
+// The two 3D views sit under their task; the mode switch names the current one.
 function galleryStageHeader(t, mode) {
-  const current = mode === 'sandtable' ? '三维沙盘' : '原作展厅';
   const modes = [['exhibition', '原作展厅'], ['sandtable', '三维沙盘']];
   return `<header class="topbar sandbar"><div class="wrap topbar-in sandbar-in">
     <a class="brand" href="#/" aria-label="${esc(DATA.title)} · 首页">${LOGO}<span class="wordmark">${esc(DATA.title)}</span></a>
     ${backLink('top-back')}
-    <nav class="crumbs sand-crumbs" aria-label="位置"><a href="${taskHref(t)}">${esc(t.title)}</a><span class="sep" aria-hidden="true">/</span><span aria-current="page">${current}</span></nav>
+    <nav class="crumbs sand-crumbs" aria-label="面包屑">${breadcrumbTrail([LIBRARY, { text: t.title, href: taskHref(t) }])}</nav>
     <nav class="display-modes" aria-label="展示模式">${modes.map(([id, name]) => `<a ${id === mode ? 'aria-current="page"' : 'data-switch-mode'} href="#/${t.id}/${id}">${name}</a>`).join('')}</nav>
     <div class="sandbar-tools"><span class="sand-count">已选择 <b data-count>0</b> 件</span><button class="btn sm" data-action="panel" aria-expanded="true" aria-controls="${mode === 'sandtable' ? 'sand-library' : 'exhibition-library'}">选择模型</button>${themeButton()}</div>
   </div></header>`;
@@ -202,10 +203,12 @@ function sortedTasks() {
   });
 }
 
-// Form and domain ride in the address (#/questions/<category>/<domain>, either may be left out)
-// so a return or a shared link keeps them.
-function renderLibrary(scopes = []) {
-  if (scopes.length) homeState.view = 'tasks';
+// Form and domain ride in the address (#/questions/<category>/<domain>, either may be left out),
+// as does the model index (#/questions/models), so a return or a shared link keeps them. Search
+// and the selects only survive a return; a fresh visit opens the whole library.
+function renderLibrary(scopes = [], fresh = true) {
+  if (fresh) Object.assign(homeState, { model: '', query: '', modelQuery: '', vendor: '' });
+  homeState.view = scopes[0] === 'models' ? 'models' : 'tasks';
   homeState.category = scopes.find((x) => DATA.tasks.some((t) => t.category === x)) ?? '';
   homeState.domain = scopes.find((x) => DATA.tasks.some((t) => domainsOf(t).includes(x))) ?? '';
   const controller = new AbortController();
@@ -354,7 +357,7 @@ function renderLibrary(scopes = []) {
     const scopes = homeState.view === 'tasks' ? [homeState.category, homeState.domain].filter(Boolean) : [];
     const scope = homeState.view === 'models' ? '模型索引' : scopes.map((x) => (categoryOf(x) ? categoryLabel(x) : x)).join(' · ');
     $('.topbar .crumbs').innerHTML = breadcrumbTrail(scope ? [LIBRARY, { text: scope }] : [{ text: '题库' }]);
-    const address = [LIBRARY.href, ...scopes.map(encodeURIComponent)].join('/');
+    const address = [LIBRARY.href, ...(homeState.view === 'models' ? ['models'] : scopes.map(encodeURIComponent))].join('/');
     if (location.hash !== address) history.replaceState(history.state, '', address);
     previews?.setPaused(homeState.view !== 'tasks');
   };
@@ -442,18 +445,13 @@ async function updateResultPreviews(t) {
     console.error('Model previews unavailable:', error);
   }
 }
+// Panels are views of the one task page: they replace the address and add no level to the trail.
 const panels = ['results', 'shots', 'prompt', 'board'];
 function activatePanel(name, updateHash = true) {
   const target = panels.includes(name) && $(`[data-panel="${name}"]`) ? name : 'results';
   $$('[data-panel]').forEach((el) => { el.hidden = el.dataset.panel !== target; });
   $$('[data-go]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.go === target)));
   resultPreviews?.setPaused(target !== 'results');
-  const task = DATA.tasks.find((t) => t.id === taskState.task);
-  $('.topbar .crumbs').innerHTML = breadcrumbTrail(target === 'results' ? [LIBRARY, { text: task.title }] : [
-    LIBRARY,
-    { text: task.title, href: taskHref(task) },
-    { text: { shots: '截图对照', prompt: '提示词', board: '排行榜' }[target] },
-  ]);
   if (target === 'board') mountTaskBoard();
   if (updateHash) {
     const base = `#${location.hash.split('#')[1]}`;
@@ -1219,32 +1217,28 @@ function platformOffline(name) {
 }
 
 // ---- the way back ---------------------------------------------------------------------
-// Every sub-page has one "返回" at the left of its top bar. It leads to the page the reader came
-// from, or to the page above when the reader arrived by a shared link or came up from below.
-const PAGE_NAMES = { '': '首页', questions: '题库', arena: '盲评', leaderboard: '排行榜', new: '发起题目', me: '个人中心', 'me/works': '我的作品', 'me/questions': '我的题目', review: '审核', terms: '使用条款', privacy: '隐私政策', submit: '上传作品' };
+// A sub-page's way back always leads one level up, the same page its breadcrumb names: on wide
+// screens that crumb is the way back, on narrow ones a "返回" takes its place. When the page above
+// is earlier in this tab's history, it goes back there for real and keeps its filters and scroll.
+const PAGE_NAMES = { questions: '题库', arena: '盲评' };
 function placeOf(hash) {
   const [p = '', a] = hash.replace(/^#\/?/, '').split('#')[0].split('/').filter(Boolean).map(decodeURIComponent);
   const t = DATA.tasks.find((x) => x.id === p);
   if (t && !a) return { key: p, name: '题目', up: LIBRARY.href };
-  if (t) return a === 'exhibition' || a === 'sandtable'
-    ? { key: `${p}/stage`, name: '展厅', up: taskHref(t) }
-    : { key: `${p}/view`, name: '作品预览', up: taskHref(t) };
-  if (p === 'submit' && DATA.tasks.some((x) => x.id === a)) return { key: `submit/${a}`, name: '上传作品', up: `#/${a}` };
-  if (p === 'arena' && a) return { key: `arena/${a}`, name: '盲评', up: '#/arena' };
-  // The library's category rides in its address but leaves it the same page.
+  if (t) return { key: a === 'exhibition' || a === 'sandtable' ? `${p}/stage` : `${p}/view`, up: taskHref(t) };
+  if (p === 'submit' && DATA.tasks.some((x) => x.id === a)) return { key: `submit/${a}`, up: `#/${a}` };
+  if (p === 'arena' && a) return { key: `arena/${a}`, up: '#/arena' };
+  // The library's form, domain and model index ride in its address but leave it the same page.
   const key = p === 'questions' ? p : [p, a].filter(Boolean).join('/');
-  return { key, name: PAGE_NAMES[key] ?? PAGE_NAMES[p] ?? '上一页', up: null };
+  return { key, name: PAGE_NAMES[p], up: null };
 }
-const isBelow = (hash, key) => {
-  for (let up = placeOf(hash).up; up; up = placeOf(up).up) if (placeOf(up).key === key) return true;
-  return false;
-};
 // Keep each history entry, including forward entries, so browser traversal keeps its origin and scroll.
 const visits = new Map();
 let currentVisit = null;
 let nextVisit = Date.now();
 let back = null;
-// Returns the scroll position to restore: the page's own when the reader went back to it.
+// Returns the scroll position to restore (the page's own when the reader went back to it) and
+// whether this is such a return.
 function retrace(from) {
   const here = placeOf(location.hash);
   // The page being left is still on screen, so its address and scroll are taken as it goes.
@@ -1261,22 +1255,35 @@ function retrace(from) {
   }
   currentVisit = entry.visit;
   entry.hash = location.hash;
-  // Pages below this one (a work opened from a shared link) are skipped on the way back.
-  let prev = visits.get(entry.from);
-  while (prev && (prev.key === here.key || isBelow(prev.hash, here.key))) prev = visits.get(prev.from);
-  back = !here.up ? null
-    : prev ? { href: prev.hash, text: placeOf(prev.hash).name, history: prev.visit === entry.from }
-    : { href: here.up, text: placeOf(here.up).name };
-  return returning ? entry.scroll : 0;
+  // Each visit's `from` is the history entry just before it, so walking them counts the steps back.
+  back = null;
+  if (here.up) {
+    const above = placeOf(here.up);
+    let prev = visits.get(entry.from), steps = 1;
+    while (prev && prev.key !== above.key) { prev = visits.get(prev.from); steps++; }
+    back = { up: here.up, text: above.name, href: prev?.hash ?? here.up, steps: prev ? steps : 0 };
+  }
+  return { scroll: returning ? entry.scroll : 0, returning };
 }
 history.scrollRestoration = 'manual';
-// Back to the page just before in history goes back for real, so that page keeps its scroll.
+const plainClick = (event) => !event.defaultPrevented && !event.button && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
 addEventListener('click', (event) => {
-  if (!back?.history || event.defaultPrevented || event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !event.target.closest('.top-back, .vback')) return;
-  event.preventDefault();
-  history.back();
+  if (!plainClick(event)) return;
+  if (back?.steps && event.target.closest('.top-back, .vback, [data-back]')) {
+    event.preventDefault();
+    history.go(-back.steps);
+    return;
+  }
+  // The exhibition and the sandtable are two views of one place, like the task page's panels.
+  const mode = event.target.closest('[data-switch-mode]');
+  if (mode) {
+    event.preventDefault();
+    const from = location.href;
+    history.replaceState(history.state, '', mode.getAttribute('href'));
+    route({ from });
+  }
 });
-// On narrow screens only "返回" stays; the place is in the title.
+// "返回" names the page above it; the viewers keep it at every width, the other pages on narrow screens.
 function backLink(cls) {
   return back ? `<a class="${cls}" href="${esc(back.href)}" title="返回${esc(back.text)}">${icon('prev')}<span class="back-text">返回<span class="back-place">${esc(back.text)}</span></span></a>` : '';
 }
@@ -1339,7 +1346,8 @@ let routeVersion = 0;
 // `from` is the address being left; a redraw in place (sign-in, a review) passes none.
 async function route({ keepScroll = false, from = null } = {}) {
   const version = ++routeVersion;
-  const scrollBack = keepScroll ? scrollY : from === null ? 0 : retrace(from);
+  const visit = keepScroll || from === null ? null : retrace(from);
+  const scrollBack = keepScroll ? scrollY : visit?.scroll ?? 0;
   const parts = location.hash.replace(/^#\/?/, '').split('#')[0].split('/').filter(Boolean).map(decodeURIComponent);
   const [taskId, a, vs, b] = parts;
   const platformPage = Object.hasOwn(PLATFORM_PAGES, taskId ?? '') ? taskId : null;
@@ -1371,7 +1379,7 @@ async function route({ keepScroll = false, from = null } = {}) {
   if (!taskId) {
     renderLanding(root, context());
   } else if (taskId === 'questions') {
-    page = renderLibrary(parts.slice(1));
+    page = renderLibrary(parts.slice(1), Boolean(visit && !visit.returning));
   } else if (taskId === 'terms' || taskId === 'privacy') {
     page = renderLegal(root, context(), taskId);
   } else if (platformPage) {

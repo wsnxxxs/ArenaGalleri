@@ -202,7 +202,8 @@
 .sandtable .exhibition-focusbar b { color:var(--ink); }
 .sandtable .exhibition-focusbar small { color:var(--muted); }
 .sandtable .exhibition-focusbar a,.sandtable .exhibition-card-foot button { color:var(--accent); }
-@media(max-width:1100px) { .sand-crumbs { display:none; } }
+.sandbar .top-back { display:none; }
+@media(max-width:1100px) { .sand-crumbs { display:none; } .sandbar .top-back { display:inline-flex; } }
 @media(max-width:700px) {
   .sandbar-in { gap:8px; }
   .sandbar-in .brand { display:none; }
