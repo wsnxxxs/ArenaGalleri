@@ -23,7 +23,8 @@ function modelOptions(ctx) {
 function harnessOptions(ctx, selected) {
   const listed = [...ctx.HARNESSES.values()].filter((h) => h.listed || h.id === selected);
   if (selected && !ctx.HARNESSES.has(selected)) listed.push({ id: selected, name: selected });
-  return listed.sort((a, b) => byName(a.name, b.name)).map((h) => option(h.id, h.name, h.id === selected)).join('');
+  // The data registry orders common tools first; keep that order in every work form.
+  return listed.map((h) => option(h.id, h.name, h.id === selected)).join('');
 }
 
 function providerOptions(ctx, selected) {

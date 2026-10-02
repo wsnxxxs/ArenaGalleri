@@ -1,4 +1,11 @@
 # HANDOFF.md · 当前状态
+## 补齐 Harness 与常用优先排序（2026-10-02，本地提交，未推送）
+
+- 独立数据仓登记 Cherry Studio、Chatbox、Open WebUI、LibreChat、LM Studio、AnythingLLM、Continue、Kiro、Amp，Harness 共 38 个登记项 + 其他。用户追加常用优先排序，数据注册表按常见使用场景排列；work-fields.js 沿用其顺序，投稿、作者编辑、管理员审核共用，其他仍在末尾。前列为 Claude Code、Codex、Cursor、Cherry Studio、官方网页 / App 对话、Gemini CLI、GitHub Copilot 等。
+- check 45/0、test 18/18；DATAPACK_LOCAL_DIR 正常消费新本地包，build 182 件 / 57 site 文件、严格 intake 0 错 / 10 既有提示。数据仓 check 34/0、test 16/16、严格 intake 182 件 / 0 错 / 10 提示、assemble --data 182 件 / 20 题。
+- 已提交后端基线 83e43fe + 隔离合成数据库验证 9 个新增 ID 均可保存，SQL 确认 harness_id 和空 harness_other。Browser 管理员测试账号从「我的作品」保存 Cherry Studio、重开回填；从内容审核保存 Amp；两种表单 38 项顺序一致、其他在末尾，console 0。当前后端工作区有他轮未完成的 import，本轮只导出已提交源码用于联调，未改后端或业务库。
+- 两仓各一条英文简单句本地提交，未推送、发布、部署或改私有 pin。临时服务与页面已关闭，证据保留于忽略 output；未重验完整上传、手机、生产、真实自动审核、SMTP 或全部作品交互。见 [归档](docs/archive/2026-10-02-harness-catalog-order-wsnxxxs.md)。
+
 ## 体素山水 Gemini 灰度封面（2026-10-02，本地提交，未推送）
 
 - 按用户要求，题库「体素山水 · 飞瀑穿云」固定使用 Gemini 4.x（灰度）High（gemini-4.x-high）结果；不可用或存疑时回退原有规则。仅修改 Gallery 封面选择与产品说明，未改数据仓库或作品资源。
