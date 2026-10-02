@@ -383,6 +383,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       const generation = ++widgetGeneration;
       widgetTask = (async () => {
         const { siteKey } = await api('auth/turnstile');
+        if (siteKey !== null && (typeof siteKey !== 'string' || !siteKey)) throw new Error('人机验证加载失败，请刷新页面重试。');
         if (generation !== widgetGeneration || !sheet.el.open || !siteKey) return null;
         await loadTurnstile();
         if (generation !== widgetGeneration || !sheet.el.open) return null;
@@ -415,12 +416,10 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       $('[data-forgot]', form).hidden = !login;
       $$('[data-register]', form).forEach((el) => { el.hidden = login; });
       $('.form-error', form).textContent = '';
-      if (!login) {
-        const generation = widgetGeneration + 1;
-        prepareWidget().catch((error) => {
-          if (generation === widgetGeneration && sheet.el.open) $('.form-error', form).textContent = error.message;
-        });
-      }
+      const generation = widgetGeneration + 1;
+      prepareWidget().catch((error) => {
+        if (generation === widgetGeneration && sheet.el.open) $('.form-error', form).textContent = error.message;
+      });
     };
     setMode(mode);
     // Registration binds the email up front: the challenge guards the code, and the code
@@ -445,12 +444,18 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
       const switchButton = $('[data-switch]', form);
       submit.disabled = true;
       switchButton.disabled = true;
+      let loginSent = false;
       try {
         const body = { name: form.name.value, password: form.password.value };
         if (mode === 'register') {
           Object.assign(body, { email: form.email.value.trim(), code: form.code.value.trim() });
           if (!body.email) throw new Error('请填写邮箱，注册需要绑定邮箱。');
           if (!body.code) throw new Error('请先发送并填写邮箱验证码。');
+        } else {
+          const mounted = await (widgetTask ?? prepareWidget());
+          if (mounted && !mounted.token) throw new Error('请先完成人机验证。');
+          body.turnstileToken = mounted?.token ?? '';
+          loginSent = true;
         }
         const result = await api(`auth/${mode}`, { method: 'POST', body });
         user = result.user;
@@ -463,6 +468,8 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
         $('.form-error', form).textContent = error.message;
         submit.disabled = false;
         switchButton.disabled = false;
+      } finally {
+        if (loginSent) widget?.reset();
       }
     });
     setTimeout(() => form.name.focus());

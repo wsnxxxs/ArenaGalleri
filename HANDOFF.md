@@ -1,4 +1,11 @@
 # HANDOFF.md · 当前状态
+
+## 登录人机验证（2026-10-02，本地完成，未推送、未部署）
+
+- 用户要求复核红队报告并加固，由 GPT-6.1 Sol / high 子代理完成前端；登录与注册复用现有Turnstile组件。后端启用验证时，登录在验密前发送turnstileToken，错误请求后重置，配置/脚本不可用阻止提交。注册仍通过邮箱验证码创建账号。
+- 仅site/platform.js登录接线及site/turnstile.js注释。check45/0、test18/18、build182件/57站点文件，严格intake0错/8既有提示；三个入口共12项生产编译隔离浏览器场景通过，Gallery使用候选CSP，无意外产品JS/CSP错误。仅stub验证，未调用真实Cloudflare挑战、SMTP或生产业务写入。
+- 与共享后端及game需配套发布，当前仅本地完成；未改私有pin或作品资源。日志/产物留忽略output和dist，详见[归档](docs/archive/2026-10-02-login-challenge-wsnxxxs.md)。
+
 ## 补齐 Harness 与常用优先排序（2026-10-02，本地提交，未推送）
 
 - 独立数据仓登记 Cherry Studio、Chatbox、Open WebUI、LibreChat、LM Studio、AnythingLLM、Continue、Kiro、Amp，Harness 共 38 个登记项 + 其他。用户追加常用优先排序，数据注册表按常见使用场景排列；work-fields.js 沿用其顺序，投稿、作者编辑、管理员审核共用，其他仍在末尾。前列为 Claude Code、Codex、Cursor、Cherry Studio、官方网页 / App 对话、Gemini CLI、GitHub Copilot 等。

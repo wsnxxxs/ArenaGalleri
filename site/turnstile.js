@@ -1,4 +1,4 @@
-// Turnstile is loaded only when the API enables it for registration.
+// Turnstile is loaded only when the API enables it for authentication.
 let scriptTask;
 
 export function loadTurnstile() {
