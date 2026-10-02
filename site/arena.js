@@ -40,11 +40,13 @@ function lobby(root, ctx) {
   const row = (t) => {
     const p = pool(t);
     const open = ready(t);
-    return `<li class="arena-task${open ? '' : ' is-closed'}"><a ${open ? `href="#/arena/${esc(t.id)}"` : 'aria-disabled="true"'}>
+    // Admins follow a closed task to its page, where the sidebar shows what keeps the pool short.
+    const admin = !open && platform.user?.role === 'admin';
+    return `<li class="arena-task${open ? '' : ' is-closed'}"><a ${open ? `href="#/arena/${esc(t.id)}"` : admin ? `href="#/${esc(t.id)}" title="查看这道题的盲评池"` : 'aria-disabled="true"'}>
       <span class="num">No.${pad(ctx.DATA.tasks.indexOf(t) + 1)}</span>
       <span class="arena-task-title"><b>${esc(t.title)}</b><small>${esc([domainsOf(t).join('、'), t.summary].filter(Boolean).join(' · '))}</small></span>
       <span class="arena-task-meta">可盲评 ${p.works} 件<br>${p.entries} 个配置</span>
-      <span class="arena-task-go">${open ? `开始${icon('right')}` : (p.works ? '配置不足' : '未进盲评池')}</span>
+      <span class="arena-task-go">${open ? `开始${icon('right')}` : (p.works ? `还差 ${2 - p.entries} 个配置` : '暂无作品')}</span>
     </a></li>`;
   };
 
@@ -62,9 +64,9 @@ function lobby(root, ctx) {
     return `<div class="collection-toolbar"><span>${meta}</span></div>
       ${open.length ? `<ul class="arena-tasks">${open.map(row).join('')}</ul>` : `<div class="board-empty">
         <p class="board-empty-title">这里还没有可以盲评的题目</p>
-        <p>一道题至少要有两个不同模型配置的作品进入盲评池（已验证且由管理员开启盲评），才能开始盲评。</p></div>`}
+        <p>一道题至少要有两个不同模型配置的作品进入盲评池，才能开始盲评。核验通过、单轮生成且无人工介入的作品会自动进入。</p></div>`}
       ${closed.length ? `<details class="result-group is-questioned arena-closed"><summary><div class="group-head">
-        <h3>作品不足<span class="group-count">${closed.length}</span></h3><p>至少需要两个不同模型配置的作品进入盲评池；已验证作品还需管理员开启盲评</p>
+        <h3>作品不足<span class="group-count">${closed.length}</span></h3><p>至少需要两个不同模型配置的作品进入盲评池</p>
         <span class="group-toggle" aria-hidden="true"><span class="when-open">收起</span><span class="when-closed">展开</span>${icon('next')}</span>
       </div></summary><ul class="arena-tasks">${closed.map(row).join('')}</ul></details>` : ''}`;
   }

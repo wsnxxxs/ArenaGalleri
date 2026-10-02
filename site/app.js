@@ -12,7 +12,7 @@
 //   #/me · #/review           personal center · review queue (platform)
 //   #/terms · #/privacy       terms of use and disclaimer · privacy policy
 import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, store, syncThemeUi, themeButton, versionedMedia } from './ui.js';
-import { STATUS, accountControl, api, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, statusBadge } from './platform.js';
+import { STATUS, accountControl, api, arenaText, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, setFaces, statusBadge, toast } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { representatives, standard, taskCover } from './featured.js';
@@ -494,6 +494,12 @@ function shotGrid(t) {
   }).join('')}</div>`;
 }
 
+// Admins see the task's blind pool and how many published uploads stay out of it.
+function adminPoolLine(t, pool) {
+  const out = t.results.filter((r) => r.upload && r.status === 'verified' && r.arena && r.arena.state !== 'in_pool').length;
+  return `<p>盲评池 ${pool?.works ?? 0} 件 · ${pool?.entries ?? 0} 个配置${out ? ` · <a href="#/review/noarena">${out} 件已公开但不在池中</a>` : ''}</p>`;
+}
+
 function resultCard(t, r) {
   const m = modelOf(r);
   const screenshotPreview = r.previewMode === 'screenshot';
@@ -592,6 +598,7 @@ function renderTask(t) {
       <div class="side-bottom">${actions}
         ${hasExhibition(t) ? `<div class="side-views"><a class="btn sm" href="${sandtableHref(t)}">${icon('full')}三维沙盘</a><a class="btn sm" href="#/${t.id}/exhibition">${icon('grid')}原作展厅</a></div>` : ''}
         <p>${new Set(works.map((r) => r.model)).size} 个模型 · ${new Set(works.map(vendorOf)).size} 家厂商</p>
+        ${platform.user?.role === 'admin' ? adminPoolLine(t, pool) : ''}
       </div>
     </aside>
     <main class="workspace page">
@@ -919,11 +926,17 @@ function sourceFacts(r) {
   return [harness ? `<div><dt>Harness</dt><dd>${esc(harness.name)}</dd></div>` : r.tool ? `<div><dt>Harness</dt><dd>${esc(r.tool)}（作者原始声明）</dd></div>` : r.upload ? '<div><dt>Harness</dt><dd>未注明</dd></div>' : '',
     provider || r.upload ? `<div><dt>服务商</dt><dd>${esc(provider?.name ?? '未注明')}</dd></div>` : ''].filter(Boolean).join('');
 }
+// Admin switches beside a verified upload: [button, faces, toast].
+const VIEWER_FACES = { 'arena-on': ['开启盲评', { show_arena: true }, '已开启盲评'], 'arena-off': ['移出盲评', { show_arena: false }, '已移出盲评'],
+  hide: ['撤下', { show_gallery: false, show_arena: false }, '已撤下'] };
 function uploadFacts(r) {
   const info = STATUS[r.status];
+  const admin = platform.user?.role === 'admin' && r.status === 'verified';
+  const switches = admin ? [r.arena?.state === 'in_pool' ? 'arena-off' : r.arena?.state === 'off' ? 'arena-on' : '', 'hide'].filter(Boolean) : [];
   return `<div class="guide-block guide-status" data-status="${r.status}">
     <h3>核验状态</h3>
-    <p class="guide-state">${statusBadge(r.status, { always: true })}<span>${esc(info.hint)}</span></p>
+    <p class="guide-state">${statusBadge(r.status, { always: true })}<span>${esc(arenaText(r.arena) ? `已公开 · ${arenaText(r.arena)}` : info.hint)}</span></p>
+    ${switches.length ? `<div class="actions">${switches.map((action) => `<button class="btn sm" data-face="${action}">${VIEWER_FACES[action][0]}</button>`).join('')}</div>` : ''}
     ${r.reason ? `<p class="guide-reason">${esc(r.reason)}</p>` : ''}
     <dl class="facts">
       <div><dt>投稿</dt><dd>${esc(r.owner ?? '已注销的用户')} · ${formatDate(r.addedAt)}</dd></div>
@@ -1122,6 +1135,15 @@ function createViewer(t) {
     if (v === 'full') return fullscreen();
     if (v === 'prev') return cycle(-1);
     if (v === 'next') return cycle(1);
+    const face = e.target.closest('[data-face]');
+    if (face) {
+      const r = byId(state.panes[state.active]);
+      const [, faces, done] = VIEWER_FACES[face.dataset.face];
+      face.disabled = true;
+      setFaces(t.id, r.id, faces).then(() => { toast(`${done}：${r.title}`); return refreshPlatform('review'); },
+        (error) => { toast(error.message); face.disabled = false; });
+      return;
+    }
     const preset = e.target.closest('[data-preset]');
     if (preset) {
       state.queries[state.active] = preset.dataset.preset;
@@ -1326,6 +1348,7 @@ function uploadResult(w) {
     previewLoader: null,
     files: w.files,
     bytes: w.bytes,
+    ...(w.arena ? { arena: w.arena } : {}),
   };
 }
 function mergePlatform() {

@@ -99,10 +99,16 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
 
 // ---- status -------------------------------------------------------------------------------
 export const STATUS = {
-  verified: { label: '已验证', hint: '已核验并优先展示；是否进入盲评以盲评开关为准', icon: 'check' },
+  verified: { label: '已验证', hint: '已核验并公开；单轮生成且无人工介入的作品参与盲评', icon: 'check' },
   unverified: { label: '未验证', hint: '等待管理员核验：可以浏览和贴表情，暂不参与盲评', icon: 'clock' },
   questioned: { label: '存疑', hint: '核验存疑：仅供参考，不参与互动与盲评', icon: 'alert' },
 };
+// A work's blind-pool state as the server reports it (owner and admin views carry `arena`).
+const ARENA_TEXT = { in_pool: '在盲评池', off: '不进盲评', not_qualified: '不进盲评', curated: '已收录为馆藏' };
+export const arenaText = (arena) => (ARENA_TEXT[arena?.state] ? `${ARENA_TEXT[arena.state]}${arena.reason ? `（${arena.reason}）` : ''}` : '');
+// Admin switches for an upload's two faces; the server records each named face as decided.
+export const setFaces = (task, id, faces) => api(`admin/works/${encodeURIComponent(task)}/${encodeURIComponent(id)}/face-settings`, { method: 'POST', body: faces });
+
 export function statusBadge(status, { always = false, reason = '' } = {}) {
   const info = STATUS[status];
   if (!info || (status === 'verified' && !always)) return '';

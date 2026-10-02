@@ -1,6 +1,6 @@
 // Personal center (#/me), and the admin review queue (#/review[/<tab>]).
 import { $, $$, brandMark, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
-import { api, avatarFace, confirmDialog, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, statusBadge, toast } from './platform.js';
+import { api, arenaText, avatarFace, confirmDialog, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, refreshPlatform, requireUser, reviewCount, setFaces, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf } from './categories.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
@@ -8,7 +8,11 @@ import { moderated, pendingLimit, stageTrack } from './submit.js';
 // The review queue runs one pipeline: 题目审核 → 内容审核 → 作品核验. The first group only
 // counts what needs a person; the second lists what has been decided.
 const TODO_TABS = { questions: '题目', content: '内容', unverified: '核验' };
-const DONE_TABS = { verified: '已验证', off: '未展示', questioned: '存疑', rejected: '已拒绝', log: '记录' };
+const DONE_TABS = { done: '已处理', log: '记录' };
+// Decided uploads by what they show now; each filter answers one question an admin asks.
+const DONE_FILTERS = { all: '全部', public: '已公开', noarena: '不进盲评', off: '已撤下', questioned: '存疑', rejected: '已拒绝' };
+// Addresses that open the decided list on one filter, including the old decided tabs.
+const FILTER_TABS = { verified: 'public', off: 'off', questioned: 'questioned', rejected: 'rejected', noarena: 'noarena' };
 const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的题目' };
 const ACCOUNT = { title: '个人中心', description: '每一道提问，每一份解答，都是你的创作足迹。' };
 const ACTIONS = { submit: '提交作品', verified: '通过核验', questioned: '标记存疑', unverified: '退回未验证', delete: '删除作品',
@@ -94,7 +98,7 @@ function authorStage(w, questions) {
   if (['pending', 'review'].includes(asked)) return stage('题目审核', 'held', '题目审核中', '所属题目正在人工审核，通过后作品进入核验流程，届时可以编辑信息。');
   if (asked === 'rejected') return stage('题目审核', 'issue', '题目未通过', '所属题目没有通过审核，作品不会公开。', true);
   if (w.status === 'questioned') return stage('存疑', 'issue', '存疑', `核验存疑${w.reason ? `：${w.reason}` : ''}。存疑作品不能再修改，可以删除后重新上传。`, true);
-  if (w.status === 'verified') return { ...stage('已验证', 'verified', '已验证', `${w.reviewedAt ? `${formatDate(w.reviewedAt)} ` : ''}通过核验。是否公开展示和参与盲评以管理员设置为准。`), current: stages.length };
+  if (w.status === 'verified') return { ...stage('已验证', 'verified', '已验证', `${w.reviewedAt ? `${formatDate(w.reviewedAt)} ` : ''}通过核验，${faceOn(w) ? `已公开${arenaText(w.arena) ? `，${arenaText(w.arena)}` : ''}` : '已被管理员撤下'}。`), current: stages.length };
   return stage('等待核验', 'waiting', '等待核验', `等待管理员核对生成信息，公开展示以人工审核和展示设置为准。${days > 0 ? `已等待 ${days} 天。` : ''}`);
 }
 
@@ -111,11 +115,22 @@ function reviewBucket(ctx, w, questions = []) {
     return question && question.moderation?.status !== 'rejected' ? 'sample' : 'rejected';
   }
   if (w.status === 'questioned') return 'questioned';
-  const shown = w.show_gallery ?? ['show2', 'both'].includes(w.audience);
   if (w.reviewed ? !w.reviewed.gallery : w.status === 'unverified') return 'unverified';
-  if (w.status === 'verified' && shown) return 'verified';
+  if (w.status === 'verified' && faceOn(w)) return 'verified';
   return 'off';
 }
+const galleryOn = (w) => Boolean(w.show_gallery ?? ['show2', 'both'].includes(w.audience));
+const faceOn = (w) => galleryOn(w) || Boolean(w.show_arena ?? ['show1', 'both'].includes(w.audience));
+// One sentence for where a decided upload shows now.
+const doneLine = (w) => (faceOn(w) ? `已公开${galleryOn(w) ? '' : '（未上展览馆）'} · ${arenaText(w.arena) || '不进盲评'}` : '已撤下：展览馆和盲评都不显示');
+// The face switches behind the row actions and the dialog's take-down: [button, faces, toast].
+const FACE_ACTIONS = {
+  'arena-on': ['开启盲评', { show_arena: true }, '已开启盲评'],
+  'arena-off': ['移出盲评', { show_arena: false }, '已移出盲评'],
+  restore: ['恢复公开', { show_gallery: true, show_arena: true }, '已恢复公开'],
+  hide: ['撤下', { show_gallery: false, show_arena: false }, '已撤下'],
+};
+const faceButton = (w, action, primary = false) => `<button class="btn sm${primary ? ' primary' : ''}" data-face="${action}" data-work="${esc(w.id)}">${FACE_ACTIONS[action][0]}</button>`;
 const pickBox = (id, title, picked) => `<label class="row-pick"><input type="checkbox" data-pick="${esc(id)}"${picked ? ' checked' : ''} aria-label="选择「${esc(title)}」"></label>`;
 // What the admin does next with a work, by bucket; one primary action per row.
 function adminAction(w, bucket) {
@@ -125,8 +140,8 @@ function adminAction(w, bucket) {
     auto: `<button class="btn sm" data-content="${id}">人工审核</button>`,
     rejected: `${w.moderation?.status === 'rejected' ? `<button class="btn sm" data-content="${id}">重新审核内容</button>` : ''}<button class="icon-btn" data-delete="${id}" title="删除作品" aria-label="删除「${esc(w.title)}」">${icon('trash')}</button>`,
     unverified: `<button class="btn sm primary" data-review="${id}">核验</button>`,
-    verified: `<button class="btn sm" data-review="${id}">详情</button>`,
-    off: `<button class="btn sm" data-review="${id}">重新核验</button>`,
+    verified: `<button class="btn sm ghost" data-review="${id}">详情</button>${w.arena?.state === 'in_pool' ? faceButton(w, 'arena-off') : w.arena?.state === 'off' ? faceButton(w, 'arena-on', true) : ''}`,
+    off: `<button class="btn sm ghost" data-review="${id}">详情</button>${faceButton(w, 'restore', true)}`,
     questioned: `<button class="btn sm" data-review="${id}">重新核验</button>`,
   }[bucket] ?? '';
 }
@@ -150,12 +165,13 @@ function workRow(ctx, w, { bucket = null, questions = [], picked } = {}) {
     <div class="work-main">
       <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(w.modelName)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}${mine
         ? `<span class="status status-${tone}">${icon({ issue: 'alert', verified: 'check' }[mine.group] ?? 'clock')}${mine.badge}</span>`
-        : `${moderationBadge(w.moderation, HELD.work[w.moderation?.status])}${statusBadge(w.status, { always: true, reason: w.reason })}${w.status === 'verified' ? `<span class="badge">${w.arena_eligible ? '在盲评池' : '未进盲评'}</span>` : ''}`}</p>
+        : `${moderationBadge(w.moderation, HELD.work[w.moderation?.status])}${statusBadge(w.status, { always: true, reason: w.reason })}`}</p>
       <h3><a href="${href}"${hidden ? ' target="_blank" rel="noopener"' : ''}>${esc(w.title)}</a></h3>
       <p class="work-meta">${esc(task?.title ?? questions.find((q) => q.id === w.task)?.title ?? w.task)}${variant ? ` · ${esc(variant.label)}` : ''}${ctx.sourceLine(w) ? ` · ${esc(ctx.sourceLine(w))}` : w.tool ? ` · 作者原始声明：${esc(w.tool)}` : ''} · ${formatDate(w.addedAt)}${admin ? ` · 投稿者 ${esc(w.owner ?? '已注销的用户')}` : ''}</p>
       ${mine
         ? `${stageTrack(mine.stages, mine.current, { row: true, compact: true, failed: mine.failed })}<p class="result-reason">${icon(mine.failed ? 'alert' : mine.group === 'verified' ? 'check' : 'clock')}<span>${esc(mine.note)}</span></p>`
         : `${contentNote(w) || (bucket === 'rejected' ? `<p class="result-reason">${icon('alert')}<span>所属题目未通过审核，作品不会公开。</span></p>` : '')}
+      ${['verified', 'off'].includes(bucket) ? `<p class="result-reason">${icon(bucket === 'off' ? 'alert' : 'check')}<span>${esc(doneLine(w))}</span></p>` : ''}
       ${w.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(w.reason)}</span></p>` : ''}`}
     </div>
     <div class="work-side">
@@ -589,28 +605,6 @@ async function saveMeta(w, meta) {
   return true;
 }
 
-// Verification decides both faces, like the admin console: the gallery shows the work, the arena
-// puts it in the formal blind pool. An undecided arena face defaults on when generation qualifies;
-// as on the server, text questions are exempt from the single-turn, no-intervention rule.
-const arenaFaceOn = (w) => Boolean(w.show_arena ?? ['show1', 'both'].includes(w.audience));
-const arenaQualified = (task, fields) => task?.kind === 'text' || task?.category === '文学'
-  || (fields.generationMode === 'single-turn' && fields.humanIntervention === 'none');
-const arenaHint = (w, qualified) => (qualified ? `盲评池现在：${w.arena_eligible ? '已在池中' : '不在池中'}。同一题至少两个不同模型配置的作品进入盲评池，才能开始盲评。`
-  : '多轮生成或有人工介入的作品只在展览馆展示，不进入盲评。');
-function facesHtml(w, qualified) {
-  const arena = qualified && (w.reviewed?.arena ? arenaFaceOn(w) : true);
-  return `<fieldset class="field"><legend class="field-label">通过核验后<small>两项分别生效，之后可重新核验调整</small></legend>
-    <div class="format-options"><label><input type="checkbox" name="show_gallery" checked>在展览馆展示</label><label><input type="checkbox" name="show_arena"${arena ? ' checked' : ''}${qualified ? '' : ' disabled'}>进入正式盲评</label></div>
-    <p class="field-hint" data-arena-hint>${arenaHint(w, qualified)}</p></fieldset>`;
-}
-function syncArenaFace(form, task, w) {
-  const qualified = arenaQualified(task, { generationMode: form.generationMode.value, humanIntervention: form.humanIntervention.value });
-  if (form.show_arena.disabled !== qualified) return;
-  form.show_arena.disabled = !qualified;
-  form.show_arena.checked = qualified && (w.reviewed?.arena ? arenaFaceOn(w) : true);
-  $('[data-arena-hint]', form).textContent = arenaHint(w, qualified);
-}
-
 // Save information fixes before the decision; only verification needs a complete record.
 function openReview(ctx, w, { questions = [], onDecided } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task) ?? questions.find((q) => q.id === w.task);
@@ -642,22 +636,21 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
           ${workFieldsHtml(ctx, task, w, { expanded: true })}
           <div class="review-meta-actions"><button type="button" class="btn sm" data-save-meta>只保存信息</button></div>
         </details>
-        ${facesHtml(w, w.arena_generation_ok ?? arenaQualified(task, w))}
+        <p class="fine">${w.status === 'verified' ? `现在：${esc(doneLine(w))}` : '通过后公开到展览馆；单轮生成且无人工介入的作品同时进入盲评。'}</p>
         <label class="field"><span class="field-label">存疑原因<small>标记存疑时必填，作者与访客都能看到</small></span><textarea class="input" name="reason" rows="3" maxlength="500">${esc(w.status === 'questioned' ? w.reason : '')}</textarea></label>
         <p class="form-error" role="alert"></p>
         <div class="sheet-actions">
           <button type="button" class="btn danger ghost" data-remove>${icon('trash')}删除</button>
           <span class="spacer"></span>
-          ${w.status === 'verified' && ((w.show_gallery ?? ['show2', 'both'].includes(w.audience)) || arenaFaceOn(w)) ? '<button type="button" class="btn ghost" data-decide="off">全部撤下</button>' : ''}
+          ${w.status === 'verified' && faceOn(w) ? '<button type="button" class="btn ghost" data-decide="off">撤下</button>' : ''}
           <button type="button" class="btn" data-decide="questioned">${icon('alert')}标记存疑</button>
-          <button type="button" class="btn primary" data-decide="verified"${held(w) ? ' disabled' : ''}>${icon('check')}通过核验</button>
+          ${w.status === 'verified' ? '' : `<button type="button" class="btn primary" data-decide="verified"${held(w) ? ' disabled' : ''}>${icon('check')}通过核验</button>`}
         </div>
       </form>
     </div>`,
   });
   const form = $('form', sheet.el);
   const editor = reviewEditor(form, task, w);
-  form.addEventListener('change', (e) => { if (['generationMode', 'humanIntervention'].includes(e.target.name)) syncArenaFace(form, task, w); });
   sheet.el.addEventListener('click', async (e) => {
     if (e.target.closest('a[href^="#"]')) { sheet.close(); return; }
     if (e.target.closest('[data-open-content]')) { sheet.close(); openContent(ctx, w, { questions }); return; }
@@ -685,9 +678,9 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
     if (status === 'off') {
       $$('[data-decide]', form).forEach((b) => { b.disabled = true; });
       try {
-        await api(`admin/works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}/face-settings`, { method: 'POST', body: { show_gallery: false, show_arena: false } });
+        await setFaces(w.task, w.id, FACE_ACTIONS.hide[1]);
         sheet.close();
-        toast(`已撤下展览馆和盲评：${w.title}`);
+        toast(`已撤下：${w.title}`);
         await refreshPlatform('review');
       } catch (error) {
         $('.form-error:not(.field-error)', form).textContent = error.message;
@@ -699,8 +692,7 @@ function openReview(ctx, w, { questions = [], onDecided } = {}) {
     try {
       if (status === 'questioned' && !form.reason.value.trim()) throw new Error('标记存疑时请写明原因，作者和访客都会看到');
       meta = editor.collect(status === 'verified');
-      body = { status, reason: status === 'questioned' ? form.reason.value : '',
-        ...(status === 'verified' ? { show_gallery: form.show_gallery.checked, show_arena: form.show_arena.checked } : {}) };
+      body = { status, reason: status === 'questioned' ? form.reason.value : '' };
     } catch (err) {
       error.textContent = err.message;
       $('.review-meta', form).open = true;
@@ -960,11 +952,8 @@ function editQuestion(q) {
 const REVIEW_SUMMARY = {
   questions: '题目只能人工审核，通过后进入题库并开放投稿。确认提示词是一项具体、可比较的生成任务；拒绝时写明理由，作者会看到。示例结果的内容可以在题目里直接审核。',
   content: '只判断能否公开。自动审核没能确定的投稿在这里由人决定：通过后转入「核验」，拒绝时写明理由，作者会看到。',
-  unverified: '内容已通过、还没核验的投稿，最早的在前。核对能否运行、是否符合题目、生成信息是否可信；通过时分别决定是否在展览馆展示、是否进入正式盲评，无法核实的标记存疑并写明原因。',
-  verified: '已通过核验并在展览馆展示的投稿，标注是否在盲评池。打开「详情」可调整盲评开关后重新通过核验。馆藏作品由仓库收录流程管理，不在这里。',
-  off: '已处理但未在展览馆展示的投稿（可能仍在盲评池），可以重新核验并调整展示。',
-  questioned: '无法核实的投稿，仅供参考，不参与互动与盲评；原因对作者与访客可见。',
-  rejected: '内容未通过，或所属题目未通过的投稿，都不会公开。可以重新审核内容或删除。',
+  unverified: '内容已通过、还没核验的投稿，最早的在前。核对能否运行、是否符合题目、生成信息是否可信。通过即公开到展览馆，单轮生成且无人工介入的同时进入盲评；无法核实的标记存疑并写明原因。',
+  done: '核验过的投稿，每行写明现在在哪里显示，按钮就是下一步。存疑与拒绝的原因对作者可见。馆藏作品由仓库收录流程管理，不在这里。',
   log: '最近的审核与管理操作。',
 };
 const REVIEW_EMPTY = { questions: '没有待审核的题目', content: '没有等待人工审核内容的投稿', unverified: '没有等待核验的投稿' };
@@ -974,7 +963,7 @@ const BULK = {
     ['approved', '内容通过', '内容已通过', '内容放行后转入「核验」；新题目的示例结果等题目通过后再进入。'],
     ['rejected', '拒绝', '内容已拒绝', '作品不会公开，作者会看到理由。']] },
   unverified: { path: 'admin/works/batch-review', unit: '件', actions: [
-    ['verified', '通过核验', '已通过核验', '通过核验并在展览馆展示；勾选后同时进入正式盲评。'],
+    ['verified', '通过核验', '已通过核验', '通过核验即公开到展览馆，单轮生成且无人工介入的同时进入盲评。'],
     ['questioned', '标记存疑', '已标记存疑', '存疑原因对作者与访客可见。']] },
   questions: { path: 'admin/questions/batch-moderation', unit: '道', actions: [
     ['approved', '通过', '已通过', '公开到题库并开放投稿，沿用作者选的作答形式和领域。'],
@@ -982,7 +971,7 @@ const BULK = {
 };
 
 function review(root, ctx) {
-  const state = { works: null, audit: [], questions: null, questionsError: '', error: '', tab: null, picked: new Set() };
+  const state = { works: null, audit: [], questions: null, questionsError: '', error: '', tab: null, filter: FILTER_TABS[ctx.param] ?? 'all', picked: new Set() };
   let active = true, request = 0;
   async function load() {
     const version = ++request;
@@ -1000,13 +989,22 @@ function review(root, ctx) {
     }
     draw();
   }
-  // Uploads of one bucket: the queues oldest first, decided lists newest first.
-  const queue = (bucket) => (state.works ?? []).filter((w) => w.source !== 'curated' && reviewBucket(ctx, w, state.questions ?? []) === bucket)
-    .sort((a, b) => (['content', 'auto', 'unverified'].includes(bucket) ? 1 : -1) * (Date.parse(a.addedAt) - Date.parse(b.addedAt)));
+  // Uploads of one bucket: the queues oldest first, decided lists newest first. The decided
+  // list (done) gathers four buckets and narrows them by the current filter.
+  const inDone = (w, bucket) => ({ all: ['verified', 'off', 'questioned', 'rejected'].includes(bucket), public: bucket === 'verified',
+    noarena: bucket === 'verified' && w.arena?.state !== 'in_pool', off: bucket === 'off', questioned: bucket === 'questioned', rejected: bucket === 'rejected' })[state.filter];
+  const queue = (bucket) => (state.works ?? []).filter((w) => {
+    if (w.source === 'curated') return false;
+    const own = reviewBucket(ctx, w, state.questions ?? []);
+    return bucket === 'done' ? inDone(w, own) : own === bucket;
+  }).sort((a, b) => (['content', 'auto', 'unverified'].includes(bucket) ? 1 : -1) * (Date.parse(a.addedAt) - Date.parse(b.addedAt)));
   const tabCount = (id) => (id === 'questions' ? (state.questions ?? []).filter(questionWaiting).length : queue(id).length);
+  // Batch switches on the decided list: only where every row needs the same next step.
+  const doneBulk = () => (state.tab === 'done' ? { noarena: 'arena-on', off: 'restore' }[state.filter] : null);
   // What the batch checkboxes of the current queue can select.
   const pickable = () => (state.tab === 'questions' ? (state.questions ?? []).filter(questionWaiting).map((q) => q.id)
-    : BULK[state.tab] ? queue(state.tab).map((w) => w.id) : []);
+    : state.tab === 'done' ? (doneBulk() ? queue('done').filter((w) => doneBulk() !== 'arena-on' || w.arena?.state === 'off').map((w) => w.id) : [])
+      : BULK[state.tab] ? queue(state.tab).map((w) => w.id) : []);
   function draw() {
     if (!platform.user) return signedOut(root, ctx, '请先登录管理员账号');
     if (platform.user.role !== 'admin') {
@@ -1015,7 +1013,7 @@ function review(root, ctx) {
     }
     // Without a tab in the address, open the first queue that has work waiting.
     const param = ctx.param ?? '';
-    const tab = Object.hasOwn(TODO_TABS, param) || Object.hasOwn(DONE_TABS, param) ? param
+    const tab = Object.hasOwn(TODO_TABS, param) || Object.hasOwn(DONE_TABS, param) ? param : Object.hasOwn(FILTER_TABS, param) ? 'done'
       : (state.works && Object.keys(TODO_TABS).find((id) => tabCount(id))) || 'unverified';
     if (state.works !== null) platform.review = {
       questions: tabCount('questions'), content: tabCount('content'), unverified: tabCount('unverified'),
@@ -1025,12 +1023,15 @@ function review(root, ctx) {
     state.tab = tab;
     const ids = pickable();
     for (const id of state.picked) if (!ids.includes(id)) state.picked.delete(id);
-    const bulk = BULK[tab] && ids.length ? `<div class="bulk-bar" data-bulk-bar><label class="row-pick"><input type="checkbox" data-pick-all aria-label="全选"></label><span data-bulk-count></span>${BULK[tab].actions.map(([status, label], i) => `<button class="btn sm${i ? '' : ' primary'}" type="button" data-bulk="${status}" disabled>${label}</button>`).join('')}</div>` : '';
+    const bulkButtons = doneBulk() ? `<button class="btn sm primary" type="button" data-bulk-face="${doneBulk()}" disabled>${FACE_ACTIONS[doneBulk()][0]}</button>`
+      : (BULK[tab]?.actions ?? []).map(([status, label], i) => `<button class="btn sm${i ? '' : ' primary'}" type="button" data-bulk="${status}" disabled>${label}</button>`).join('');
+    const bulk = bulkButtons && ids.length ? `<div class="bulk-bar" data-bulk-bar><label class="row-pick"><input type="checkbox" data-pick-all aria-label="全选"></label><span data-bulk-count></span>${bulkButtons}</div>` : '';
     const works = state.works ?? [];
     const titles = new Map(works.map((w) => [w.id, w.title]));
     const questions = state.questions ?? [];
     const questionTitles = new Map([...ctx.DATA.tasks, ...questions].map((q) => [q.id, q.title]));
-    const rows = (bucket) => queue(bucket).map((w) => workRow(ctx, w, { bucket, questions, picked: bucket === tab && BULK[tab] ? state.picked.has(w.id) : undefined })).join('');
+    const rows = (bucket) => queue(bucket).map((w) => workRow(ctx, w, { bucket: bucket === 'done' ? reviewBucket(ctx, w, questions) : bucket, questions,
+      picked: bucket === tab && ids.includes(w.id) ? state.picked.has(w.id) : undefined })).join('');
     const empty = (text) => `<div class="board-empty"><p class="board-empty-title">${text}</p></div>`;
     let list;
     if (tab === 'log') {
@@ -1045,8 +1046,11 @@ function review(root, ctx) {
       const waiting = rows('content'), auto = rows('auto');
       list = `${waiting ? `${bulk}<div class="work-list">${waiting}</div>` : empty(REVIEW_EMPTY.content)}
         ${auto ? `<h3 class="review-subhead">自动审核中 · ${queue('auto').length}<small>完成后会自动转入「核验」或回到这里，也可以提前人工审核</small></h3><div class="work-list is-muted">${auto}</div>` : ''}`;
+    } else if (tab === 'done') {
+      const chips = `<div class="chips review-filters">${Object.entries(DONE_FILTERS).map(([id, text]) => `<button class="chip${id === state.filter ? ' on' : ''}" type="button" data-filter="${id}" aria-pressed="${id === state.filter}">${text}</button>`).join('')}</div>`;
+      list = `${chips}${rows('done') ? `${bulk}<div class="work-list">${rows('done')}</div>` : empty(state.filter === 'all' ? '还没有核验过的投稿' : `没有${DONE_FILTERS[state.filter]}的投稿`)}`;
     } else {
-      list = rows(tab) ? `${bulk}<div class="work-list">${rows(tab)}</div>` : empty(REVIEW_EMPTY[tab] ?? `没有${DONE_TABS[tab]}的投稿`);
+      list = rows(tab) ? `${bulk}<div class="work-list">${rows(tab)}</div>` : empty(REVIEW_EMPTY[tab]);
     }
     const link = ([id, text], counted) => `<a href="#/review/${id}"${id === tab ? ' aria-current="page"' : ''}>${text}${counted && state.works !== null ? `<span>${tabCount(id)}</span>` : ''}</a>`;
     root.innerHTML = `${ctx.pageStart({ ...ACCOUNT, section: 'me', heading: '审核', nav: accountNav(ctx, 'review'),
@@ -1071,8 +1075,9 @@ function review(root, ctx) {
     const all = bar.querySelector('[data-pick-all]');
     all.checked = n > 0 && n === total;
     all.indeterminate = n > 0 && n < total;
-    bar.querySelector('[data-bulk-count]').textContent = n ? `已选 ${n} ${BULK[state.tab].unit}` : `全选（${total} ${BULK[state.tab].unit}）`;
-    $$('[data-bulk]', bar).forEach((button) => { button.disabled = !n; });
+    const unit = BULK[state.tab]?.unit ?? '件';
+    bar.querySelector('[data-bulk-count]').textContent = n ? `已选 ${n} ${unit}` : `全选（${total} ${unit}）`;
+    $$('[data-bulk], [data-bulk-face]', bar).forEach((button) => { button.disabled = !n; });
   }
   // After a decision in a queue, the oldest remaining work of that queue opens right away.
   const nextIn = (bucket, doneId) => () => {
@@ -1082,6 +1087,21 @@ function review(root, ctx) {
   };
   const open = (work, bucket) => openReview(ctx, work, { questions: state.questions ?? [], onDecided: bucket === 'unverified' ? nextIn(bucket, work.id) : undefined });
   const openHeld = (work, bucket) => openContent(ctx, work, { questions: state.questions ?? [], onDecided: bucket === 'content' ? nextIn(bucket, work.id) : undefined });
+  // One face switch for a row, or for every selected row of the decided list (all or none).
+  async function switchFaces(action, works) {
+    const [label, faces, done] = FACE_ACTIONS[action];
+    if (works.length > 1 && !(await confirmDialog({ title: `${label} ${works.length} 件？`, message: works.map((w) => `「${w.title}」`).join('、'), confirm: label }))) return;
+    try {
+      if (works.length > 1) await api('admin/works/batch-face-settings', { method: 'POST', body: { works: works.map(({ task, id }) => ({ task, id })), ...faces } });
+      else await setFaces(works[0].task, works[0].id, faces);
+    } catch (error) {
+      toast(error.message);
+      return;
+    }
+    state.picked.clear();
+    toast(works.length > 1 ? `${works.length} 件${done}` : `${done}：${works[0].title}`);
+    await refreshPlatform('review');
+  }
   // One decision for every selected item of the current queue. The server decides each item on
   // its own; the ones that failed stay selected and are listed with their reasons.
   function bulkDecide(status) {
@@ -1098,9 +1118,7 @@ function review(root, ctx) {
           <label class="field"><span class="field-label">推理档位<small>留空保持各自原值</small></span><input class="input" name="effort" maxlength="20" list="bulk-efforts"><datalist id="bulk-efforts">${['Default', ...(platform.site.efforts ?? [])].map((e) => `<option value="${esc(e)}"></option>`).join('')}</datalist></label>
           <label class="field"><span class="field-label">服务商<small>留空保持各自原值</small></span><select class="input" name="providerId"><option value="">保持原值</option>${[...ctx.PROVIDERS.values()].map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label>
         </div>
-        <p class="fine">填写的项会覆盖所选全部作品的对应信息；其他必填信息不完整的作品会保留待处理，需要逐件打开补齐。</p>
-        <div class="format-options"><label><input type="checkbox" name="show_arena" checked>同时进入正式盲评</label></div>
-        <p class="fine">多轮生成或有人工介入的作品即使勾选也不会进入盲评池。</p>`;
+        <p class="fine">填写的项会覆盖所选全部作品的对应信息；其他必填信息不完整的作品会保留待处理，需要逐件打开补齐。</p>`;
     }
     if (tab === 'questions' && status === 'approved') {
       const missing = items.filter((q) => !q.category || !domainsOf(q).length).length;
@@ -1138,8 +1156,7 @@ function review(root, ctx) {
         return !problem;
       }) : items;
       const body = tab === 'questions' ? { ids: items.map((q) => q.id), status, reason }
-        : { works: ready.map(({ task, id }) => ({ task, id })), status, reason, ...(Object.keys(meta).length ? { meta } : {}),
-          ...(form.show_arena ? { show_arena: form.show_arena.checked } : {}) };
+        : { works: ready.map(({ task, id }) => ({ task, id })), status, reason, ...(Object.keys(meta).length ? { meta } : {}) };
       const button = $('[type="submit"]', form);
       button.disabled = true;
       let results = [];
@@ -1209,6 +1226,20 @@ function review(root, ctx) {
   root.onclick = async (e) => {
     const bulk = e.target.closest('[data-bulk]');
     if (bulk) return bulkDecide(bulk.dataset.bulk);
+    const filter = e.target.closest('[data-filter]');
+    if (filter) {
+      state.filter = filter.dataset.filter;
+      state.picked.clear();
+      return draw();
+    }
+    const bulkFace = e.target.closest('[data-bulk-face]');
+    if (bulkFace) return switchFaces(bulkFace.dataset.bulkFace, (state.works ?? []).filter((w) => state.picked.has(w.id)));
+    const face = e.target.closest('[data-face]');
+    if (face) {
+      const work = state.works?.find((w) => w.id === face.dataset.work);
+      face.disabled = true;
+      return work && switchFaces(face.dataset.face, [work]);
+    }
     if (await questionAction(e)) return;
     const button = e.target.closest('[data-review], [data-content], [data-delete]');
     const work = button && state.works?.find((w) => w.id === (button.dataset.review ?? button.dataset.content ?? button.dataset.delete));
