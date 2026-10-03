@@ -561,6 +561,20 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
 .category-option small { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
 .category-option:has(input:checked) { border-color: var(--ink-2); background: var(--surface-2); color: var(--ink); }
 .category-option:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
+.domain-groups { display: grid; gap: 14px; margin-top: 6px; }
+.domain-group { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: start; }
+.domain-group-title { padding-top: 8px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.domain-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.domain-option { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink-2); font-size: 12px; line-height: 1.5; cursor: pointer; }
+.domain-option input { width: 13px; height: 13px; margin: 0; accent-color: var(--ink); }
+.domain-option:hover { border-color: var(--ink-2); color: var(--ink); }
+.domain-option:has(input:checked) { border-color: var(--ink-2); background: var(--surface-2); color: var(--ink); }
+.domain-option:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
+.domain-option:has(input:disabled) { opacity: .6; cursor: default; border-color: var(--line); }
+@media (max-width: 460px) {
+  .domain-group { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .domain-group-title { padding-top: 0; }
+}
 .format-fixed { margin: 2px 0 0; color: var(--ink-2); font-size: 13px; }
 .publish-note { border-left: 1px solid var(--line); padding-left: 24px; }
 .publish-note h3 { font-size: 15px; margin-bottom: 12px; }

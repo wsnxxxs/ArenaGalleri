@@ -18,7 +18,7 @@ const POLL_LIMIT = 40;
 // What each format's dropzone accepts: the picker filter, the name check and its message.
 const FILES = {
   text: { accept: '.txt,.md,.markdown,text/plain,text/markdown', pattern: /\.(txt|md|markdown)$/i, prompt: '拖入 .txt 或 .md 文本文件', error: '文学作品请上传 .txt 或 .md 文本文件' },
-  static: { accept: '.html,.htm,text/html', pattern: /\.html?$/i, prompt: '拖入单个 HTML 文件', error: '网页和三维作品请上传单个 .html 文件' },
+  static: { accept: '.html,.htm,text/html', pattern: /\.html?$/i, prompt: '拖入单个 HTML 文件', error: '设计和三维作品请上传单个 .html 文件' },
 };
 // A page is one HTML file of at most 30 MB, whatever the server would take.
 const HTML_BYTES = 30 * 1024 * 1024;

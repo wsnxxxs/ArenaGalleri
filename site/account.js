@@ -2,7 +2,8 @@
 import { $, $$, brandMark, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
 import { api, apiRemembered, arenaText, autoRejected, avatarFace, byStaff, canDecide, confirmDialog, injected, isSenior, isStaff, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, recall, refreshPlatform, requireUser, reviewCount, riskLabels, ROLE_LABELS, setFaces, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
-import { CATEGORIES, MAX_DOMAINS, categoryLabel, domainList, domainsOf, matchesQuery } from './categories.js';
+import { categoryLabel, domainsOf, matchesQuery } from './categories.js';
+import { categoryField, domainField, syncDomains } from './question-fields.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
 import { sticker, stickerName } from './stickers.js';
 
@@ -887,14 +888,9 @@ function catalogRow(ctx, q, buckets) {
   </article>`;
 }
 
-// The answer form and domains of a question, as set when approving or editing it.
+// The question type and domains, shared with the publishing form.
 function categoryFields(q) {
-  return `<label class="field"><span class="field-label">作答形式<i>*</i></span><select class="input" name="category" required><option value="">请选择</option>${CATEGORIES.map((c) => `<option value="${esc(c.name)}"${c.name === q.category ? ' selected' : ''}>${esc(c.label)}</option>`).join('')}</select></label>
-    <fieldset class="field"><legend class="field-label">所属领域<i>*</i><small>1–${MAX_DOMAINS} 个</small></legend><div class="format-options domain-options">${domainList(platform).map((d) => `<label><input type="checkbox" name="domains" value="${esc(d)}"${domainsOf(q).includes(d) ? ' checked' : ''}>${esc(d)}</label>`).join('')}</div></fieldset>`;
-}
-function lockDomains(form) {
-  const full = $$('[name="domains"]:checked', form).length >= MAX_DOMAINS;
-  $$('[name="domains"]', form).forEach((box) => { box.disabled = full && !box.checked; });
+  return categoryField(q.category) + domainField(platform, domainsOf(q));
 }
 const questionShown = (q) => ['legacy', 'approved'].includes(q.moderation?.status ?? 'legacy');
 
@@ -907,7 +903,7 @@ function decideQuestion(q, status) {
     let saved = false;
     const sheet = openDialog({
       title: status === 'approved' ? '通过这道题？' : '拒绝这道题',
-      className: 'confirm-sheet',
+      className: status === 'approved' ? 'edit-work-sheet' : 'confirm-sheet',
       onClose: () => resolve(saved),
       body: `<form data-q-form novalidate>
         <p class="sheet-text">「${esc(q.title)}」${status === 'approved' ? '会公开到题库并开放投稿。' : withdraw ? '会从题库撤下，作者会看到下面的理由。' : '不会公开，作者会看到下面的理由。'}</p>
@@ -919,15 +915,15 @@ function decideQuestion(q, status) {
       </form>`,
     });
     const form = $('[data-q-form]', sheet.el);
-    lockDomains(form);
-    form.addEventListener('change', () => lockDomains(form));
+    syncDomains(form);
+    form.addEventListener('change', () => syncDomains(form));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const reason = form.reason.value.trim();
       const error = $('.form-error', form);
       if (status === 'rejected' && !reason) { error.textContent = '请写明拒绝理由'; form.reason.focus(); return; }
       const category = form.category?.value;
-      if (status === 'approved' && !category) { error.textContent = '请选择作答形式'; form.category.focus(); return; }
+      if (status === 'approved' && !category) { error.textContent = '请选择题目类型'; $('[name="category"]', form).focus(); return; }
       const domains = $$('[name="domains"]:checked', form).map((box) => box.value);
       if (status === 'approved' && !domains.length) { error.textContent = '请选择所属领域'; return; }
       const button = $('[type="submit"]', form);
@@ -972,8 +968,8 @@ function editQuestion(q, works = []) {
       </form>`,
     });
     const form = $('[data-q-edit-form]', sheet.el);
-    lockDomains(form);
-    form.addEventListener('change', () => lockDomains(form));
+    syncDomains(form);
+    form.addEventListener('change', () => syncDomains(form));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const error = $('.form-error', form);
@@ -985,7 +981,7 @@ function editQuestion(q, works = []) {
       }
       if (locked) delete body.prompt;
       const category = form.category.value;
-      if (!category) { error.textContent = '请选择作答形式'; return; }
+      if (!category) { error.textContent = '请选择题目类型'; return; }
       if (category !== q.category) body.category = category;
       const domains = $$('[name="domains"]:checked', form).map((box) => box.value);
       if (!domains.length) { error.textContent = '请选择所属领域'; return; }
@@ -1027,7 +1023,7 @@ const BULK = {
     ['verified', '通过核验', '已通过核验', '通过核验即公开到展览馆，单轮生成且无人工介入的同时进入盲评。'],
     ['questioned', '标记存疑', '已标记存疑', '存疑原因对作者与访客可见。']] },
   questions: { path: 'admin/questions/batch-moderation', unit: '道', actions: [
-    ['approved', '通过', '已通过', '公开到题库并开放投稿，沿用作者选的作答形式和领域。'],
+    ['approved', '通过', '已通过', '公开到题库并开放投稿，沿用作者选的题目类型和领域。'],
     ['rejected', '拒绝', '已拒绝', '题目不会公开，作者会看到理由。']] },
 };
 
@@ -1209,7 +1205,7 @@ function review(root, ctx) {
     }
     if (tab === 'questions' && status === 'approved') {
       const missing = items.filter((q) => !q.category || !domainsOf(q).length).length;
-      if (missing) extra = `<p class="sheet-text">其中 ${missing} 道还没有作答形式或领域，会失败，需要先编辑或单独通过。</p>`;
+      if (missing) extra = `<p class="sheet-text">其中 ${missing} 道还没有题目类型或领域，会失败，需要先编辑或单独通过。</p>`;
     }
     const name = (item) => esc(item.title) + (tab === 'questions' ? '' : ` <span>${esc(item.modelName ?? '')}</span>`);
     const sheet = openDialog({

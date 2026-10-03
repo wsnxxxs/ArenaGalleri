@@ -1,15 +1,21 @@
-// Questions sit on two axes. The category is the form of the answer (text, page, 3D): it groups the
+// Questions sit on two axes. The category is the type of the answer (text, design, 3D): it groups the
 // library and the leaderboard and decides which submission formats a question accepts. Stored names
 // stay as they are, so links and votes keep working; `label` is what readers see.
 // Domains say what a question is about (数学, 化学, 建筑…): one or two per question, for browsing only.
 export const CATEGORIES = [
-  { name: '文学', label: '文本', slug: 'text', glyph: 'text', templates: ['text'] },
-  { name: '静态网页', label: '网页', slug: 'page', glyph: 'desktop', templates: ['static'] },
-  { name: '建模', label: '三维', slug: 'model', glyph: 'cube', templates: ['static'] },
+  { name: '文学', label: '文本', note: '故事、诗歌、推导与证明', slug: 'text', glyph: 'text', templates: ['text'] },
+  { name: '静态网页', label: '设计', note: '页面布局、交互与可视化', slug: 'page', glyph: 'desktop', templates: ['static'] },
+  { name: '建模', label: '三维', note: '三维场景、模型与模拟', slug: 'model', glyph: 'cube', templates: ['static'] },
 ];
 export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '单个 HTML 文件' };
 // The backend may send its own list in bootstrap (`domains`); this one stands in without it.
-export const DOMAINS = ['数学', '物理', '化学', '生物', '天文', '建筑', '自然景观', '交通与机械', '产品与品牌', '文学艺术', '游戏娱乐'];
+export const DOMAIN_GROUPS = [
+  { title: '理工与健康', domains: ['数学', '物理', '化学', '生物', '天文', '计算机技术', '工程技术', '医学健康', '地理环境'] },
+  { title: '人文与社会', domains: ['文学艺术', '历史文化', '教育学习', '经济金融', '商业管理', '法律政务', '社会生活'] },
+  { title: '空间与产品', domains: ['建筑', '自然景观', '交通与机械', '产品与品牌'] },
+  { title: '生活与娱乐', domains: ['游戏娱乐', '生活服务', '餐饮美食', '旅游出行', '运动体育'] },
+];
+export const DOMAINS = DOMAIN_GROUPS.flatMap((group) => group.domains);
 export const MAX_DOMAINS = 2;
 
 export const categoryOf = (name) => CATEGORIES.find((c) => c.name === name) ?? null;
@@ -20,6 +26,16 @@ export const templatesOf = (task) => [...new Set((task.templates?.length ? task.
   .map((type) => (type === 'vite' ? 'static' : type)))];
 export const domainsOf = (task) => task.domains ?? [];
 export const domainList = (platform) => (platform?.domains?.length ? platform.domains : DOMAINS);
+// Groups organize the picker only; the API's list remains authoritative for allowed values.
+export function domainGroups(platform) {
+  const list = domainList(platform);
+  const groups = (platform?.domainGroups ?? DOMAIN_GROUPS)
+    .map((group) => ({ ...group, domains: group.domains.filter((name) => list.includes(name)) }))
+    .filter((group) => group.domains.length);
+  const listed = groups.flatMap((group) => group.domains);
+  const other = list.filter((name) => !listed.includes(name));
+  return other.length ? [...groups, { title: '其他领域', domains: other }] : groups;
+}
 // Questions carry no tags of their own: a search looks through their words and every version of
 // the prompt, where a stack such as Three.js is already named. Each space-separated word must appear.
 // Letters fold to lower case and spaces, dots, hyphens and underscores drop out, so threejs finds

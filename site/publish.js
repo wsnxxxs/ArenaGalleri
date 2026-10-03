@@ -4,9 +4,8 @@
 import { $, $$, esc, icon } from './ui.js';
 import { api, platform, refreshPlatform, requireUser, toast } from './platform.js';
 import { contentStage, moderated, stageTrack, uploadFlow } from './submit.js';
-import { CATEGORIES, MAX_DOMAINS, TEMPLATE_LABELS, categoryLabel, categoryOf, domainList } from './categories.js';
-
-const CATEGORY_NOTES = { 文学: '故事、诗歌、推导与证明', 静态网页: '页面、交互与可视化', 建模: '三维场景、模型与模拟' };
+import { TEMPLATE_LABELS, categoryLabel, categoryOf } from './categories.js';
+import { categoryField, domainField, syncDomains } from './question-fields.js';
 // Drafts staged for a question that does not exist yet.
 const NEW_QUESTION = '__new__';
 const blank = () => ({ title: '', summary: '', category: '', domains: [], prompt: '', templates: [] });
@@ -14,14 +13,13 @@ const sideSteps = (current) => `<ol class="side-steps">${['题目信息', '选�
   .map((label, i) => `<li${i === current ? ' aria-current="step"' : ''}><span>0${i + 1}</span>${label}</li>`).join('')}</ol>`;
 
 export function mount(root, ctx) {
-  const domains = domainList(platform);
   let question = blank();
   let flow = null, active = true;
 
   // Formats follow the category: a text question takes text, web and 3D questions one HTML file.
   function formatField() {
     const category = categoryOf(question.category);
-    if (!category) return '<span class="field-label">允许的提交格式 *</span><p class="fine">选择作答形式后显示可用格式。</p>';
+    if (!category) return '<span class="field-label">允许的提交格式 *</span><p class="fine">选择题目类型后显示可用格式。</p>';
     const [only] = category.templates;
     if (category.templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '上传 .txt 或 .md 文件，站内按统一版式展示；.md 支持表格与 LaTeX 公式。' : '上传单个 .html 文件，资源需写进页面。'}</p>`;
     return `<span class="field-label">允许的提交格式 *</span><div class="format-options">
@@ -39,30 +37,21 @@ export function mount(root, ctx) {
           <div class="notice publish-auth" data-publish-auth${platform.user ? ' hidden' : ''}>${icon('user')}<p>登录后即可发起题目，已填写的内容会保留。</p><button class="btn sm" type="button" data-auth="login">登录 / 注册</button></div>
           <label class="field"><span class="field-label">题目标题 *</span><input class="input" name="title" required maxlength="70" placeholder="例如：体素中国古典建筑群" value="${esc(question.title)}"></label>
           <label class="field"><span class="field-label">测试简述 *</span><textarea class="input" name="summary" required maxlength="400" rows="3" placeholder="需要完成什么？能测出模型的哪些能力？">${esc(question.summary)}</textarea></label>
-          <fieldset class="field"><legend class="field-label">作答形式 *</legend><div class="category-options">
-            ${CATEGORIES.map((c) => `<label class="category-option"><input type="radio" name="category" value="${esc(c.name)}"${c.name === question.category ? ' checked' : ''}>${icon(c.glyph)}<span><b>${esc(c.label)}</b><small>${esc(CATEGORY_NOTES[c.name])}</small></span></label>`).join('')}
-          </div><p class="fine">形式决定这道题在排行榜中的分组，以及作品的提交格式。</p></fieldset>
-          <fieldset class="field"><legend class="field-label">所属领域 *</legend><div class="format-options domain-options">
-            ${domains.map((d) => `<label><input type="checkbox" name="domains" value="${esc(d)}"${question.domains.includes(d) ? ' checked' : ''}>${esc(d)}</label>`).join('')}
-          </div><p class="fine">选 1–${MAX_DOMAINS} 个，题库按领域筛选。例如函数图像动画选「网页 · 数学」，分子结构选「三维 · 化学」。</p></fieldset>
+          ${categoryField(question.category)}
+          ${domainField(platform, question.domains)}
           <label class="field"><span class="field-label">完整提示词 *</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="粘贴所有参与模型需要使用的同一份完整提示词。">${esc(question.prompt)}</textarea><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
           <div class="field" data-formats>${formatField()}</div>
           <p class="form-error" role="alert"></p>
           <div class="form-actions"><button class="btn primary" type="submit" value="plain">提交题目</button><button class="btn" type="submit" value="sample">附上示例结果（选填）${icon('right')}</button><a class="btn" href="#/questions">取消</a><span class="fine">发起即表示你同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></div>
         </form>
-        <aside class="publish-note"><h3>一道可比较的题目</h3><p>简述说明测试目标。<br>形式决定提交格式，领域方便读者找到它。<br>提示词作为所有作品的共同依据。</p><p>可以选择附上一份用这份提示词生成的模型结果，让管理员和大家更快看到它能做出什么。</p><p>题目由管理员人工审核，示例结果另做内容审核；通过前只有你能看到。测试文字、灌水或广告不会通过。</p></aside>
+        <aside class="publish-note"><h3>一道可比较的题目</h3><p>简述说明测试目标。<br>类型决定提交格式，领域方便读者找到它。<br>提示词作为所有作品的共同依据。</p><p>可以选择附上一份用这份提示词生成的模型结果，让管理员和大家更快看到它能做出什么。</p><p>题目由管理员人工审核，示例结果另做内容审核；通过前只有你能看到。测试文字、灌水或广告不会通过。</p></aside>
       </section>${ctx.pageEnd()}`;
     document.title = `发起题目 · ${ctx.DATA.title}`;
     const form = $('.publish-form', root);
     const error = $('.form-error', form);
-    // At most two domains: the rest lock once two are chosen.
-    const paintDomains = () => {
-      const full = $$('[name="domains"]:checked', form).length >= MAX_DOMAINS;
-      $$('[name="domains"]', form).forEach((box) => { box.disabled = full && !box.checked; });
-    };
-    paintDomains();
+    syncDomains(form);
     root.onchange = (event) => {
-      if (event.target.matches('[name="domains"]')) { paintDomains(); error.textContent = ''; return; }
+      if (event.target.matches('[name="domains"]')) { syncDomains(form); error.textContent = ''; return; }
       if (!event.target.matches('[name="category"]')) return;
       question.category = event.target.value;
       question.templates = [...categoryOf(question.category).templates];
@@ -79,7 +68,7 @@ export function mount(root, ctx) {
       for (const [name, label] of [['title', '题目标题'], ['summary', '测试简述'], ['prompt', '完整提示词']]) {
         if (!String(data.get(name)).trim()) { error.textContent = `请填写${label}`; $(`[name="${name}"]`, form).focus(); return; }
       }
-      if (!categoryOf(data.get('category'))) { error.textContent = '请选择作答形式'; $('[name="category"]', form).focus(); return; }
+      if (!categoryOf(data.get('category'))) { error.textContent = '请选择题目类型'; $('[name="category"]', form).focus(); return; }
       if (!data.getAll('domains').length) { error.textContent = '请选择所属领域'; $('[name="domains"]', form).focus(); return; }
       if (!data.getAll('templates').length) { error.textContent = '请至少选择一种提交格式'; return; }
       question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), category: String(data.get('category')), domains: data.getAll('domains'), prompt: String(data.get('prompt')).trim(),
