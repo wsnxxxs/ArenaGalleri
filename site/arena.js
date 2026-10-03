@@ -190,7 +190,7 @@ function match(root, ctx, task) {
       <span class="arena-who revealed"><b>${esc(work.modelName)}</b>${work.effort ? `<span class="badge">${esc(work.effort)}</span>` : ''}<small>${esc(work.title)}</small></span>
       ${chosen ? '<span class="arena-pick-seal" title="你的选择"><span>所</span><span>选</span></span>' : ''}
       ${reactionBar(`${task.id}/${work.id}`, { locked: work.status === 'questioned' })}
-      <a class="pane-close" href="#/${esc(task.id)}/${esc(work.id)}" title="在展厅中打开" aria-label="在展厅中打开 ${esc(work.title)}">${icon('arrow')}</a>
+      ${ctx.inGallery(task.id, work.id) ? `<a class="pane-close" href="#/${esc(task.id)}/${esc(work.id)}" title="在展厅中打开" aria-label="在展厅中打开 ${esc(work.title)}">${icon('arrow')}</a>` : ''}
       ${unseal ? sealStrip(' is-leaving') : ''}`;
   }
 

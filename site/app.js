@@ -101,6 +101,9 @@ const authorName = (item) => (byStaff(item) ? DATA.title : item.author.name ?? '
 const authorAvatar = (item) => (byStaff(item) ? LOGO : avatarFace(item.author.avatar, item.author.name ?? ''));
 const workKey = (t, r) => `${t.id}/${r.id}`;
 const interactive = (r) => r.status !== 'questioned';
+// Whether a work has a gallery page: the public catalog holds exactly the works the gallery shows,
+// so an unverified, held or taken-down upload links to its own preview instead.
+const inGallery = (taskId, id) => DATA.tasks.some((t) => t.id === taskId && t.results.some((r) => r.id === id));
 
 // Images fade in once decoded; `load` does not bubble, so listen in the capture phase.
 document.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('is-loaded'); }, true);
@@ -1467,7 +1470,7 @@ function backLink(cls) {
 }
 
 // Everything a platform page needs from the gallery.
-const context = () => ({ DATA, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, entryKey, taskHref, viewHref, workKey, interactive, settleImages, packagedWork });
+const context = () => ({ DATA, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, entryKey, taskHref, viewHref, workKey, interactive, inGallery, settleImages, packagedWork });
 
 // The data pack holds its questions' assets: screenshots, scenes, models and capture conditions.
 // The API decides which questions and works are public and holds their current fields; without

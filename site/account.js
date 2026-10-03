@@ -170,7 +170,7 @@ function workRow(ctx, w, { bucket = null, questions = [], picked } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task);
   const model = ctx.modelOf({ model: w.model, modelName: w.modelName, vendor: w.vendor });
   // Works absent from the public catalog open the server-provided owner/admin preview.
-  const hidden = held(w) || !task?.results.some((result) => result.id === w.id);
+  const hidden = !ctx.inGallery(w.task, w.id);
   const variant = task?.promptVariants?.find((v) => v.id === w.promptVariant);
   const mine = admin ? null : authorStage(w, questions);
   const tone = { held: 'unverified', waiting: 'unverified', issue: 'questioned', verified: 'verified' }[mine?.group];
@@ -632,13 +632,15 @@ export function openReview(ctx, w, { questions = [], onDecided } = {}) {
   const task = ctx.DATA.tasks.find((t) => t.id === w.task) ?? questions.find((q) => q.id === w.task);
   // An unregistered model without a declared vendor shows what its name suggests.
   const guess = w.model || w.vendor ? '' : ctx.modelOf({ modelName: w.modelName }).vendor;
+  // Most works here are not in the gallery yet; those only open their preview.
+  const shown = ctx.inGallery(w.task, w.id);
   const sheet = openDialog({
     title: '核验作品',
     className: 'review-sheet',
     body: `<div class="review">
       <div class="review-facts">
-        <div class="review-head">${thumb(ctx, w)}<div><h3>${esc(w.title)}</h3><p class="result-model">${statusBadge(w.status, { always: true })}<span>${esc(task?.title ?? w.task)}</span></p>
-          <div class="actions"><a class="btn sm" href="${esc(w.scene)}" target="_blank" rel="noopener">打开作品${icon('arrow')}</a><a class="btn sm" href="#/${esc(w.task)}/${esc(w.id)}">在展厅中查看</a></div></div></div>
+        <div class="review-head">${thumb(ctx, w, { link: shown })}<div><h3>${esc(w.title)}</h3><p class="result-model">${statusBadge(w.status, { always: true })}<span>${esc(task?.title ?? w.task)}</span></p>
+          <div class="actions"><a class="btn sm" href="${esc(w.scene)}" target="_blank" rel="noopener">打开作品${icon('arrow')}</a>${shown ? `<a class="btn sm" href="#/${esc(w.task)}/${esc(w.id)}">在展厅中查看</a>` : ''}</div></div></div>
         <dl class="facts">
           <div><dt>发布者</dt><dd>${esc(publisher(ctx, w))}${w.addedAt ? ` · ${formatTime(w.addedAt)}` : ''}</dd></div>
           <div><dt>声明的模型</dt><dd>${esc(w.modelName)}${w.vendor ? ` · ${esc(w.vendor)}` : ''}${w.model ? '' : `（未收录${guess ? `，按名称推断为 ${esc(guess)}` : ''}，可在数据仓注册表补录）`}</dd></div>
@@ -1100,7 +1102,7 @@ function review(root, ctx) {
   function managedRow(w) {
     const key = esc(pickId(w)), task = taskOf(w), model = ctx.modelOf(w);
     const bucket = reviewBucket(ctx, w, state.questions ?? []);
-    const hidden = held(w) || !ctx.DATA.tasks.find((t) => t.id === w.task)?.results.some((result) => result.id === w.id);
+    const hidden = !ctx.inGallery(w.task, w.id);
     const href = hidden && w.scene ? esc(w.scene) : `#/${esc(w.task)}/${esc(w.id)}`;
     const issue = ['questioned', 'rejected'].includes(bucket);
     const checkLabel = held(w) ? '内容' : bucket === 'sample' || !ctx.DATA.tasks.some((t) => t.id === w.task) ? '题目' : '核验';
@@ -1184,15 +1186,19 @@ function review(root, ctx) {
       : (BULK[tab]?.actions ?? []).map(([status, label], i) => `<button class="btn sm${i ? '' : ' primary'}" type="button" data-bulk="${status}" disabled>${label}</button>`).join('');
     const bulk = bulkButtons && ids.length ? `<div class="bulk-bar" data-bulk-bar><label class="row-pick"><input type="checkbox" data-pick-all aria-label="全选"></label><span data-bulk-count></span>${bulkButtons}</div>` : '';
     const works = state.works ?? [];
-    const titles = new Map(works.map((w) => [pickId(w), w.title]));
+    const byKey = new Map(works.map((w) => [pickId(w), w]));
     const questions = state.questions ?? [];
     const questionTitles = new Map([...ctx.DATA.tasks, ...questions].map((q) => [q.id, q.title]));
     const rows = (bucket) => queue(bucket).map((w) => workRow(ctx, w, { bucket: bucket === 'done' ? reviewBucket(ctx, w, questions) : bucket, questions,
       picked: bucket === tab && ids.includes(pickId(w)) ? state.picked.has(pickId(w)) : undefined })).join('');
     const empty = (text) => `<div class="board-empty"><p class="board-empty-title">${text}</p></div>`;
+    // A logged work links to its gallery page, or to its preview while it is not in the gallery.
+    const auditWork = (w, id) => !w ? `<span class="muted">${esc(id)}（已删除）</span>`
+      : ctx.inGallery(w.task, w.id) ? `<a href="#/${esc(w.task)}/${esc(w.id)}">${esc(w.title)}</a>`
+        : w.scene ? `<a href="${esc(w.scene)}" target="_blank" rel="noopener">${esc(w.title)}</a>` : esc(w.title);
     let list;
     if (tab === 'log') {
-      list = state.audit.length ? `<ol class="audit">${state.audit.map((row) => `<li><time>${formatTime(row.at)}</time><span class="audit-actor">${esc(row.actor)}</span><b>${esc(ACTIONS[row.action] ?? row.action)}</b><span class="audit-work">${!row.work && row.action?.startsWith('question-') && row.task ? esc(questionTitles.get(row.task) ?? row.task) : ''}${row.work ? (titles.has(`${row.task}/${row.work}`) ? `<a href="#/${esc(row.task)}/${esc(row.work)}">${esc(titles.get(`${row.task}/${row.work}`))}</a>` : `<span class="muted">${esc(row.work)}（已删除）</span>`) : ''}${row.detail ? ` · ${esc(row.detail)}` : ''}</span></li>`).join('')}</ol>` : '<p class="muted">还没有记录。</p>';
+      list = state.audit.length ? `<ol class="audit">${state.audit.map((row) => `<li><time>${formatTime(row.at)}</time><span class="audit-actor">${esc(row.actor)}</span><b>${esc(ACTIONS[row.action] ?? row.action)}</b><span class="audit-work">${!row.work && row.action?.startsWith('question-') && row.task ? esc(questionTitles.get(row.task) ?? row.task) : ''}${row.work ? auditWork(byKey.get(`${row.task}/${row.work}`), row.work) : ''}${row.detail ? ` · ${esc(row.detail)}` : ''}</span></li>`).join('')}</ol>` : '<p class="muted">还没有记录。</p>';
     } else if (tab === 'questions') {
       const waiting = questions.filter(questionWaiting).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
       list = state.questionsError ? `<p class="muted">${esc(state.questionsError)}</p>`

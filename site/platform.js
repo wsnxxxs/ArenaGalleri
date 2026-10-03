@@ -137,8 +137,9 @@ window.addEventListener('pageshow', (event) => {
 
 // ---- status -------------------------------------------------------------------------------
 export const STATUS = {
-  verified: { label: '已验证', hint: '已核验并公开；单轮生成且无人工介入的作品参与盲评', icon: 'check' },
-  unverified: { label: '未验证', hint: '等待管理员核验：可以浏览和贴表情，暂不参与盲评', icon: 'clock' },
+  // Hints describe the review only: admin lists also show works the gallery does not.
+  verified: { label: '已验证', hint: '已通过核验；单轮生成且无人工介入的作品可参与盲评', icon: 'check' },
+  unverified: { label: '未验证', hint: '等待管理员核验，暂不参与盲评', icon: 'clock' },
   questioned: { label: '存疑', hint: '核验存疑：仅供参考，不参与互动与盲评', icon: 'alert' },
 };
 // A work's blind-pool state as the server reports it (owner and admin views carry `arena`).

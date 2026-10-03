@@ -48,9 +48,10 @@ export function stageTrack(stages, current = -1, { row = false, compact = false,
   }).join('')}</ol>`;
 }
 
-const workStages = () => [...(moderated() ? [contentStage()] : []), ['未验证', '公开展示，可修改信息'], ['已验证', '管理员核对后排在前面']];
-// Where a submitted work stands, for its done page.
-function workStage(w) {
+const workStages = () => [...(moderated() ? [contentStage()] : []), ['等待核验', '管理员核对生成信息，可修改'], ['已验证', '公开到展览馆']];
+// Where a submitted work stands, for its done page. shown: the work is in the public gallery;
+// an automatic content approval alone does not put an unverified upload there.
+function workStage(w, shown) {
   const offset = moderated() ? 1 : 0;
   const status = w.moderation?.status;
   if (status === 'pending') return { kicker: '内容审核中', title: `「${w.title}」正在内容审核`,
@@ -59,9 +60,11 @@ function workStage(w) {
     text: '自动审核没能确定结果，管理员会人工查看。通过前仍然只有你能看到。', current: 0 };
   if (status === 'rejected') return { kicker: '未通过', title: `「${w.title}」没有通过内容审核`,
     text: '作品不会公开。可以在「我的作品」删除后修改，再重新上传。', current: -1, rejected: true };
-  if (w.status === 'verified') return { kicker: '已验证', title: `「${w.title}」已通过验证`, text: '它会排在题目页前面。', current: offset + 1 };
-  return { kicker: '未验证', title: `「${w.title}」已经进入展厅`,
+  if (w.status === 'verified') return { kicker: '已验证', title: `「${w.title}」已通过验证`, text: shown ? '它已公开到展览馆，排在题目页前面。' : '它目前没有公开到展览馆。', current: offset + 1, live: shown };
+  if (shown) return { kicker: '未验证', title: `「${w.title}」已经进入展厅`,
     text: '所有人都可以浏览它、给它贴表情。管理员核对生成信息后会标为已验证。', current: offset, live: true };
+  return { kicker: '等待核验', title: `「${w.title}」等待核验`,
+    text: '管理员核对生成信息后公开到展览馆，在此之前只有你能看到。核验前可以在「我的作品」修改信息。', current: offset };
 }
 
 export function mount(root, ctx) {
@@ -237,7 +240,7 @@ export function uploadFlow(root, ctx, options) {
   function done() {
     if (options.done) return options.done(state.result);
     const w = state.work;
-    const stage = workStage(w);
+    const stage = workStage(w, ctx.inGallery(w.task, w.id));
     const reason = stage.rejected && w.moderation?.reason ? `<p class="result-reason">${icon('alert')}<span>原因：${esc(w.moderation.reason)}</span></p>` : '';
     const actions = stage.rejected
       ? `<a class="btn primary" href="#/me/works">去我的作品处理${icon('right')}</a><button class="btn" data-act="another">重新上传</button>`
@@ -432,9 +435,11 @@ export function uploadFlow(root, ctx, options) {
         const key = (r) => JSON.stringify([r.work?.moderation?.status, r.work?.status, r.question?.moderation?.status]);
         const next = { ...state.result, ...(freshWork ? { work: freshWork } : {}), ...(freshQuestion ? { question: freshQuestion } : {}) };
         if (key(next) !== key(state.result)) {
+          // The done page asks the catalog whether the work is in the gallery, so refresh it first.
+          await refreshPlatform('upload').catch(() => {});
+          if (!active || !state.result) return;
           Object.assign(state, { result: next, work: next.work });
           draw();
-          refreshPlatform('upload').catch(() => {});
         }
       } catch { /* keep trying until the limit */ }
       follow();
