@@ -537,7 +537,8 @@ function resultCard(t, r) {
   const m = modelOf(r);
   const screenshotPreview = r.previewMode === 'screenshot';
   const screenshot = r.captures?.first ?? r.gallery?.[0]?.src ?? '';
-  const lead = isLead(coverLead(t), r);
+  const coverWork = coverLead(t);
+  const lead = isLead(coverWork, r);
   return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-model="${esc(modelKey(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media">
       <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
@@ -547,7 +548,7 @@ function resultCard(t, r) {
     <div class="result-body">
       ${resultVariantButtons(t, r)}
       <p class="result-model">${brandMark(m, 'brand-mark sm')}<b>${esc(m.name)}</b>${resultBadges(r)}${platform.featured?.[t.id]?.models?.[modelKey(r)] === r.id ? '<span class="badge featured-badge" title="盲评票选出的代表作">代表作</span>' : ''}${statusBadge(r.status, { reason: r.reason })}</p>
-      ${lead ? `<p class="lead-why">${platform.featured?.[t.id]?.cover === r.id ? '盲评票选的代表作' : '本题封面作品 · 盲评票数足够后改由票选决定'}</p>` : ''}
+      ${lead ? `<p class="lead-why">${t.cover === coverWork.id ? '管理员指定的本题封面' : platform.featured?.[t.id]?.cover === coverWork.id ? '盲评票选的代表作' : '本题封面作品 · 盲评票数足够后改由票选决定'}</p>` : ''}
       <h3><a href="${viewHref(t, r.id)}">${esc(r.title)}${icon('arrow')}</a></h3>
       <p class="result-by">${esc(authorName(r))} 发布${sourceLine(r) || r.tool ? ` · ${esc(sourceLine(r) || r.tool)}` : ''}${r.addedAt ? ` · ${formatDate(r.addedAt)}` : ''}</p>
       ${r.status === 'questioned' && r.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(r.reason)}</span></p>` : ''}
