@@ -123,7 +123,7 @@ function lobby(root, ctx) {
 }
 
 function match(root, ctx, task) {
-  const state = { match: null, result: null, ready: {}, seen: {}, side: 'a', round: 0, counted: 0, busy: false, prompt: false, slow: false, error: null };
+  const state = { match: null, result: null, ready: {}, seen: {}, controls: {}, controlsShown: false, side: 'a', round: 0, counted: 0, busy: false, prompt: false, slow: false, error: null };
   const mobile = () => matchMedia('(max-width: 860px)').matches;
   const timers = new Set();
   const later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); };
@@ -136,6 +136,7 @@ function match(root, ctx, task) {
       <div class="arena-heading"><b>${esc(task.title)}</b><span data-round>正在准备</span></div>
       <div class="vtools">
         <button class="vtool" data-a="prompt" aria-pressed="false" title="查看提示词">${icon('guide')}<span class="vtool-text">提示词</span></button>
+        <button class="vtool" data-a="controls" aria-pressed="false" aria-label="显示作品控件" title="显示作品控件" hidden>${icon('menu')}<span class="vtool-text">显示作品控件</span></button>
         <a class="vtool" href="#/leaderboard/${esc(task.id)}" title="这道题的榜单">${icon('rank')}<span class="vtool-text">榜单</span></a>
         <span class="vdivider" aria-hidden="true"></span>
         ${themeButton('vtool icon-only')}
@@ -239,17 +240,47 @@ function match(root, ctx, task) {
     $$('[data-a="side"]', el).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === state.side)));
   }
 
-  const update = () => { drawHeads(); drawBar(); drawSide(); };
+  function drawControls() {
+    const button = $('[data-a="controls"]', el);
+    const label = state.controlsShown ? '隐藏作品控件' : '显示作品控件';
+    button.hidden = !Object.values(state.controls).some((count) => count > 0);
+    button.setAttribute('aria-pressed', String(state.controlsShown));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    $('.vtool-text', button).textContent = label;
+  }
+
+  function syncControls(frame) {
+    frame.contentWindow?.postMessage({ source: 'sp-arena', fold: !state.controlsShown }, '*');
+  }
+
+  const onFold = (event) => {
+    if (!state.match || event.data?.source !== 'sp-fold' || !(event.data.count > 0)) return;
+    for (const side of ['a', 'b']) {
+      const current = $(`[data-body="${side}"] iframe`, el);
+      if (!current || event.source !== current.contentWindow) continue;
+      state.controls[side] = event.data.count;
+      drawControls();
+      syncControls(current);
+      break;
+    }
+  };
+  addEventListener('message', onFold);
+
+  const update = () => { drawHeads(); drawBar(); drawSide(); drawControls(); };
 
   function frame(side) {
     const body = $(`[data-body="${side}"]`, el);
     state.ready[side] = false;
+    delete state.controls[side];
     body.innerHTML = `<iframe src="${esc(state.match[side])}" title="匿名作品 ${letter(side)}" sandbox="${SANDBOX}" allow="fullscreen; autoplay" allowfullscreen referrerpolicy="no-referrer"></iframe>
       <div class="loader blind"><span class="loader-letter" aria-hidden="true">${letter(side)}</span><div class="spinner" aria-hidden="true"></div><span>作品 ${letter(side)} 正在载入</span></div>`;
     const current = state.match;
-    $('iframe', body).addEventListener('load', () => {
-      if (state.match !== current) return;
+    const iframe = $('iframe', body);
+    iframe.addEventListener('load', () => {
+      if (state.match !== current || $('iframe', body) !== iframe) return;
       state.ready[side] = true;
+      syncControls(iframe);
       later(() => $('.loader', body)?.classList.add('gone'), 300);
       update();
     }, { once: true });
@@ -257,6 +288,8 @@ function match(root, ctx, task) {
 
   function showError(error) {
     state.error = error;
+    state.controls = {};
+    drawControls();
     const others = ctx.DATA.tasks.filter((t) => t !== task && (platform.arena[t.id]?.entries ?? 0) >= 2);
     const exhausted = error.code === 'exhausted';
     $('.arena-stage', el).innerHTML = `<div class="board-empty arena-empty">
@@ -271,7 +304,7 @@ function match(root, ctx, task) {
     if (state.busy || state.error) return;
     state.busy = true;
     const previous = state.match?.id;
-    Object.assign(state, { match: null, result: null, ready: {}, seen: { a: true }, side: 'a', slow: false });
+    Object.assign(state, { match: null, result: null, ready: {}, seen: { a: true }, controls: {}, controlsShown: false, side: 'a', slow: false });
     $$('[data-body]', el).forEach((body) => { body.innerHTML = `<div class="loader blind"><span class="loader-letter" aria-hidden="true">${letter(body.dataset.body)}</span><div class="spinner" aria-hidden="true"></div><span>正在抽取一组作品</span></div>`; });
     update();
     try {
@@ -322,6 +355,11 @@ function match(root, ctx, task) {
     const kind = action.dataset.a;
     if (kind === 'next') next();
     else if (kind === 'prompt') togglePrompt();
+    else if (kind === 'controls') {
+      state.controlsShown = !state.controlsShown;
+      $$('[data-body] iframe', el).forEach(syncControls);
+      drawControls();
+    }
     else if (kind === 'reload' && state.match && !state.result) {
       frame(action.dataset.side ?? state.side);
       update();
@@ -353,10 +391,10 @@ function match(root, ctx, task) {
     onPlatformChange() { if (!state.error) update(); },
     destroy() {
       document.removeEventListener('keydown', onKey);
+      removeEventListener('message', onFold);
       removeEventListener('resize', onResize);
       timers.forEach(clearTimeout);
       document.body.classList.remove('is-viewer');
     },
   };
 }
-

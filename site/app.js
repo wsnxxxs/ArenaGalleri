@@ -19,6 +19,7 @@ import { representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 import { modelResolver } from './models.js';
+import { createWorkControls, workFrameUrl } from './work-controls.js';
 
 const root = $('#app');
 let DATA;
@@ -994,6 +995,7 @@ function createViewer(t) {
         ${hasExhibition(t) ? `<button class="vtool" data-v="exhibition" title="将当前作品加入三维沙盘">${icon('full')}<span class="vtool-text">沙盘</span></button>` : ''}
         <button class="vtool" data-v="guide" aria-label="操作指南" aria-pressed="false" title="操作指南（G）">${icon('guide')}<span class="vtool-text">指南</span></button>
         ${many ? `<button class="vtool" data-v="split" aria-label="并排对比" aria-pressed="false" title="并排对比（S）">${icon('split')}<span class="vtool-text">并排</span></button>` : ''}
+        <button class="vtool" data-v="controls" aria-label="显示作品控件" aria-pressed="false" title="显示作品控件" hidden>${icon('menu')}<span class="vtool-text">显示作品控件</span></button>
         <a class="vtool" data-v="open" aria-label="在新窗口打开独立页面" target="_blank" rel="noopener" title="在新窗口打开独立页面">${icon('arrow')}<span class="vtool-text">新窗口</span></a>
         <button class="vtool" data-v="full" aria-label="全屏" title="全屏（F）">${icon('full')}<span class="vtool-text">全屏</span></button>
         <span class="vdivider" aria-hidden="true"></span>
@@ -1009,6 +1011,15 @@ function createViewer(t) {
   const el = $('.viewer', root);
   const stage = $('.stage', el);
   const guide = $('.guide', el);
+  const controlsButton = $('[data-v="controls"]', el);
+  const controls = createWorkControls(({ folded, count }) => {
+    controlsButton.hidden = state.panes.length < 2 || !count;
+    const text = folded ? '显示作品控件' : '隐藏作品控件';
+    controlsButton.setAttribute('aria-label', text);
+    controlsButton.setAttribute('aria-pressed', String(!folded));
+    controlsButton.title = `${folded ? '显示' : '隐藏'}作品控件`;
+    $('.vtool-text', controlsButton).textContent = text;
+  });
 
   function paneHtml(i) {
     return `<section class="pane" data-pane="${i}">
@@ -1026,6 +1037,8 @@ function createViewer(t) {
     const r = byId(state.panes[i]);
     const pane = $(`[data-pane="${i}"]`, stage);
     const body = $('.pane-body', pane);
+    const previous = $('iframe', body);
+    if (previous) controls.remove(previous);
     $('select', pane).value = r.id;
     $('.pane-variants', pane).innerHTML = resultVariantButtons(t, r, i);
     $('.pane-variants', pane).hidden = !variantChoices(t, r).length;
@@ -1033,7 +1046,8 @@ function createViewer(t) {
       body.innerHTML = `<div class="loader static"><b>${esc(r.title)}</b><span>该作品尚未构建，无法在线预览。</span></div>`;
       return;
     }
-    const src = r.scene + (state.queries[i] ? `?${state.queries[i]}` : '');
+    const split = state.panes.length > 1;
+    const src = workFrameUrl(r.scene, state.queries[i], split && r.upload);
     const bg = versionedMedia(cover(r));
     // Uploads run on their own origin; the frame sandbox repeats the server's policy.
     const sandbox = r.upload ? ' sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads" referrerpolicy="no-referrer"' : '';
@@ -1041,6 +1055,7 @@ function createViewer(t) {
     body.innerHTML = `<iframe src="${esc(src)}" title="${esc(r.title)} · ${esc(label(r))}" allow="fullscreen; autoplay; clipboard-write" allowfullscreen${sandbox}></iframe>
       <div class="loader"${bg ? ` style="--cover:url('${esc(bg)}')"` : ''}><div class="spinner" aria-hidden="true"></div><b>${esc(r.title)}</b><span>${esc(label(r))} · 正在载入</span></div>`;
     const frame = $('iframe', body);
+    if (split) controls.add(frame, { inject: !r.upload });
     const loader = $('.loader', body);
     let done = false;
     const hide = () => {
@@ -1092,7 +1107,7 @@ function createViewer(t) {
     $('[data-v="guide"]', el).setAttribute('aria-pressed', String(state.guide));
     $('[data-v="split"]', el)?.setAttribute('aria-pressed', String(split));
     const open = $('[data-v="open"]', el);
-    if (current.scene) open.href = current.scene + (state.queries[state.active] ? `?${state.queries[state.active]}` : '');
+    if (current.scene) open.href = workFrameUrl(current.scene, state.queries[state.active]);
     else open.removeAttribute('href');
     renderGuide();
   }
@@ -1107,6 +1122,8 @@ function createViewer(t) {
   function update(panes) {
     const before = state.panes;
     if (panes.length !== before.length) {
+      controls.clear();
+      if (panes.length > 1) controls.hide();
       stage.innerHTML = panes.map((_, i) => paneHtml(i)).join('');
       state.queries = panes.map((id, i) => (before[i] === id ? state.queries[i] ?? '' : ''));
       state.panes = panes;
@@ -1158,6 +1175,7 @@ function createViewer(t) {
     if (v === 'exhibition') { location.hash = sandtableHref(t, state.panes); return; }
     if (v === 'guide') return toggleGuide();
     if (v === 'split') return toggleSplit();
+    if (v === 'controls') return controls.toggle();
     if (v === 'full') return fullscreen();
     if (v === 'prev') return cycle(-1);
     if (v === 'next') return cycle(1);
@@ -1232,12 +1250,14 @@ function createViewer(t) {
     onPlatformChange() {
       $('.vselect', el).innerHTML = options();
       $$('[data-pane-pick]', stage).forEach((select) => { select.innerHTML = options(); });
-      state.panes = state.panes.filter(byId);
-      if (!state.panes.length) { location.hash = taskHref(t); return; }
+      const panes = state.panes.filter(byId);
+      if (!panes.length) { location.hash = taskHref(t); return; }
+      if (panes.length !== state.panes.length) return navigate(panes, 0);
       $$('[data-pane-pick]', stage).forEach((select, i) => { select.value = state.panes[i] ?? state.panes[0]; });
       sync();
     },
     destroy() {
+      controls.destroy();
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('blur', onBlur);
       document.body.classList.remove('is-viewer');
