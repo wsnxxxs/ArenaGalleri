@@ -28,14 +28,13 @@ export function representatives(results, keyOf, picks = {}) {
   return new Map([...groups].map(([key, works]) => [key, byId(works, picks[key]) ?? [...works].sort(fallbackOrder)[0]]));
 }
 
-// Cover fallbacks in order: Claude Opus 5.5 Max, then GPT-6 Astra Max; otherwise a grey placeholder.
+// The cover an admin set on the question leads; then the vote-based pick, then Claude Opus 5.5
+// Max and GPT-6 Astra Max; otherwise a grey placeholder.
 const COVER_FALLBACKS = [['claude-opus-5.5', 'max'], ['gpt-6-astra', 'max']];
 export function taskCover(task, pick = null) {
   const works = task.results.filter((r) => r.status !== 'questioned');
-  if (task.id === 'show1-005') {
-    const selected = byId(works, 'gemini-4.x-high');
-    if (selected) return selected;
-  }
+  const selected = byId(works, task.cover);
+  if (selected) return selected;
   const voted = byId(works, pick);
   if (voted) return voted;
   for (const [model, effort] of COVER_FALLBACKS) {

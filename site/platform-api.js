@@ -9,7 +9,7 @@ export function apiBaseUrl() {
 export const apiUrl = (path) => new URL(path.replace(/^\/+/, ''), apiBaseUrl()).href;
 
 export function compatibleBuild(buildInfo, bootstrap) {
-  return Boolean(buildInfo && Object.hasOwn(buildInfo, 'datapack') && bootstrap.apiVersion === 1);
+  return Boolean(buildInfo && Object.hasOwn(buildInfo, 'datapack') && bootstrap.apiVersion === 2);
 }
 
 export function staleBuild(buildInfo, bootstrap) {
@@ -51,14 +51,16 @@ export function mediaUrl(value) {
   return new URL(value.replace(/^\/+/, ''), base).href;
 }
 
-const work = (item) => !item || item.curated ? item : {
+// The API sends media fields only for works whose files it hosts; packaged works keep the
+// frontend's own assets, so a missing field stays missing.
+const work = (item) => !item ? item : {
   ...item,
-  cover: mediaUrl(item.cover),
-  captures: item.captures && Object.fromEntries(Object.entries(item.captures).map(([name, url]) => [name, mediaUrl(url)])),
+  ...(item.cover ? { cover: mediaUrl(item.cover) } : {}),
+  ...(item.captures ? { captures: Object.fromEntries(Object.entries(item.captures).map(([name, url]) => [name, mediaUrl(url)])) } : {}),
 };
 const works = (items) => items?.map(work);
 
-// Only the API's known DTOs contain server media. Curated question assets remain on the frontend.
+// Only the API's known DTOs contain server media. Packaged assets remain on the frontend.
 export function resolveApiMedia(data, endpoint) {
   if (!data || typeof data !== 'object') return data;
   if (endpoint === 'bootstrap' || endpoint === 'me' || endpoint === 'review') return Array.isArray(data.works) ? { ...data, works: works(data.works) } : data;

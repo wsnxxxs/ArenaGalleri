@@ -12,7 +12,7 @@
 //   #/me · #/review           personal center · review queue (platform)
 //   #/terms · #/privacy       terms of use and disclaimer · privacy policy
 import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, store, syncThemeUi, themeButton, versionedMedia } from './ui.js';
-import { STATUS, accountControl, api, arenaText, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, requestBootstrap, setFaces, statusBadge, toast } from './platform.js';
+import { STATUS, accountControl, api, arenaText, avatarFace, byStaff, connectPlatform, isStaff, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, requestBootstrap, setFaces, statusBadge, toast } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { representatives, standard, taskCover } from './featured.js';
@@ -82,19 +82,23 @@ function setResultSort(value) {
 }
 // Cover: the first uniform capture (task condition order), else the author's first screenshot.
 const cover = (r) => Object.values(r.captures)[0] ?? r.gallery[0]?.src ?? '';
-// Uploads without a screenshot yet show their title instead of an empty frame.
+// Works without a screenshot yet show their title instead of an empty frame.
 function coverHtml(r, cls = '', eager = false) {
   const src = cover(r);
-  if (src || !r.upload) return img(src, r.title, cls, eager);
+  if (src) return img(src, r.title, cls, eager);
   return `<div class="${cls} img-empty upload-cover"><b>${esc(r.title)}</b><span>${platform.site?.capture ? '截图生成中' : '暂无截图'}</span></div>`;
 }
 const taskHref = (t) => `#/${t.id}`;
 const viewHref = (t, a, b) => `#/${t.id}/${a}${b ? `/vs/${b}` : ''}`;
 const hasExhibition = (t) => t.sandtable;
 const sandtableHref = (t, ids = []) => `#/${t.id}/sandtable${ids.length ? `/${ids.join(',')}` : ''}`;
-// The sandtable, exhibition and card models read build extracts that only curated works have.
-const curatedTask = (t) => ({ ...t, results: t.curated ?? t.results });
-const isCurated = (t, id) => (t.curated ?? t.results).some((r) => r.id === id);
+// Works this site serves itself can be framed same-origin: the sandtable, the exhibition, card
+// models and injected controls need that. Works on the content origin stay sandboxed.
+const hosted = (r) => Boolean(r.scene) && new URL(r.scene, document.baseURI).origin === location.origin;
+const hostedTask = (t) => ({ ...t, results: t.results.filter(hosted) });
+// Staff publish under the site's name; members under their own.
+const authorName = (item) => (byStaff(item) ? DATA.title : item.author.name ?? '已注销的用户');
+const authorAvatar = (item) => (byStaff(item) ? LOGO : avatarFace(item.author.avatar, item.author.name ?? ''));
 const workKey = (t, r) => `${t.id}/${r.id}`;
 const interactive = (r) => r.status !== 'questioned';
 
@@ -175,7 +179,7 @@ const questionSorts = { date: '发布时间（最新在前）', works: '解答�
 const homeState = { category: '', domain: '', model: '', query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'date', modelQuery: '', vendor: '' };
 
 // ---- home -----------------------------------------------------------------------------
-// Questioned uploads stay visible as reference but are left out of every count.
+// Questioned works stay visible as reference but are left out of every count.
 const counted = (t) => t.results.filter(interactive);
 
 function libraryStart(crumbs) {
@@ -242,7 +246,7 @@ function renderLibrary(scopes = [], fresh = true) {
       </a>
       <div class="task-body">
         <div class="question-byline"><ul class="tag-line">${tagLine(t)}</ul>
-          <span class="avatar question-avatar" role="img" aria-label="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}" title="${t.owner ? `发布者：${esc(t.owner)}` : '发布者未记录'}">${t.owner ? avatarFace(t.ownerAvatar, t.owner) : icon('user')}</span>
+          <span class="avatar question-avatar${byStaff(t) ? ' is-site' : ''}" role="img" aria-label="发布者：${esc(authorName(t))}" title="发布者：${esc(authorName(t))}">${authorAvatar(t)}</span>
         </div>
         <h3><a href="${taskHref(t)}">${esc(t.title)}</a></h3>
         <p class="summary">${esc(t.summary)}</p>
@@ -272,7 +276,7 @@ function renderLibrary(scopes = [], fresh = true) {
     if (!modelsByVendor.has(vendor)) modelsByVendor.set(vendor, []);
     modelsByVendor.get(vendor).push(model);
   }
-  // The index lists the collection: curated works and verified uploads.
+  // The index lists verified works.
   const catalogued = results.filter(({ r }) => r.status === 'verified');
   const vendors = [...modelsByVendor.keys()].sort(byName);
   if (!vendors.includes(homeState.vendor)) homeState.vendor = '';
@@ -446,7 +450,7 @@ async function updateResultPreviews(t) {
   resultPreviews?.destroy();
   resultPreviews = null;
   if (previewMode !== 'model') return;
-  const results = displayedResults(curatedTask(t)).filter((result) => result.previewMode !== 'screenshot');
+  const results = displayedResults(hostedTask(t)).filter((result) => result.previewMode !== 'screenshot');
   if (!results.length) return;
   try {
     const { createResultPreviews } = await import('./result-previews.js');
@@ -506,9 +510,9 @@ function shotGrid(t) {
   }).join('')}</div>`;
 }
 
-// Admins see the task's blind pool and how many published uploads stay out of it.
+// Staff see the task's blind pool and how many published works stay out of it.
 function adminPoolLine(t, pool) {
-  const out = t.results.filter((r) => r.upload && r.status === 'verified' && r.arena && r.arena.state !== 'in_pool').length;
+  const out = t.results.filter((r) => r.status === 'verified' && r.arena && r.arena.state !== 'in_pool').length;
   return `<p>盲评池 ${pool?.works ?? 0} 件 · ${pool?.entries ?? 0} 个配置${out ? ` · <a href="#/review/noarena">${out} 件已公开但不在池中</a>` : ''}</p>`;
 }
 
@@ -516,7 +520,7 @@ function resultCard(t, r) {
   const m = modelOf(r);
   const screenshotPreview = r.previewMode === 'screenshot';
   const screenshot = r.captures?.first ?? r.gallery?.[0]?.src ?? '';
-  return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${r.upload ? ' is-upload' : ''}" data-vendor="${esc(vendorOf(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
+  return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}" data-vendor="${esc(vendorOf(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media">
       <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
       ${t.results.length > 1 ? `<button class="pick" data-pick="${esc(r.id)}" aria-pressed="false" aria-label="加入对比：${esc(r.title)}"><span class="pick-box">${icon('plus')}${icon('check')}</span><span class="pick-text">对比</span></button>` : ''}
@@ -526,17 +530,17 @@ function resultCard(t, r) {
       <p class="result-model">${brandMark(m, 'brand-mark sm')}<b>${esc(m.name)}</b>${resultBadges(r)}${platform.featured?.[t.id]?.models?.[modelKey(r)] === r.id ? '<span class="badge featured-badge" title="盲评票选出的代表作">代表作</span>' : ''}${statusBadge(r.status, { reason: r.reason })}</p>
       <h3><a href="${viewHref(t, r.id)}">${esc(r.title)}${icon('arrow')}</a></h3>
       ${r.summary ? `<p class="summary">${esc(r.summary)}</p>` : ''}
-      ${r.upload ? `<p class="result-by">${esc(r.owner ?? '已注销的用户')} 上传${sourceLine(r) || r.tool ? ` · ${esc(sourceLine(r) || r.tool)}` : ''} · ${formatDate(r.addedAt)}</p>` : ''}
+      <p class="result-by">${esc(authorName(r))} 发布${sourceLine(r) || r.tool ? ` · ${esc(sourceLine(r) || r.tool)}` : ''}${r.addedAt ? ` · ${formatDate(r.addedAt)}` : ''}</p>
       ${r.status === 'questioned' && r.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(r.reason)}</span></p>` : ''}
       <div class="result-foot">
-        ${r.gallery.length ? `<button class="text-action" data-gallery="${esc(r.id)}">${icon('image')}${r.upload ? '封面' : `截图 ${r.gallery.length}`}</button>` : ''}
+        ${r.gallery.length ? `<button class="text-action" data-gallery="${esc(r.id)}">${icon('image')}截图 ${r.gallery.length}</button>` : ''}
         ${reactionBar(workKey(t, r), { locked: !interactive(r) })}
       </div>
     </div>
   </article>`;
 }
 
-// With uploads present the list splits by review state: verified works lead, unverified
+// The list splits by review state: verified works lead, unverified
 // ones follow, questioned ones stay folded away as reference.
 const GROUPS = [
   { status: 'verified', title: '已验证', note: '核验通过的作品' },
@@ -590,14 +594,14 @@ function renderTask(t) {
   const pool = platform.arena[t.id];
   const actions = platform.available ? `<div class="actions task-actions">
     ${(pool?.entries ?? 0) >= 2 ? `<a class="btn primary sm" href="#/arena/${esc(t.id)}">${icon('blind')}参与盲评</a>` : ''}
-    ${pool?.uploads ? `<a class="btn sm" href="#/submit/${esc(t.id)}">${icon('upload')}上传作品</a>` : '<span class="btn sm is-disabled" title="提示词原文尚未公开">暂不接受投稿</span>'}
+    ${t.acceptsUploads ? `<a class="btn sm" href="#/submit/${esc(t.id)}">${icon('upload')}上传作品</a>` : `<span class="btn sm is-disabled" title="${t.promptPending ? '提示词原文尚未公开' : '这道题暂时关闭了投稿'}">暂不接受投稿</span>`}
   </div>` : '';
 
   root.innerHTML = `${header([LIBRARY, { text: t.title }], false, 'questions')}<div class="app-layout task-layout">
     <aside class="app-sidebar">
       <h1>${esc(t.title)}</h1>
       <p class="side-intro">${esc(t.summary)}</p>
-      <p class="side-byline">${t.owner ? `${esc(t.owner)} 发起 · ` : `No.${pad(DATA.tasks.indexOf(t) + 1)} · `}${esc(t.date ?? '')}</p>
+      <p class="side-byline">${esc(authorName(t))} 发起${t.date ? ` · ${esc(t.date)}` : ''}</p>
       <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}</ul>
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
@@ -608,7 +612,7 @@ function renderTask(t) {
       <div class="side-bottom">${actions}
         ${hasExhibition(t) ? `<div class="side-views"><a class="btn sm" href="${sandtableHref(t)}">${icon('full')}三维沙盘</a><a class="btn sm" href="#/${t.id}/exhibition">${icon('grid')}原作展厅</a></div>` : ''}
         <p>${new Set(works.map((r) => r.model)).size} 个模型 · ${new Set(works.map(vendorOf)).size} 家厂商</p>
-        ${platform.user?.role === 'admin' ? adminPoolLine(t, pool) : ''}
+        ${isStaff() ? adminPoolLine(t, pool) : ''}
       </div>
     </aside>
     <main class="workspace page">
@@ -723,7 +727,7 @@ function renderTask(t) {
     const gal = e.target.closest('[data-gallery]');
     if (gal) {
       const r = t.results.find((x) => x.id === gal.dataset.gallery);
-      lightbox.open(r.gallery.map((g) => ({ src: versionedMedia(g.src), title: g.caption || r.title, sub: `${r.title} · ${label(r)} · ${r.upload ? '投稿者提供' : '作者截图'}` })), 0);
+      lightbox.open(r.gallery.map((g) => ({ src: versionedMedia(g.src), title: g.caption || r.title, sub: `${r.title} · ${label(r)} · 作者截图` })), 0);
     }
     const copy = e.target.closest('[data-copy]');
     if (copy) {
@@ -822,8 +826,8 @@ function syncPicks(t) {
   document.body.classList.toggle('has-tray', picks.length > 0);
   if (!picks.length) return;
   const chosen = picks.map((id) => t.results.find((r) => r.id === id));
-  // Uploads have no scene extract, so they can be compared side by side but not in the sandtable.
-  const sandIds = picks.filter((id) => isCurated(t, id));
+  // Works on the content origin have no scene extract: side by side, but not in the sandtable.
+  const sandIds = picks.filter((id) => t.results.some((r) => r.id === id && hosted(r)));
   const sandNote = sandIds.length < picks.length ? ' title="网页上传的作品没有沙盘模型"' : '';
   const slot = (r, i) => (r
     ? `<li class="slot"><span class="slot-thumb">${img(cover(r), '', '', true)}</span><span class="slot-text"><b>${esc(r.title)}</b><small>${esc(label(r))}</small></span><button class="slot-x" data-unpick="${esc(r.id)}" aria-label="移出对比：${esc(r.title)}">${icon('close')}</button></li>`
@@ -946,19 +950,19 @@ const lightbox = (() => {
 // does not reload the other.
 const wide = () => matchMedia('(min-width: 1100px)').matches;
 
-// Provenance of an upload in the guide drawer: its review state and how it was made.
+// How a work was made, in the guide drawer.
 function sourceFacts(r) {
   const harness = harnessOf(r);
-  const provider = providerOf(r);
-  return [harness ? `<div><dt>Harness</dt><dd>${esc(harness.name)}</dd></div>` : r.tool ? `<div><dt>Harness</dt><dd>${esc(r.tool)}（作者原始声明）</dd></div>` : r.upload ? '<div><dt>Harness</dt><dd>未注明</dd></div>' : '',
-    provider || r.upload ? `<div><dt>服务商</dt><dd>${esc(provider?.name ?? '未注明')}</dd></div>` : ''].filter(Boolean).join('');
+  return `<div><dt>Harness</dt><dd>${harness ? esc(harness.name) : r.tool ? `${esc(r.tool)}（作者原始声明）` : '未注明'}</dd></div>
+      <div><dt>服务商</dt><dd>${esc(providerOf(r)?.name ?? '未注明')}</dd></div>`;
 }
-// Admin switches beside a verified upload: [button, faces, toast].
+// Staff switches beside a verified work: [button, faces, toast].
 const VIEWER_FACES = { 'arena-on': ['开启盲评', { show_arena: true }, '已开启盲评'], 'arena-off': ['移出盲评', { show_arena: false }, '已移出盲评'],
   hide: ['撤下', { show_gallery: false, show_arena: false }, '已撤下'] };
-function uploadFacts(r) {
+// A work's review state, who published it and how it was made.
+function workFacts(r) {
   const info = STATUS[r.status];
-  const admin = platform.user?.role === 'admin' && r.status === 'verified';
+  const admin = isStaff() && r.status === 'verified';
   const switches = admin ? [r.arena?.state === 'in_pool' ? 'arena-off' : r.arena?.state === 'off' ? 'arena-on' : '', 'hide'].filter(Boolean) : [];
   return `<div class="guide-block guide-status" data-status="${r.status}">
     <h3>核验状态</h3>
@@ -966,9 +970,9 @@ function uploadFacts(r) {
     ${switches.length ? `<div class="actions">${switches.map((action) => `<button class="btn sm" data-face="${action}">${VIEWER_FACES[action][0]}</button>`).join('')}</div>` : ''}
     ${r.reason ? `<p class="guide-reason">${esc(r.reason)}</p>` : ''}
     <dl class="facts">
-      <div><dt>上传</dt><dd>${esc(r.owner ?? '已注销的用户')} · ${formatDate(r.addedAt)}</dd></div>
+      <div><dt>发布</dt><dd>${esc(authorName(r))}${r.addedAt ? ` · ${formatDate(r.addedAt)}` : ''}</dd></div>
       ${sourceFacts(r)}
-      <div><dt>文件</dt><dd>${r.files} 个 · ${formatBytes(r.bytes)}</dd></div>
+      ${r.files ? `<div><dt>文件</dt><dd>${r.files} 个 · ${formatBytes(r.bytes)}</dd></div>` : ''}
     </dl>
     ${r.note ? `<p class="guide-note">${esc(r.note)}</p>` : ''}
   </div>`;
@@ -1047,15 +1051,15 @@ function createViewer(t) {
       return;
     }
     const split = state.panes.length > 1;
-    const src = workFrameUrl(r.scene, state.queries[i], split && r.upload);
+    const src = workFrameUrl(r.scene, state.queries[i], split && !hosted(r));
     const bg = versionedMedia(cover(r));
-    // Uploads run on their own origin; the frame sandbox repeats the server's policy.
-    const sandbox = r.upload ? ' sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads" referrerpolicy="no-referrer"' : '';
+    // Works on the content origin get the frame sandbox that repeats the server's policy.
+    const sandbox = hosted(r) ? '' : ' sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads" referrerpolicy="no-referrer"';
     // Replace the whole frame so the previous scene's WebGL context is released.
     body.innerHTML = `<iframe src="${esc(src)}" title="${esc(r.title)} · ${esc(label(r))}" allow="fullscreen; autoplay; clipboard-write" allowfullscreen${sandbox}></iframe>
       <div class="loader"${bg ? ` style="--cover:url('${esc(bg)}')"` : ''}><div class="spinner" aria-hidden="true"></div><b>${esc(r.title)}</b><span>${esc(label(r))} · 正在载入</span></div>`;
     const frame = $('iframe', body);
-    if (split) controls.add(frame, { inject: !r.upload });
+    if (split) controls.add(frame, { inject: hosted(r) });
     const loader = $('.loader', body);
     let done = false;
     const hide = () => {
@@ -1077,7 +1081,7 @@ function createViewer(t) {
         <button class="icon-btn" data-v="guide" aria-label="收起指南">${icon('close')}</button>
       </div>
       ${r.summary ? `<p class="guide-summary">${esc(r.summary)}</p>` : ''}
-      ${r.upload ? uploadFacts(r) : sourceFacts(r) ? `<div class="guide-block"><h3>来源</h3><dl class="facts">${sourceFacts(r)}</dl></div>` : ''}
+      ${workFacts(r)}
       ${platform.available ? `<div class="guide-block"><h3>表情</h3>${reactionBar(workKey(t, r), { locked: !interactive(r) }) || '<p class="fine">存疑作品不再接受互动。</p>'}</div>` : ''}
       ${g.presets?.length ? `<div class="guide-block"><h3>快速跳转</h3>
         <div class="presets">${g.presets.map((p) => `<button class="chip${state.queries[state.active] === p.query ? ' on' : ''}" data-preset="${esc(p.query)}">${esc(p.label)}</button>`).join('')}
@@ -1358,56 +1362,67 @@ function backLink(cls) {
 }
 
 // Everything a platform page needs from the gallery.
-const context = () => ({ DATA, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, entryKey, taskHref, viewHref, workKey, interactive, settleImages });
+const context = () => ({ DATA, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, entryKey, taskHref, viewHref, workKey, interactive, settleImages, packagedWork });
 
-// Uploads join their task's result list in the same shape as curated works.
-function uploadResult(w) {
+// The data pack holds its questions' assets: screenshots, scenes, models and capture conditions.
+// The API decides which questions and works are public and holds their current fields; without
+// it the pack is shown as an archive. Task and work objects stay the same across merges.
+let PACK = new Map();
+const tasksById = new Map(), resultsByKey = new Map();
+const packagedWork = (task, id) => PACK.get(task)?.works.get(id) ?? null;
+// Fields a work keeps when the pack has none for it.
+const UNPACKED = { source: null, readme: null, sourceLabel: '', captureNote: '', guide: {}, previewModel: null, previewLoader: null };
+function resultOf(pack, w) {
+  if (!platform.available) return { ...pack, status: 'verified' };
   return {
+    ...(pack ?? UNPACKED),
     id: w.id,
-    upload: true,
     status: w.status,
     reason: w.reason ?? '',
-    owner: w.owner,
+    author: w.author,
     mine: w.mine,
     model: w.model ?? `x:${w.modelName}`,
     modelName: w.modelName,
     vendorName: w.vendor,
     effort: w.effort ?? '',
-    sourceLabel: '',
     tool: w.tool,
     harness: w.harness,
     harnessName: w.harnessName,
     provider: w.provider,
     providerName: w.providerName,
-    ...(w.promptVariant ? { promptVariant: w.promptVariant } : {}),
+    promptVariant: w.promptVariant ?? pack?.promptVariant,
+    generationMode: w.generationMode,
+    humanIntervention: w.humanIntervention,
     note: w.note,
     title: w.title,
-    summary: w.summary,
-    addedAt: w.addedAt,
-    scene: w.scene,
-    source: null,
-    readme: null,
-    gallery: w.cover ? [{ src: w.cover, caption: '投稿者提供的封面' }] : [],
-    captures: w.captures ?? {},
-    captureNote: '',
-    guide: {},
-    previewModel: null,
-    previewLoader: null,
+    summary: w.summary ?? '',
+    addedAt: w.addedAt ?? pack?.addedAt,
+    scene: w.scene ?? pack?.scene,
+    gallery: pack?.gallery ?? (w.cover ? [{ src: w.cover, caption: '作者提供的封面' }] : []),
+    captures: w.captures ?? pack?.captures ?? {},
     files: w.files,
     bytes: w.bytes,
-    ...(w.arena ? { arena: w.arena } : {}),
+    arena: w.arena,
   };
 }
+function stable(map, key, fresh) {
+  const kept = map.get(key);
+  if (!kept) { map.set(key, fresh); return fresh; }
+  for (const name of Object.keys(kept)) if (!Object.hasOwn(fresh, name)) delete kept[name];
+  return Object.assign(kept, fresh);
+}
 function mergePlatform() {
-  for (const question of platform.questions) {
-    const existing = DATA.tasks.find((t) => t.id === question.id);
-    if (existing) Object.assign(existing, question);
-    else DATA.tasks.push({ ...question, conditions: [], results: [], curated: [], promptUrl: null });
-  }
-  for (const t of DATA.tasks) {
-    t.curated ??= t.results.map((r) => Object.assign(r, { status: 'verified', curated: true }));
-    t.results = [...t.curated, ...platform.works.filter((w) => w.task === t.id).map(uploadResult)];
-  }
+  const listed = platform.available ? new Map(platform.questions.map((q) => [q.id, q])) : null;
+  const ids = [...[...PACK.keys()].filter((id) => !listed || listed.has(id)), ...(listed ? [...listed.keys()].filter((id) => !PACK.has(id)) : [])];
+  DATA.tasks = ids.map((id) => {
+    const pack = PACK.get(id);
+    const works = listed ? platform.works.filter((w) => w.task === id) : [...pack.works.values()];
+    return stable(tasksById, id, {
+      ...(pack?.task ?? { id, conditions: [], promptVariants: [] }),
+      ...listed?.get(id),
+      results: works.map((w) => stable(resultsByKey, `${id}/${w.id}`, resultOf(pack?.works.get(w.id), w))),
+    });
+  });
 }
 
 let page = null;
@@ -1500,9 +1515,9 @@ async function show(version, visit, scrollBack) {
           ? (await import('./sandtable.js')).createSandtable
           : (await import('./exhibition.js')).createExhibition;
         if (version !== routeVersion) return;
-        const curated = curatedTask(t);
-        const stage = create(root, curated, { label, vendorOf, cover, header: galleryStageHeader(t, a), initial: (vs ?? '').split(',').filter((id) => curated.results.some((r) => r.id === id)) });
-        // The 3D views show curated works only, so a review elsewhere changes nothing here.
+        const staged = hostedTask(t);
+        const stage = create(root, staged, { label, vendorOf, cover, header: galleryStageHeader(t, a), initial: (vs ?? '').split(',').filter((id) => staged.results.some((r) => r.id === id)) });
+        // The 3D views keep the works they opened with; a review elsewhere shows on the next visit.
         page = { destroy: () => stage.destroy(), onPlatformChange() {} };
       } catch (error) {
         if (version !== routeVersion) return;
@@ -1541,6 +1556,7 @@ try {
   }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   DATA = await res.json();
+  PACK = new Map(DATA.tasks.map(({ results, ...task }) => [task.id, { task, works: new Map(results.map((r) => [r.id, r])) }]));
   // 媒体缓存钥匙：数据包提交号前 8 位，nginx 长缓存依赖它换包失效。
   globalThis.SAME_PROMPT_CONFIG.assetVersion ??= DATA.buildInfo?.datapack?.slice(0, 8) ?? '';
   await connectPlatform(DATA.buildInfo, bootstrap);

@@ -1,5 +1,17 @@
 # HANDOFF.md · 当前状态
 
+
+## 去掉馆藏 / 社区概念，按发布者角色与三级权限重构（2026-10-03，分支 task-page-redesign，本地提交，未推送、未部署）
+
+- 用户决定：保留数据包 + 数据库两种存储，只统一接口；公开页统一显示发布者（管理员发布的显示站点名）；管理员对数据包题目 / 作品的操作与数据库里的相同（覆盖层，删除 = 软删除）；管理员发的作品跳过 AI 审查直接进核验，管理员发起的题目也进题目审核队列。
+- 三级权限：`admin` 高级管理员（现有管理员账号全部算高级）、新增 `moderator` 普通管理员、`user`。普通管理员只能做作品内容审核与核验（不能处理自己的作品），不能审核 / 编辑题目、删除题目和作品、管理角色；高级管理员可以审自己的。
+- 后端（含 `/admin/` 页面、清理提名收录残留）由另一个 agent 按 `output/unify-authorship-20261003/backend-prompt.md` 执行（apiVersion 升为 2，`author` 取代 owner / curated / community / source，bootstrap 给全部题目与作品，数据包作品不带资源字段）。本会话只改 Gallery 前端，按该契约实现。
+- 前端已改：platform-api 只认 apiVersion 2，媒体字段有才解析；platform.js 新增 ROLE_LABELS / isStaff / isSenior / canDecide / byStaff。app.js 用数据包资源 + API 当前字段合并题目与作品（API 决定公开哪些，对象跨刷新保持同一个；无 API 时按存档显示），`hosted`（作品与本站同源）取代 curated / upload 判断沙盘、展厅、卡片模型、iframe sandbox 与脚本注入；卡片、指南、题目侧栏统一「X 发布 / 发起」，管理员发布显示站点名与 Logo；投稿入口读 `acceptsUploads`。featured.js 去掉 show1-005 写死封面，改读题目 `cover`。account.js：作品一律 task/id 为键；普通管理员不显示题目审核与管理，自己的作品只读（可只保存信息），删除只给高级管理员；新增「管理 · 全部题目」（搜索、筛选、发布者、作品与盲评池情况、编辑含投稿开关与封面、撤下 / 恢复、无票可删）；审核弹窗「投稿者」改「发布者」，数据包作品用前端资源显示缩略图与「打开作品」。submit.js 管理员上传不显示内容审核阶段。文档 PRODUCT / ARCHITECTURE / DESIGN 同步。
+- 验证：check 51/0、test 19/19、build 177 件 / 61 site 文件、`CI=1` intake 0 错 / 9 既有警告。用 scratchpad 的 v2 合成后端（`.claude/launch.json` 的 unify-v2-mock，真实数据包 + 合成题目 / 投稿 / 三种角色）在 Browser 1440 宽核对：题库 20 题（撤下的隐藏、用户题合入）、覆盖后的题目 / 作品标题、指定封面、站点 Logo 头像、题目页分组与「X 发布」、投稿作品 sandbox + aob=fold 而数据包作品同源、指南「发布」事实；高级管理员全部题目的筛选 / 搜索（输入保持焦点）/ 编辑保存投稿开关与封面；核验队列按角色区分；普通管理员无题目与管理入口、自己作品只读；普通用户阶段条与关闭投稿提示；后端为 apiVersion 1 时降级为静态存档。未测：真实后端（等另一个 agent）、手机宽度与浅色主题、Safari / Firefox、批量操作的 task/id 回传、沙盘 / 展厅实际渲染。
+- 真实后端联调（后端本地提交 c4585a8，迁移 v37）：`output/unify-authorship-20261003/harness.mjs`（launch 名 unify-v2-real）同源挂 Gallery dist + 后端 handleSite / handleContent，临时库 + Gallery 自己的 3c82309f 数据包，`/__as/<ops|reviewer|author>` 切换会话。核对：bootstrap v2 字段与契约一致（数据包作品无资源字段、工作人员姓名为空）；高级管理员全部题目统计、编辑（标题 / 投稿开关 / 封面）写入后 bootstrap 生效、撤下题目恢复公开；工作人员作品直接进核验，批量核验 2 件以 task/id 回传成功；普通管理员无题目与管理入口，本人作品只读，强行调用核验接口 403「需由其他管理员处理自己发布的作品」，admin/questions 403，可对数据包作品移出盲评；普通用户阶段条正常、无审核入口；投稿作品在内容源 iframe 带 sandbox 与 aob=fold，数据包作品同源。`scripts/integration-smoke.mjs` 两处断言改为 v2（公开题目数等于数据包题目数，按 id 找回投稿），`SERVER_REPO_DIR=../arenaofbias-server` 运行通过「API v2, pinned 3c82309f65ec」。
+- 注意：发布后 show1-005 的封面要由高级管理员在「全部题目」里重新指定（原写死的 gemini-4.x-high），否则按票选 / 默认规则。前后端需同版本发布。本轮 build 覆盖了 dist/。
+- [本轮归档](docs/archive/2026-10-03-unify-authorship-wsnxxxs.md)。
+
 ## 四仓分支合并与逻辑核对（2026-10-03，本地验证完成）
 
 - Gallery 已合并 5d859ef，保留当前主线后续功能；修复自动合并遗漏的审核筛选计数与已处理空状态措辞。177 件本地数据与隔离后端联调通过；生产 pin 仍保持原版本，验证构建是本地包。

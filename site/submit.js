@@ -3,7 +3,7 @@
 // origin with a small probe that reports load time, errors and blocked requests.
 // After submitting, one stage track shows where the work is and follows it while it waits.
 import { $, $$, esc, formatBytes, formatTime, icon } from './ui.js';
-import { api, needsEmail, platform, refreshPlatform, toast } from './platform.js';
+import { api, isStaff, needsEmail, platform, refreshPlatform, toast } from './platform.js';
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { TEMPLATE_LABELS, templatesOf } from './categories.js';
@@ -31,8 +31,9 @@ function checkRow({ state, label, detail }) {
 }
 
 // Content moderation may be on without a working automatic check (no screenshots, no key);
-// then an admin reviews every upload. Older servers do not report the difference.
-export const moderated = () => Boolean(platform.site.contentModeration);
+// then an admin reviews every upload. Older servers do not report the difference. Staff uploads
+// skip content moderation and wait for verification at once.
+export const moderated = () => Boolean(platform.site.contentModeration) && !isStaff();
 // How many works a regular user may keep waiting for verification; the server may set a cap per user.
 export const pendingLimit = () => platform.me?.pendingLimit ?? platform.site.limits.pendingPerUser ?? 5;
 const automatic = () => moderated() && platform.site.autoModeration !== false;
@@ -65,12 +66,11 @@ function workStage(w) {
 
 export function mount(root, ctx) {
   const tasks = ctx.DATA.tasks;
-  const accepts = (t) => Boolean(platform.arena[t.id]?.uploads);
   const task = tasks.find((t) => t.id === ctx.param);
-  if (!task || !accepts(task)) {
+  if (!task || !task.acceptsUploads) {
     root.innerHTML = `${ctx.pageStart({ title: '上传作品', section: 'questions', heading: task ? '这道题暂不接受作品' : '从一道题目开始', description: '每份作品都对应一道明确的题目。',
       crumbs: task ? [ctx.LIBRARY, { text: task.title, href: ctx.taskHref(task) }, { text: '上传作品' }] : [ctx.LIBRARY, { text: '上传作品' }] })}
-      <section class="account-empty">${icon('grid')}<h2>${task ? '提示词原文尚未公开' : '请从题目内上传作品'}</h2><p>${task ? '待题目补充完整提示词后即可上传。' : '在题库中打开一道题，点击「上传作品」。'}</p><a class="btn primary" href="${task ? ctx.taskHref(task) : '#/questions'}">${task ? '返回题目' : '浏览题库'}</a></section>${ctx.pageEnd()}`;
+      <section class="account-empty">${icon('grid')}<h2>${!task ? '请从题目内上传作品' : task.promptPending ? '提示词原文尚未公开' : '这道题暂时关闭了投稿'}</h2><p>${!task ? '在题库中打开一道题，点击「上传作品」。' : task.promptPending ? '待题目补充完整提示词后即可上传。' : '管理员重新开放后即可上传。'}</p><a class="btn primary" href="${task ? ctx.taskHref(task) : '#/questions'}">${task ? '返回题目' : '浏览题库'}</a></section>${ctx.pageEnd()}`;
     return {};
   }
   return uploadFlow(root, ctx, { task });

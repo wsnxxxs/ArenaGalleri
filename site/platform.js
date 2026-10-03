@@ -142,7 +142,7 @@ export const STATUS = {
   questioned: { label: '存疑', hint: '核验存疑：仅供参考，不参与互动与盲评', icon: 'alert' },
 };
 // A work's blind-pool state as the server reports it (owner and admin views carry `arena`).
-const ARENA_TEXT = { in_pool: '在盲评池', off: '不进盲评', not_qualified: '不进盲评', curated: '已收录为馆藏' };
+const ARENA_TEXT = { in_pool: '在盲评池', off: '不进盲评', not_qualified: '不进盲评' };
 export const arenaText = (arena) => (ARENA_TEXT[arena?.state] ? `${ARENA_TEXT[arena.state]}${arena.reason ? `（${arena.reason}）` : ''}` : '');
 // Admin switches for an upload's two faces; the server records each named face as decided.
 export const setFaces = (task, id, faces) => api(`admin/works/${encodeURIComponent(task)}/${encodeURIComponent(id)}/face-settings`, { method: 'POST', body: faces });
@@ -171,7 +171,14 @@ export const riskLabels = (list = []) => list.map((id) => RISK_LABELS[id] ?? id)
 // A rejection nobody decided by hand, and one that came from an injection attempt aimed at the reviewer.
 export const autoRejected = (moderation) => moderation?.status === 'rejected' && moderation.source !== 'human';
 export const injected = (moderation) => Boolean(moderation?.categories?.includes('prompt-injection'));
-// Questions are always reviewed by a person, so a pending one waits for an admin.
+// Three tiers: senior admins run the site; moderators review and verify works only, never their own.
+export const ROLE_LABELS = { admin: '高级管理员', moderator: '普通管理员', user: '成员' };
+export const isStaff = (user = platform.user) => user?.role === 'admin' || user?.role === 'moderator';
+export const isSenior = (user = platform.user) => user?.role === 'admin';
+export const canDecide = (w) => isSenior() || (isStaff() && !w.mine);
+// Staff publish under the site's name; packaged items carry no author and count as staff.
+export const byStaff = (item) => (item?.author?.role ?? 'admin') !== 'user';
+// Questions are always reviewed by a person, so a pending one waits for a senior admin.
 export const QUESTION_LABELS = { pending: '等待人工审核' };
 // Everything waiting on an admin: unverified or held works, and questions under review.
 export const reviewCount = () => (platform.review?.unverified ?? 0) + (platform.review?.questions ?? 0) + (platform.review?.content ?? 0);
@@ -580,10 +587,10 @@ function menuHtml() {
     return `${nav}<div class="menu-group"><button role="menuitem" data-auth="login">${icon('user')}登录</button><button role="menuitem" data-auth="register">${icon('plus')}注册账号</button></div>`;
   }
   const name = user.nickname || user.name;
-  return `${nav}<div class="menu-user"><span class="avatar" aria-hidden="true">${avatarFace(user.avatar, name)}</span><span><b>${esc(name)}</b><small>${user.role === 'admin' ? '管理员' : '成员'} · 已评 ${platform.me?.votes ?? 0} 组</small></span></div>
+  return `${nav}<div class="menu-user"><span class="avatar" aria-hidden="true">${avatarFace(user.avatar, name)}</span><span><b>${esc(name)}</b><small>${ROLE_LABELS[user.role] ?? '成员'} · 已评 ${platform.me?.votes ?? 0} 组</small></span></div>
     <div class="menu-group">
       <a href="#/me" role="menuitem">${icon('user')}个人中心</a>
-      ${user.role === 'admin' ? `<a href="#/review" role="menuitem">${icon('shield')}审核${reviewCount() ? `<span class="count">${reviewCount()}</span>` : ''}</a>` : ''}
+      ${isStaff(user) ? `<a href="#/review" role="menuitem">${icon('shield')}审核${reviewCount() ? `<span class="count">${reviewCount()}</span>` : ''}</a>` : ''}
       <button role="menuitem" data-logout>${icon('logout')}退出登录</button>
     </div>`;
 }

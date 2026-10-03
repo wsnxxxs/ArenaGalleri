@@ -6,15 +6,15 @@ globalThis.document = { baseURI: 'https://gallery.example/archive/' };
 
 test('platform keeps the API available across datapack versions', () => {
   const build = { datapack: 'a'.repeat(40) };
-  assert.equal(compatibleBuild(build, { datapack: build.datapack, apiVersion: 1 }), true);
-  assert.equal(compatibleBuild(build, { datapack: 'b'.repeat(40), apiVersion: 1 }), true);
-  assert.equal(staleBuild(build, { datapack: 'b'.repeat(40), apiVersion: 1 }), true);
-  assert.equal(staleBuild(build, { datapack: build.datapack, apiVersion: 1 }), false);
-  assert.equal(compatibleBuild(build, { datapack: build.datapack, apiVersion: 2 }), false);
-  assert.equal(compatibleBuild({ datapack: null }, { datapack: null, apiVersion: 1 }), true);
-  assert.equal(compatibleBuild({ datapack: null, catalogDigest: 'c'.repeat(64) }, { datapack: null, catalogDigest: 'c'.repeat(64), apiVersion: 1 }), true);
-  assert.equal(staleBuild({ datapack: null, catalogDigest: 'c'.repeat(64) }, { datapack: null, catalogDigest: 'd'.repeat(64), apiVersion: 1 }), true);
-  assert.equal(compatibleBuild({}, { datapack: null, apiVersion: 1 }), false);
+  assert.equal(compatibleBuild(build, { datapack: build.datapack, apiVersion: 2 }), true);
+  assert.equal(compatibleBuild(build, { datapack: 'b'.repeat(40), apiVersion: 2 }), true);
+  assert.equal(staleBuild(build, { datapack: 'b'.repeat(40), apiVersion: 2 }), true);
+  assert.equal(staleBuild(build, { datapack: build.datapack, apiVersion: 2 }), false);
+  assert.equal(compatibleBuild(build, { datapack: build.datapack, apiVersion: 1 }), false);
+  assert.equal(compatibleBuild({ datapack: null }, { datapack: null, apiVersion: 2 }), true);
+  assert.equal(compatibleBuild({ datapack: null, catalogDigest: 'c'.repeat(64) }, { datapack: null, catalogDigest: 'c'.repeat(64), apiVersion: 2 }), true);
+  assert.equal(staleBuild({ datapack: null, catalogDigest: 'c'.repeat(64) }, { datapack: null, catalogDigest: 'd'.repeat(64), apiVersion: 2 }), true);
+  assert.equal(compatibleBuild({}, { datapack: null, apiVersion: 2 }), false);
 });
 
 test('default API remains relative to the static gallery directory', () => {
@@ -63,8 +63,11 @@ test('a backend origin resolves to /api/ without changing custom API directories
 test('API media maps only known DTO fields, with a separate media service', () => {
   globalThis.SAME_PROMPT_CONFIG = { apiBaseUrl: 'https://server.example/api/', mediaBaseUrl: 'https://cdn.example/gallery' };
   const work = { scene: 'https://token.works.example/', cover: 'media/work/cover.webp', captures: { first: '/media/work/first.jpg' }, title: 'A plain title' };
-  const question = { cover: 'assets/curated.webp', promptUrl: 'prompts/task.md' };
-  const boot = resolveApiMedia({ works: [work], questions: [question] }, 'bootstrap');
+  const question = { cover: 'w-1', promptUrl: 'prompts/task.md' };
+  // A packaged work has no media fields; it keeps the frontend's own assets.
+  const packaged = { task: 't', id: 'a', title: 'Packaged' };
+  const boot = resolveApiMedia({ works: [work, packaged], questions: [question] }, 'bootstrap');
+  assert.deepEqual(boot.works[1], packaged);
   assert.equal(boot.works[0].cover, 'https://cdn.example/gallery/media/work/cover.webp');
   assert.equal(boot.works[0].captures.first, 'https://cdn.example/gallery/media/work/first.jpg');
   assert.equal(boot.works[0].scene, work.scene);

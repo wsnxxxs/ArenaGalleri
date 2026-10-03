@@ -2,7 +2,7 @@
 // The server picks every pair and hands out opaque frame addresses; nothing on this page
 // knows which work is which until the vote comes back with the reveal.
 import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
-import { api, needsEmail, platform, reactionBar, toast } from './platform.js';
+import { api, isStaff, needsEmail, platform, reactionBar, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
 import { domainsOf, matchesQuery, tracksOf } from './categories.js';
 
@@ -41,7 +41,7 @@ function lobby(root, ctx) {
     const p = pool(t);
     const open = ready(t);
     // Admins follow a closed task to its page, where the sidebar shows what keeps the pool short.
-    const admin = !open && platform.user?.role === 'admin';
+    const admin = !open && isStaff();
     return `<li class="arena-task${open ? '' : ' is-closed'}"><a ${open ? `href="#/arena/${esc(t.id)}"` : admin ? `href="#/${esc(t.id)}" title="查看这道题的盲评池"` : 'aria-disabled="true"'}>
       <span class="num">No.${pad(ctx.DATA.tasks.indexOf(t) + 1)}</span>
       <span class="arena-task-title"><b>${esc(t.title)}</b><small>${esc([domainsOf(t).join('、'), t.summary].filter(Boolean).join(' · '))}</small></span>

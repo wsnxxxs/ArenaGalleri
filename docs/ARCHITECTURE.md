@@ -16,10 +16,10 @@
 
 | 模块 | 职责 |
 | --- | --- |
-| `app.js` / `home.js` | 路由、馆藏、提示词、首页与对比 |
+| `app.js` / `home.js` | 路由、数据包与平台数据合并、提示词、首页与对比 |
 | `platform-api.js` / `platform.js` | API 地址、凭据请求、版本协议、会话与公共界面 |
 | `arena.js` / `leaderboard.js` | Gallery 内的盲评和榜单界面，调用独立后台 |
-| `work-controls.js` | 并排作品的折叠协议、上传 URL 与馆藏 iframe 脚本注入 |
+| `work-controls.js` | 并排作品的折叠协议、内容源 URL 与同源 iframe 脚本注入 |
 | `publish.js` / `submit.js` / `account.js` | 题目、投稿、个人中心与审核界面 |
 | `question-preview.js` / `result-previews.js` | 代表作品选择和卡片模型展示 |
 | `prompt-variants.js` | 提示词版本、同模型结果分组与当前版本选择 |
@@ -30,7 +30,7 @@
 
 `site/arena.js` 是画廊原有界面模块，不是另一前端的合并副本。
 
-盲评和并排预览通过当前 iframe 的 `{source:'sp-fold', count}` 决定是否显示作品控件按钮，并发送 `{source:'sp-arena', fold:boolean}` 切换两侧。盲评由内容服务器注入脚本；并排投稿 URL 追加 `aob=fold`，保留原有参数与片段。馆藏同源 `/results/` iframe 在 load 后读取 `GET /api/fold.js` 的同一份脚本并注入当前文档，后加载的脚本立即扫描。API 地址与 CORS 沿用平台配置；API 不可用时馆藏保留原有控件。进入单栏会重建未启用折叠的 iframe，页面销毁时释放消息监听与跟踪。
+盲评和并排预览通过当前 iframe 的 `{source:'sp-fold', count}` 决定是否显示作品控件按钮，并发送 `{source:'sp-arena', fold:boolean}` 切换两侧。盲评由内容服务器注入脚本；并排时内容源上的作品 URL 追加 `aob=fold`，保留原有参数与片段。本站同源托管的 `/results/` iframe 在 load 后读取 `GET /api/fold.js` 的同一份脚本并注入当前文档，后加载的脚本立即扫描。API 地址与 CORS 沿用平台配置；API 不可用时同源作品保留原有控件。进入单栏会重建未启用折叠的 iframe，页面销毁时释放消息监听与跟踪。
 
 每个地址只对应一个页面：路由在 `app.js` 的 `show()` 里只保存一个 `page`。首页、题库、条款、题目页、作品查看器、展厅 / 沙盘和各平台页的渲染函数都返回同样的对象，字段都可以省略：`ready` 是首批数据画完的 Promise，已经从记忆画好时为 null；`fullscreen` 表示页面自己管理滚动；`onPlatformChange(reason)` 表示登录或审核状态变化时页面自己重画，没有这个字段时路由会原地重画整页；`destroy()` 用来释放定时器、监听器和 iframe。页面可以直接设置 `root.on*` 事件，拆页时由路由统一清掉。作品查看器在同一道题的作品之间切换时不拆掉，只调用 `update`，已经打开的那一栏不会重新载入。点链接切换页面是一次 View Transition：在回调里拆掉旧页、画新页，等 `ready` 完成，最多等 300ms（`HOLD`），然后交叉淡入。等待期间旧画面保持不动。顶栏（`#app > .topbar`）和侧栏（`.app-sidebar`）有各自的 `view-transition-name`，内容相同的话过渡时看不出变化。浏览器不支持 View Transition、标签页在后台，或者是首屏、同页重画时，直接绘制。数据超过 HOLD 才到的页面先显示自己的载入状态，到了再原地补上。返回上一页时，等 `ready` 后再恢复一次滚动位置；如果读者在等待期间自己滚动过，就不再恢复。
 

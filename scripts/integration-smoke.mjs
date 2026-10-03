@@ -38,7 +38,7 @@ if (marker.source === 'github' && data.schemaVersion != null) {
   assert.equal(data.sourceCommit, integration.data.commit, 'datapack sourceCommit differs from the integration.json data pin');
 }
 const task = data.tasks.find((entry) => entry.results?.length >= 2 && !entry.promptPending);
-assert.ok(task, 'no curated task with two works');
+assert.ok(task, 'no packaged task with two works');
 
 const { createPlatform } = await import(pathToFileURL(join(serverRoot, 'server', 'app.mjs')).href);
 const { config: defaults, limits } = await import(pathToFileURL(join(serverRoot, 'server', 'config.mjs')).href);
@@ -76,10 +76,11 @@ try {
   assert.equal(boot.status, 200);
   assert.equal(boot.data.datapack, packageCommit);
   assert.equal(boot.data.catalogDigest, catalogDigest);
-  assert.equal(boot.data.apiVersion, 1);
+  assert.equal(boot.data.apiVersion, 2);
   assert.equal(typeof boot.data.serverVersion, 'string');
   assert.equal(compatibleBuild({ datapack: packageCommit, catalogDigest }, boot.data), true);
-  assert.equal(resolveApiMedia(boot.data, 'bootstrap').questions.length, 0);
+  // One question list: every packaged question is public before anyone asks a new one.
+  assert.equal(resolveApiMedia(boot.data, 'bootstrap').questions.length, data.tasks.length);
 
   // Registration binds an email: the code is sent first, then spent on the new account.
   const register = async (name) => {
@@ -137,7 +138,7 @@ try {
   assert.equal(reviewed.data.results[0].ok, true, JSON.stringify(reviewed.data));
   assert.equal((await fetch(resolvedWork.cover)).status, 200, 'verified Gallery upload is public');
   const freshBoot = await call('bootstrap');
-  assert.equal(resolveApiMedia(freshBoot.data, 'bootstrap').works[0].cover, resolvedWork.cover);
+  assert.equal(resolveApiMedia(freshBoot.data, 'bootstrap').works.find((w) => w.id === submitted.data.work.id).cover, resolvedWork.cover);
 
   // The pinned server predates work_overrides until the coordinated pin update.
   const hasOverrides = Boolean(platform.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_overrides'").get());
@@ -169,7 +170,7 @@ try {
   assert.equal(html.status, 200);
   assert.match(html.body.toString(), /__sp_fold\.js/);
   const work = platform.arena.workForToken(tokenHost.split('.')[0]);
-  assert.ok(work?.dir, 'match token did not resolve to a curated work');
+  assert.ok(work?.dir, 'match token did not resolve to a packaged work');
   const firstResource = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) { const found = firstResource(join(directory, entry.name)); if (found) return found; }
@@ -198,7 +199,7 @@ try {
     assert.equal(mismatch.status, 409);
     assert.equal(mismatch.data.code, 'datapack_mismatch');
   }
-  console.log(`Integration smoke passed: ${task.id}, ${basename(resource)}, API v1, ${packageCommit ? `pinned ${packageCommit.slice(0, 12)}` : `local ${catalogDigest.slice(0, 12)}`}.`);
+  console.log(`Integration smoke passed: ${task.id}, ${basename(resource)}, API v2, ${packageCommit ? `pinned ${packageCommit.slice(0, 12)}` : `local ${catalogDigest.slice(0, 12)}`}.`);
 } finally {
   await close(site);
   await close(content);
