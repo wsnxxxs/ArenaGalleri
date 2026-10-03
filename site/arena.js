@@ -50,19 +50,22 @@ function lobby(root, ctx) {
     </a></li>`;
   };
 
-  function list() {
+  // The tasks in view: the chosen category, narrowed by the search.
+  function scope() {
     const query = view.query.trim().toLowerCase();
     const scoped = ctx.DATA.tasks.filter((t) => (!view.track || t.category === view.track)
       && matchesQuery(t, query));
-    const open = scoped.filter(ready);
-    const closed = scoped.filter((t) => !ready(t));
-    const meta = `${open.length} 道题可以开始${closed.length ? ` · ${closed.length} 道作品不足` : ''}`;
+    return { scoped, open: scoped.filter(ready), closed: scoped.filter((t) => !ready(t)) };
+  }
+  const meta = ({ open, closed }) => `${open.length} 道题可以开始${closed.length ? ` · ${closed.length} 道作品不足` : ''}`;
+
+  function list() {
+    const { scoped, open, closed } = scope();
     if (!scoped.length) {
-      return `<div class="collection-toolbar"><span>${meta}</span></div><div class="board-empty">
+      return `<div class="board-empty">
         <p class="board-empty-title">没有找到相关题目</p><p>换个关键词，或切换到全部题目。</p></div>`;
     }
-    return `<div class="collection-toolbar"><span>${meta}</span></div>
-      ${open.length ? `<ul class="arena-tasks">${open.map(row).join('')}</ul>` : `<div class="board-empty">
+    return `${open.length ? `<ul class="arena-tasks">${open.map(row).join('')}</ul>` : `<div class="board-empty">
         <p class="board-empty-title">这里还没有可以盲评的题目</p>
         <p>一道题至少要有两个不同模型配置的作品进入盲评池，才能开始盲评。核验通过、单轮生成且无人工介入的作品会自动进入。</p></div>`}
       ${closed.length ? `<details class="result-group is-questioned arena-closed"><summary><div class="group-head">
@@ -71,14 +74,17 @@ function lobby(root, ctx) {
       </div></summary><ul class="arena-tasks">${closed.map(row).join('')}</ul></details>` : ''}`;
   }
 
-  const drawList = () => { $('[data-arena-list]', root).innerHTML = list(); };
+  // Typing redraws the list only, so the search in the toolbar keeps its focus.
+  const drawList = () => {
+    $('[data-arena-list]', root).innerHTML = list();
+    $('[data-arena-meta]', root).textContent = meta(scope());
+  };
 
   const draw = () => {
     const open = openTasks();
     const track = tracks.find((x) => x.name === view.track);
     const link = (name, glyph, text, count) => `<button class="side-link" data-arena-track="${esc(name)}" aria-pressed="${view.track === name}">${icon(glyph)}${esc(text)}<span class="nav-count">${count}</span></button>`;
     root.innerHTML = `${ctx.pageStart({ title: '盲评', section: 'arena', heading: track ? `${track.label}题目` : '全部题目',
-      caption: `<label class="collection-search">${icon('search')}<input type="search" data-arena-search aria-label="搜索题目" placeholder="搜索题目" value="${esc(view.query)}"></label>`,
       description: '同一道题，两件匿名作品。只凭体验选出你更认可的一件，投票后揭晓模型身份。',
       meta: `<dl class="side-stats">
             <div><dt>可评题目</dt><dd>${pad(open.length)}</dd></div>
@@ -88,6 +94,7 @@ function lobby(root, ctx) {
           ${platform.user ? '' : '<p class="side-note">未登录可以体验，选择不计入榜单。<button class="link" data-auth="login">登录</button></p>'}`,
       nav: `<nav class="side-nav section-nav" aria-label="盲评题型">${link('', 'grid', '全部', open.length)}${tracks.map((x) => link(x.name, x.glyph, x.label, x.tasks.filter(ready).length)).join('')}</nav>` })}
       <section class="block wrap">
+        <div class="collection-toolbar"><label class="collection-search">${icon('search')}<input type="search" data-arena-search aria-label="搜索题目" placeholder="搜索题目" value="${esc(view.query)}"></label><span data-arena-meta>${meta(scope())}</span></div>
         <div data-arena-list>${list()}</div>
         <details class="board-notes">
           <summary>盲评规则${icon('next')}</summary>
@@ -165,23 +172,26 @@ function match(root, ctx, task) {
   const el = $('.arena', root);
 
   const letter = (side) => side.toUpperCase();
+  // As in an exam hall, the name is sealed under a strip (糊名) until the vote, then unsealed.
+  const sealStrip = (cls = '') => `<span class="arena-seal${cls}" aria-hidden="true">糊 名<small>投票后拆封</small></span>`;
   function blindHead(side) {
     const ready = state.ready[side];
     const text = ready ? '已就绪' : '载入中';
-    return `<span class="pane-letter">${letter(side)}</span><span class="arena-who">匿名作品</span>${aigcLabel()}
+    return `<span class="pane-letter">${letter(side)}</span><span class="arena-who"><span class="sr">匿名作品</span>${sealStrip()}</span>${aigcLabel()}
       <span class="arena-dot${ready ? ' is-ready' : ''}" title="${text}" role="img" aria-label="${text}"></span>
       <button class="pane-close" data-a="reload" data-side="${side}" title="重新载入作品 ${letter(side)}" aria-label="重新载入作品 ${letter(side)}">${icon('reload')}</button>`;
   }
-  function revealHead(side) {
+  function revealHead(side, unseal) {
     const work = state.result[side];
     if (!work) return `<span class="pane-letter">${letter(side)}</span><span class="arena-who">作品已不可用</span>`;
     const model = ctx.modelOf({ model: work.model, modelName: work.modelName, vendor: work.vendor });
     const chosen = state.result.choice === side;
     return `<span class="pane-letter">${letter(side)}</span>${brandMark(model, 'brand-mark sm')}
       <span class="arena-who revealed"><b>${esc(work.modelName)}</b>${work.effort ? `<span class="badge">${esc(work.effort)}</span>` : ''}<small>${esc(work.title)}</small></span>
-      ${chosen ? '<span class="chosen-tag">你的选择</span>' : ''}
+      ${chosen ? '<span class="arena-pick-seal" title="你的选择"><span>所</span><span>选</span></span>' : ''}
       ${reactionBar(`${task.id}/${work.id}`, { locked: work.status === 'questioned' })}
-      <a class="pane-close" href="#/${esc(task.id)}/${esc(work.id)}" title="在展厅中打开" aria-label="在展厅中打开 ${esc(work.title)}">${icon('arrow')}</a>`;
+      <a class="pane-close" href="#/${esc(task.id)}/${esc(work.id)}" title="在展厅中打开" aria-label="在展厅中打开 ${esc(work.title)}">${icon('arrow')}</a>
+      ${unseal ? sealStrip(' is-leaving') : ''}`;
   }
 
   const canVote = () => Boolean(state.match && !state.result && state.ready.a && state.ready.b && (!mobile() || (state.seen.a && state.seen.b)));
@@ -225,8 +235,11 @@ function match(root, ctx, task) {
   }
 
   function drawHeads() {
+    // The strip comes off once, on the draw that first shows the names.
+    const unseal = Boolean(state.result) && !state.unsealed;
+    if (state.result) state.unsealed = true;
     for (const side of ['a', 'b']) {
-      $(`[data-head="${side}"]`, el).innerHTML = state.result ? revealHead(side) : blindHead(side);
+      $(`[data-head="${side}"]`, el).innerHTML = state.result ? revealHead(side, unseal) : blindHead(side);
       $(`[data-side="${side}"].arena-pane`, el).classList.toggle('chosen', state.result?.choice === side);
       const dot = $(`[data-dot="${side}"]`, el);
       if (dot) dot.className = state.ready[side] ? 'is-ready' : '';
@@ -304,7 +317,7 @@ function match(root, ctx, task) {
     if (state.busy || state.error) return;
     state.busy = true;
     const previous = state.match?.id;
-    Object.assign(state, { match: null, result: null, ready: {}, seen: { a: true }, controls: {}, controlsShown: false, side: 'a', slow: false });
+    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, seen: { a: true }, controls: {}, controlsShown: false, side: 'a', slow: false });
     $$('[data-body]', el).forEach((body) => { body.innerHTML = `<div class="loader blind"><span class="loader-letter" aria-hidden="true">${letter(body.dataset.body)}</span><div class="spinner" aria-hidden="true"></div><span>正在抽取一组作品</span></div>`; });
     update();
     try {
