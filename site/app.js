@@ -20,6 +20,7 @@ import { groupVariantResults, variantChoices, variantKey, variantsOf } from './p
 import { categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 import { modelResolver } from './models.js';
 import { createWorkControls, workFrameUrl } from './work-controls.js';
+import { hasModelPreview, screenshotOf } from './work-preview-media.js';
 
 const root = $('#app');
 let DATA;
@@ -81,7 +82,7 @@ function setResultSort(value) {
   store.set('result-sort', value);
 }
 // Cover: the first uniform capture (task condition order), else the author's first screenshot.
-const cover = (r) => Object.values(r.captures)[0] ?? r.gallery[0]?.src ?? '';
+const cover = screenshotOf;
 // Works without a screenshot yet show their title instead of an empty frame.
 function coverHtml(r, cls = '', eager = false) {
   const src = cover(r);
@@ -249,7 +250,7 @@ function renderLibrary(scopes = [], fresh = true) {
   let previews = null, destroyed = false;
   const choices = DATA.tasks.map((task) => ({ task, result: taskCover(task, platform.featured?.[task.id]?.cover) }));
   const artworkFor = (t, shown, eager = false) => shown?.previewMode === 'screenshot'
-    ? img(shown.captures?.first ?? shown.gallery?.[0]?.src ?? '', shown.title, 'question-screenshot-preview', eager)
+    ? img(screenshotOf(shown), shown.title, 'question-screenshot-preview', eager)
     : shown?.previewModel || shown?.previewLoader
       ? (shown.previewPoster ? img(shown.previewPoster, '', 'question-model-poster', eager) : coverHtml(shown))
       : shown ? coverHtml(shown, '', eager) : `<span class="question-placeholder">${icon('text')}<span>${counted(t).length ? '暂无预览图' : '等待第一份答案'}</span></span>`;
@@ -484,7 +485,7 @@ async function updateResultPreviews(t) {
   resultPreviews?.destroy();
   resultPreviews = null;
   if (previewMode !== 'model') return;
-  const results = displayedResults(hostedTask(t)).filter((result) => result.previewMode !== 'screenshot');
+  const results = displayedResults(t).filter((result) => hasModelPreview(result) && (result.previewModel || hosted(result)));
   if (!results.length) return;
   try {
     const { createResultPreviews } = await import('./result-previews.js');
@@ -559,13 +560,13 @@ function adminPoolLine(t, pool) {
 // The model is the card's title; the work's own name follows in grey. Summaries stay in the guide.
 function resultCard(t, r) {
   const m = modelOf(r);
-  const screenshotPreview = r.previewMode === 'screenshot';
-  const screenshot = r.captures?.first ?? r.gallery?.[0]?.src ?? '';
+  const screenshotPreview = !hasModelPreview(r);
+  const screenshot = screenshotOf(r);
   const coverWork = coverLead(t);
   const lead = isLead(coverWork, r);
   return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-model="${esc(modelKey(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media">
-      <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
+      <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview && screenshot ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
       ${lead ? '<span class="lead-seal" aria-hidden="true"><span>代</span><span>表</span></span>' : ''}
       ${t.results.length > 1 ? `<button class="pick" data-pick="${esc(r.id)}" aria-pressed="false" aria-label="加入对比：${esc(r.title)}"><span class="pick-box">${icon('plus')}${icon('check')}</span><span class="pick-text">对比</span></button>` : ''}
     </div>
@@ -1506,6 +1507,10 @@ function resultOf(pack, w) {
     summary: w.summary ?? '',
     addedAt: w.addedAt ?? pack?.addedAt,
     scene: w.scene ?? pack?.scene,
+    previewModel: w.previewModel ?? pack?.previewModel ?? null,
+    previewPoster: w.previewPoster ?? pack?.previewPoster ?? null,
+    previewMode: w.previewMode ?? pack?.previewMode,
+    previewCapture: w.previewCapture ?? pack?.previewCapture,
     gallery: pack?.gallery ?? (w.cover ? [{ src: w.cover, caption: '作者提供的封面' }] : []),
     captures: w.captures ?? pack?.captures ?? {},
     files: w.files,

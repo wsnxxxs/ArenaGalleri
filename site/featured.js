@@ -1,3 +1,5 @@
+import { hasModelPreview, screenshotOf } from './work-preview-media.js';
+
 // Which work leads: one per model on the task page, one for the task card.
 // The server sends the vote-based picks (platform.featured[task] = { cover, models }); until a
 // work has enough blind votes, the fixed fallbacks below decide.
@@ -28,11 +30,14 @@ export function representatives(results, keyOf, picks = {}) {
   return new Map([...groups].map(([key, works]) => [key, byId(works, picks[key]) ?? [...works].sort(fallbackOrder)[0]]));
 }
 
-// The cover an admin set on the question leads; then the vote-based pick, then Claude Opus 5.5
-// Max and GPT-6 Astra Max; otherwise a grey placeholder.
+// A model preview can supply the card visual itself; otherwise use an available screenshot.
+const hasCoverMedia = (r) => hasModelPreview(r) || Boolean(screenshotOf(r));
+
+// Prefer the admin's cover, then the vote-based pick, then Opus 5.5 Max and Astra Max.
+// If those works have no card media, fall back to the best media-bearing public work.
 const COVER_FALLBACKS = [['claude-opus-5.5', 'max'], ['gpt-6-astra', 'max']];
 export function taskCover(task, pick = null) {
-  const works = task.results.filter((r) => r.status !== 'questioned');
+  const works = task.results.filter((r) => r.status !== 'questioned' && hasCoverMedia(r));
   const selected = byId(works, task.cover);
   if (selected) return selected;
   const voted = byId(works, pick);
@@ -41,5 +46,5 @@ export function taskCover(task, pick = null) {
     const match = works.filter((r) => r.model === model && String(r.effort ?? '').toLowerCase() === effort).sort(fallbackOrder)[0];
     if (match) return match;
   }
-  return null;
+  return [...works].sort(fallbackOrder)[0] ?? null;
 }

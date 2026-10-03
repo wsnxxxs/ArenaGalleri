@@ -56,6 +56,7 @@ export function mediaUrl(value) {
 const work = (item) => !item ? item : {
   ...item,
   ...(item.cover ? { cover: mediaUrl(item.cover) } : {}),
+  ...Object.fromEntries(['previewModel', 'previewPoster', 'previewCapture'].filter((field) => item[field]).map((field) => [field, mediaUrl(item[field])])),
   ...(item.captures ? { captures: Object.fromEntries(Object.entries(item.captures).map(([name, url]) => [name, mediaUrl(url)])) } : {}),
 };
 const works = (items) => items?.map(work);
