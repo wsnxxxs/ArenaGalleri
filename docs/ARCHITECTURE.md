@@ -21,6 +21,7 @@
 | `arena.js` / `leaderboard.js` | Gallery 内的盲评和榜单界面，调用独立后台 |
 | `work-controls.js` | 并排作品的折叠协议、内容源 URL 与同源 iframe 脚本注入 |
 | `publish.js` / `submit.js` / `account.js` | 题目、投稿、个人中心与审核界面 |
+| `work-fields.js` / `work-management.js` | 共用作品信息字段与作品管理弹窗 |
 | `question-preview.js` / `result-previews.js` | 代表作品选择和卡片模型展示 |
 | `prompt-variants.js` | 提示词版本、同模型结果分组与当前版本选择 |
 | `preview-model.js` / `scene-resources.js` | 模型读取与资源回收 |
@@ -35,6 +36,8 @@
 每个地址只对应一个页面：路由在 `app.js` 的 `show()` 里只保存一个 `page`。首页、题库、条款、题目页、作品查看器、展厅 / 沙盘和各平台页的渲染函数都返回同样的对象，字段都可以省略：`ready` 是首批数据画完的 Promise，已经从记忆画好时为 null；`fullscreen` 表示页面自己管理滚动；`onPlatformChange(reason)` 表示登录或审核状态变化时页面自己重画，没有这个字段时路由会原地重画整页；`destroy()` 用来释放定时器、监听器和 iframe。页面可以直接设置 `root.on*` 事件，拆页时由路由统一清掉。作品查看器在同一道题的作品之间切换时不拆掉，只调用 `update`，已经打开的那一栏不会重新载入。点链接切换页面是一次 View Transition：在回调里拆掉旧页、画新页，等 `ready` 完成，最多等 300ms（`HOLD`），然后交叉淡入。等待期间旧画面保持不动。顶栏（`#app > .topbar`）和侧栏（`.app-sidebar`）有各自的 `view-transition-name`，内容相同的话过渡时看不出变化。浏览器不支持 View Transition、标签页在后台，或者是首屏、同页重画时，直接绘制。数据超过 HOLD 才到的页面先显示自己的载入状态，到了再原地补上。返回上一页时，等 `ready` 后再恢复一次滚动位置；如果读者在等待期间自己滚动过，就不再恢复。
 
 页面进入时读取的数据（`me`、`auth/me`、`review`、`admin/questions`、各榜单）用 `platform.js` 的 `apiRemembered` 读取，按账号记住上一次的结果。回到页面时先用 `recall` 画出上次的内容，后台刷新；结果有变化才重画。同页操作或平台状态变化引起的刷新一律重画。
+
+作品管理位于 `#/review/works`，题目管理通过 `?task=<题目ID>` 带入筛选。复用 `review` 的全量目录，以 `task/id` 标识单件与批量作品；数据包作品的媒体来自 `packagedWork`，不复制资源。弹窗由 `work-management.js` 绘制，`account.js` 传入共用的差异编辑器与审核回调；先写 metadata，再按实际改动写 face-settings，部分成功保留已保存信息。权限沿用 `canDecide` / `isSenior` 与后台校验，普通管理员本人作品不进入展示批量选择；普通管理员不请求 `admin/questions`。
 
 启动时并行读取本地展示目录和后台 bootstrap，bootstrap 8 秒没有响应就按静态档案运行。数据版本仍用于写请求兼容，API 契约不可用时保留静态浏览。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。
 

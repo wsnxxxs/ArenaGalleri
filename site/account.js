@@ -2,6 +2,7 @@
 import { $, $$, brandMark, esc, formatBytes, formatDate, formatTime, icon, img } from './ui.js';
 import { api, apiRemembered, arenaText, autoRejected, avatarFace, byStaff, canDecide, confirmDialog, injected, isSenior, isStaff, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, recall, refreshPlatform, requireUser, reviewCount, riskLabels, ROLE_LABELS, setFaces, statusBadge, toast } from './platform.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
+import { openWorkManagement } from './work-management.js';
 import { categoryLabel, domainsOf, matchesQuery } from './categories.js';
 import { categoryField, domainField, syncDomains } from './question-fields.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
@@ -9,12 +10,12 @@ import { sticker, stickerName } from './stickers.js';
 
 // The review queue runs one pipeline: 题目审核 → 内容审核 → 作品核验. The first group only
 // counts what needs a person; the second lists what has been decided; the third manages every
-// question. Questions belong to senior admins; moderators review works only.
+// question and work. Questions belong to senior admins; moderators manage works too.
 const TODO_TABS = { questions: '题目', content: '内容', unverified: '核验' };
 const DONE_TABS = { done: '已处理', log: '记录' };
-const MANAGE_TABS = { catalog: '全部题目' };
+const MANAGE_TABS = { catalog: '全部题目', works: '全部作品' };
 const todoTabs = () => Object.fromEntries(Object.entries(TODO_TABS).filter(([id]) => id !== 'questions' || isSenior()));
-const manageTabs = () => (isSenior() ? MANAGE_TABS : {});
+const manageTabs = () => Object.fromEntries(Object.entries(MANAGE_TABS).filter(([id]) => id !== 'catalog' || isSenior()));
 // Decided uploads by what they show now; each filter answers one question an admin asks.
 const DONE_FILTERS = { all: '全部', public: '已公开', noarena: '不进盲评', off: '已撤下', questioned: '存疑', rejected: '已拒绝', machine: '机审拒绝', injection: '疑似注入' };
 // Addresses that open the decided list on one filter, including the old decided tabs.
@@ -23,7 +24,7 @@ const ME_TABS = { overview: '概览', works: '我的作品', questions: '我的�
 const ACCOUNT = { title: '个人中心', description: '每一道提问，每一份解答，都是你的创作足迹。' };
 const ACTIONS = { submit: '提交作品', verified: '通过核验', questioned: '标记存疑', unverified: '退回未验证', delete: '删除作品',
   'question-create': '发起题目', 'question-review': '审核题目', 'question-edit': '编辑题目', 'question-delete': '删除题目',
-  'content-review': '内容审核', 'content-retry': '重新自动审核', meta: '编辑信息' };
+  'content-review': '内容审核', 'content-retry': '重新自动审核', meta: '编辑信息', 'face-settings': '调整展示设置' };
 
 export function mount(root, ctx) {
   return ctx.route === 'review' ? review(root, ctx) : mine(root, ctx);
@@ -133,6 +134,7 @@ const doneLine = (w) => (faceOn(w) ? `已公开${galleryOn(w) ? '' : '（未上�
 const FACE_ACTIONS = {
   'arena-on': ['开启盲评', { show_arena: true }, '已开启盲评'],
   'arena-off': ['移出盲评', { show_arena: false }, '已移出盲评'],
+  'gallery-on': ['公开到展览馆', { show_gallery: true }, '已公开到展览馆'],
   restore: ['恢复公开', { show_gallery: true, show_arena: true }, '已恢复公开'],
   hide: ['撤下', { show_gallery: false, show_arena: false }, '已撤下'],
 };
@@ -147,7 +149,7 @@ const publisher = (ctx, item) => (byStaff(item) ? `${item.author?.name ?? ctx.DA
 function adminAction(w, bucket) {
   const id = esc(pickId(w));
   const details = `<button class="btn sm ghost" data-review="${id}">详情</button>`;
-  if (!canDecide(w) && ['content', 'auto', 'unverified', 'questioned'].includes(bucket)) return details;
+  if (!canDecide(w)) return details;
   const arena = w.arena?.state === 'in_pool' ? faceButton(w, 'arena-off') : w.arena?.state === 'off' ? faceButton(w, 'arena-on', true) : '';
   return {
     content: `<button class="btn sm primary" data-content="${id}">审核内容</button>`,
@@ -653,7 +655,7 @@ export function openReview(ctx, w, { questions = [], onDecided } = {}) {
         ${w.trial ? `<h4>作者浏览器中的试加载</h4><ul class="checks">${trialRows(w.trial)}</ul>` : ''}
       </div>
       <form class="review-form" novalidate>
-        ${held(w) ? `<div class="review-blocked">${icon('alert')}<p>内容审核还没通过，通过后才能核验。</p><button type="button" class="btn sm primary" data-open-content>审核内容</button></div>` : ''}
+        ${held(w) ? `<div class="review-blocked">${icon('alert')}<p>内容审核还没通过，通过后才能核验。</p><button type="button" class="btn sm primary" data-open-content${canDecide(w) ? '' : ' disabled'}>审核内容</button></div>` : ''}
         <details class="review-meta" open><summary>作品信息<small>与上传表单一致，必填项补齐后才能通过核验</small></summary>
           ${workFieldsHtml(ctx, task, w, { expanded: true })}
           <div class="review-meta-actions"><button type="button" class="btn sm" data-save-meta>只保存信息</button></div>
@@ -666,7 +668,7 @@ export function openReview(ctx, w, { questions = [], onDecided } = {}) {
         <div class="sheet-actions">
           ${isSenior() ? `<button type="button" class="btn danger ghost" data-remove>${icon('trash')}删除</button>` : ''}
           <span class="spacer"></span>
-          ${w.status === 'verified' && faceOn(w) ? '<button type="button" class="btn ghost" data-decide="off">撤下</button>' : ''}
+          ${canDecide(w) && w.status === 'verified' && faceOn(w) ? '<button type="button" class="btn ghost" data-decide="off">撤下</button>' : ''}
           ${canDecide(w) ? `<button type="button" class="btn" data-decide="questioned">${icon('alert')}标记存疑</button>
           ${w.status === 'verified' ? '' : `<button type="button" class="btn primary" data-decide="verified"${held(w) ? ' disabled' : ''}>${icon('check')}通过核验</button>`}` : ''}
         </div>
@@ -677,7 +679,7 @@ export function openReview(ctx, w, { questions = [], onDecided } = {}) {
   const editor = reviewEditor(form, task, w);
   sheet.el.addEventListener('click', async (e) => {
     if (e.target.closest('a[href^="#"]')) { sheet.close(); return; }
-    if (e.target.closest('[data-open-content]')) { sheet.close(); openContent(ctx, w, { questions }); return; }
+    if (e.target.closest('[data-open-content]') && canDecide(w)) { sheet.close(); openContent(ctx, w, { questions }); return; }
     const decide = e.target.closest('[data-decide]');
     if (e.target.closest('[data-remove]')) {
       if (await removeWork(w, { admin: true })) sheet.close();
@@ -697,7 +699,7 @@ export function openReview(ctx, w, { questions = [], onDecided } = {}) {
       button.disabled = false;
       return;
     }
-    if (!decide) return;
+    if (!decide || !canDecide(w)) return;
     const status = decide.dataset.decide;
     if (status === 'off') {
       $$('[data-decide]', form).forEach((b) => { b.disabled = true; });
@@ -771,7 +773,7 @@ function openContent(ctx, w, { questions = [], onDecided } = {}) {
         <label class="field"><span class="field-label">理由<small>拒绝时必填，作者会看到</small></span><textarea class="input" name="reason" rows="3" maxlength="500"></textarea></label>
         <p class="form-error" role="alert"></p>
         <div class="sheet-actions">
-          ${platform.site.contentModeration && platform.site.autoModeration !== false && m.status !== 'pending' ? '<button type="button" class="btn ghost" data-content-act="retry">重新自动审核</button>' : ''}
+          ${canDecide(w) && platform.site.contentModeration && platform.site.autoModeration !== false && m.status !== 'pending' ? '<button type="button" class="btn ghost" data-content-act="retry">重新自动审核</button>' : ''}
           <span class="spacer"></span>
           ${!canDecide(w) ? '<span class="fine">你发布的作品需要由其他管理员审核</span>' : `${m.status === 'rejected' ? '' : `<button type="button" class="btn danger" data-content-act="rejected">${icon('close')}拒绝</button>`}
           <button type="button" class="btn primary" data-content-act="approved">${icon('check')}内容通过</button>`}
@@ -797,7 +799,7 @@ function openContent(ctx, w, { questions = [], onDecided } = {}) {
       return;
     }
     const act = e.target.closest('[data-content-act]')?.dataset.contentAct;
-    if (!act) return;
+    if (!act || !canDecide(w)) return;
     const reason = form.reason.value.trim();
     error.textContent = '';
     if (act === 'rejected' && !reason) { error.textContent = '请写明拒绝理由'; form.reason.focus(); return; }
@@ -851,6 +853,7 @@ function reviewQuestionRow(ctx, q, picked) {
       <details class="prompt-peek"><summary>${icon('guide')}完整提示词</summary><pre>${esc(q.prompt)}</pre></details>
     </div>
     <div class="actions">
+      <a class="btn sm" href="#/review/works?task=${encodeURIComponent(q.id)}">管理作品</a>
       <button class="btn sm" data-q-edit="${esc(q.id)}">编辑</button>
       ${shown ? '' : `<button class="btn sm primary" data-q-decide="approved" data-q="${esc(q.id)}">通过</button>`}
       ${status === 'rejected' ? '' : `<button class="btn sm" data-q-decide="rejected" data-q="${esc(q.id)}">拒绝</button>`}
@@ -879,6 +882,7 @@ function catalogRow(ctx, q, buckets) {
       ${q.moderation?.status === 'rejected' && q.moderation.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(q.moderation.reason)}</span></p>` : ''}
     </div>
     <div class="actions">
+      <a class="btn sm" href="#/review/works?task=${encodeURIComponent(q.id)}">管理作品</a>
       <button class="btn sm" data-q-edit="${esc(q.id)}">编辑</button>
       ${waiting ? '<a class="btn sm primary" href="#/review/questions">去审核</a>'
         : shown ? `<button class="btn sm" data-q-decide="rejected" data-q="${esc(q.id)}">撤下</button>`
@@ -1012,7 +1016,10 @@ const REVIEW_SUMMARY = {
   done: '核验过的作品，每行写明现在在哪里显示，按钮就是下一步。存疑与拒绝的原因对作者可见。',
   log: '最近的审核与管理操作。',
   catalog: '站内的全部题目：发布者、公开状态和作品情况。可以编辑、开关投稿、指定封面、撤下或恢复；已有投票的题目不能删除。',
+  works: '查找、编辑作品信息，分别管理展览馆与盲评展示。审核决定在作品详情中单独处理；保存信息不会自动通过审核。',
 };
+const WORK_FILTERS = { all: '全部', public: '已公开', content: '内容审核中', unverified: '待核验', questioned: '存疑', off: '已撤下', rejected: '已拒绝' };
+const ARENA_FILTERS = { all: '全部盲评状态', in_pool: '在盲评池', off: '已关闭盲评', not_qualified: '生成方式不符', not_ready: '尚不能盲评' };
 const REVIEW_EMPTY = { questions: '没有待审核的题目', content: '没有等待人工审核内容的投稿', unverified: '没有等待核验的投稿' };
 // Batch decisions per queue: [status, button, done, what it means]. Each item succeeds or fails on its own.
 const BULK = {
@@ -1028,8 +1035,9 @@ const BULK = {
 };
 
 function review(root, ctx) {
-  const state = { works: null, audit: [], questions: null, questionsError: '', error: '', tab: null, filter: FILTER_TABS[ctx.param] ?? 'all', picked: new Set(),
-    catalog: { filter: 'all', query: '' } };
+  const [routeTab = '', routeQuery = ''] = (ctx.param ?? '').split('?');
+  const state = { works: null, audit: [], questions: null, questionsError: '', error: '', tab: null, filter: FILTER_TABS[routeTab] ?? 'all', picked: new Set(),
+    catalog: { filter: 'all', query: '' }, managed: { filter: 'all', query: '', task: new URLSearchParams(routeQuery).get('task') ?? '', arena: 'all', sort: 'latest' } };
   // Packaged works come without media; they show the data pack's screenshots and scene.
   const settle = (data, questions) => Object.assign(state, { works: data.works.map((w) => ({ ...ctx.packagedWork(w.task, w.id), ...w })), audit: data.audit, error: '',
     questions: questions.list ?? state.questions ?? [], questionsError: questions.error ?? '' });
@@ -1068,8 +1076,79 @@ function review(root, ctx) {
   const doneBulk = () => (state.tab === 'done' ? { noarena: 'arena-on', off: 'restore' }[state.filter] : null);
   // What the batch checkboxes of the current queue can select.
   const pickable = () => (state.tab === 'questions' ? (state.questions ?? []).filter(questionWaiting).map((q) => q.id)
-    : state.tab === 'done' ? (doneBulk() ? queue('done').filter((w) => doneBulk() !== 'arena-on' || w.arena?.state === 'off').map(pickId) : [])
+    : state.tab === 'works' ? managedWorks().filter(displayReady).filter(canDecide).map(pickId)
+    : state.tab === 'done' ? (doneBulk() ? queue('done').filter(canDecide).filter((w) => doneBulk() !== 'arena-on' || w.arena?.state === 'off').map(pickId) : [])
       : BULK[state.tab] ? queue(state.tab).filter(canDecide).map(pickId) : []);
+  const taskOf = (w) => ctx.DATA.tasks.find((t) => t.id === w.task) ?? state.questions?.find((q) => q.id === w.task);
+  const displayReady = (w) => w.status === 'verified' && !held(w) && !w.entertainment_route && ctx.DATA.tasks.some((t) => t.id === w.task);
+  const arenaState = (w) => !displayReady(w) ? 'not_ready' : w.arena?.state ?? 'not_ready';
+  const managedIn = (w, filter) => {
+    const bucket = reviewBucket(ctx, w, state.questions ?? []);
+    return { all: true, public: bucket === 'verified', content: ['content', 'auto'].includes(bucket),
+      unverified: ['unverified', 'sample'].includes(bucket), questioned: bucket === 'questioned', off: bucket === 'off', rejected: bucket === 'rejected' }[filter];
+  };
+  function managedWorks({ filtered = true } = {}) {
+    const { filter, query, task, arena, sort } = state.managed;
+    const terms = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    return (state.works ?? []).filter((w) => {
+      if (task && w.task !== task || arena !== 'all' && arenaState(w) !== arena || filtered && !managedIn(w, filter)) return false;
+      const text = [w.title, w.modelName, w.vendor, publisher(ctx, w), taskOf(w)?.title ?? w.task].join(' ').toLocaleLowerCase();
+      return terms.every((term) => text.includes(term));
+    }).sort((a, b) => sort === 'title' ? a.title.localeCompare(b.title, 'zh-CN', { numeric: true })
+      : (sort === 'oldest' ? 1 : -1) * ((Date.parse(a.addedAt) || 0) - (Date.parse(b.addedAt) || 0)));
+  }
+  function managedRow(w) {
+    const key = esc(pickId(w)), task = taskOf(w), model = ctx.modelOf(w);
+    const bucket = reviewBucket(ctx, w, state.questions ?? []);
+    const hidden = held(w) || !ctx.DATA.tasks.find((t) => t.id === w.task)?.results.some((result) => result.id === w.id);
+    const href = hidden && w.scene ? esc(w.scene) : `#/${esc(w.task)}/${esc(w.id)}`;
+    const issue = ['questioned', 'rejected'].includes(bucket);
+    const checkLabel = held(w) ? '内容' : bucket === 'sample' || !ctx.DATA.tasks.some((t) => t.id === w.task) ? '题目' : '核验';
+    const checkText = held(w) ? { pending: '自动审核中', review: '待人工复核', rejected: '未通过' }[w.moderation.status]
+      : checkLabel === '题目' ? bucket === 'rejected' ? '未通过 / 未公开' : '尚未公开'
+        : { unverified: '待核验', questioned: '存疑', verified: '已验证', off: '已验证', rejected: '未通过' }[bucket] ?? '待核验';
+    const ready = displayReady(w), selectable = ready && canDecide(w);
+    const arena = arenaState(w), arenaText = { in_pool: '在盲评池', off: '已关闭', not_qualified: '生成方式不符', not_ready: '尚不能盲评' }[arena] ?? '尚不能盲评';
+    const pickHint = !canDecide(w) ? '本人作品的展示设置需由其他管理员处理' : !ready ? '通过审核并公开题目后可批量管理展示' : `选择「${w.title}」`;
+    return `<article class="work-row is-pickable work-managed-row" data-status="${esc(w.status)}">
+      <label class="row-pick"><input type="checkbox"${selectable ? ` data-pick="${key}"` : ' disabled'}${state.picked.has(pickId(w)) ? ' checked' : ''} aria-label="${esc(pickHint)}" title="${esc(pickHint)}"></label>
+      ${thumb(ctx, w, { link: false })}<div class="work-main">
+        <p class="result-model">${brandMark(model, 'brand-mark sm')}<b>${esc(model.name)}</b>${w.effort ? `<span class="badge">${esc(w.effort)}</span>` : ''}</p>
+        <h3><a href="${href}"${hidden && w.scene ? ' target="_blank" rel="noopener"' : ''}>${esc(w.title)}</a></h3>
+        <p class="work-meta">${esc(task?.title ?? w.task)} · ${esc(publisher(ctx, w))}${w.addedAt ? ` · ${formatDate(w.addedAt)}` : ''}${w.mine ? ' · 本人作品' : ''}</p>
+        <p class="work-state"><span${issue ? ' class="is-issue"' : ''}><small>${checkLabel}</small>${esc(checkText)}</span><span${ready && galleryOn(w) ? '' : ' class="is-muted"'}><small>展览馆</small>${ready && galleryOn(w) ? '已公开' : '未公开'}</span><span${arena === 'in_pool' ? '' : ' class="is-muted"'}${w.arena?.reason ? ` title="${esc(w.arena.reason)}"` : ''}><small>盲评</small>${arenaText}</span></p>
+      </div><div class="work-side"><button class="btn sm" type="button" data-manage-work="${key}">管理</button></div>
+    </article>`;
+  }
+  function managedChips() {
+    const scope = managedWorks({ filtered: false });
+    return Object.entries(WORK_FILTERS).map(([id, label]) => `<button class="chip" type="button" data-managed-filter="${id}" aria-pressed="${state.managed.filter === id}">${label}<span>${scope.filter((w) => managedIn(w, id)).length}</span></button>`).join('');
+  }
+  function managedResults() {
+    const works = managedWorks(), total = (state.works ?? []).length;
+    const bulk = pickable().length ? `<div class="bulk-bar" data-bulk-bar><label class="row-pick"><input type="checkbox" data-pick-all aria-label="全选可管理展示的作品"></label><span data-bulk-count></span>${['gallery-on', 'hide', 'arena-off'].map((action, i) => `<button class="btn sm${i ? '' : ' primary'}" type="button" data-bulk-face="${action}" disabled>${FACE_ACTIONS[action][0]}</button>`).join('')}</div>` : '';
+    return `<p class="work-manage-list-meta">显示 ${works.length} / ${total} 件作品${works.some((w) => !canDecide(w)) ? ' · 本人作品可编辑信息，展示设置由其他管理员处理' : ''}</p>${bulk}
+      ${works.length ? `<div class="work-list">${works.map(managedRow).join('')}</div>` : '<div class="board-empty"><p class="board-empty-title">没有匹配的作品</p><button class="btn sm" type="button" data-managed-reset>清除筛选</button></div>'}`;
+  }
+  function managedList() {
+    const taskTitles = new Map([...ctx.DATA.tasks, ...(state.questions ?? [])].map((t) => [t.id, t.title]));
+    for (const w of state.works ?? []) if (!taskTitles.has(w.task)) taskTitles.set(w.task, w.task);
+    const options = (items, current) => items.map(([id, label]) => `<option value="${esc(id)}"${id === current ? ' selected' : ''}>${esc(label)}</option>`).join('');
+    return `<div class="work-management"><div class="work-manage-heading"><h3>全部作品<span>${state.works?.length ?? 0}</span></h3><p>信息、核验与展示状态分别管理</p></div>
+      <div class="work-manage-tools"><label class="collection-search">${icon('search')}<input type="search" data-managed-search aria-label="搜索作品、模型或发布者" placeholder="搜索作品、模型或发布者" value="${esc(state.managed.query)}"></label>
+        <select name="task" data-managed-select aria-label="按题目筛选">${options([['', '全部题目'], ...taskTitles], state.managed.task)}</select>
+        <select name="arena" data-managed-select aria-label="按盲评状态筛选">${options(Object.entries(ARENA_FILTERS), state.managed.arena)}</select>
+        <select name="sort" data-managed-select aria-label="作品排序">${options([['latest', '最新在前'], ['oldest', '最早在前'], ['title', '按作品名称']], state.managed.sort)}</select></div>
+      <div class="chips work-manage-filters" data-managed-chips>${managedChips()}</div><div class="work-manage-results" data-managed-results>${managedResults()}</div></div>`;
+  }
+  // Preserve input focus while filters and search redraw only the result area.
+  function updateManaged() {
+    state.picked.clear();
+    root.querySelector('[data-managed-chips]').innerHTML = managedChips();
+    root.querySelector('[data-managed-results]').innerHTML = managedResults();
+    syncBulk();
+    ctx.settleImages();
+  }
   // 全部题目, narrowed by the filter and the search; redrawn alone while typing.
   function catalogList() {
     const { filter, query } = state.catalog;
@@ -1089,7 +1168,7 @@ function review(root, ctx) {
       return;
     }
     // Without a tab in the address, open the first queue that has work waiting.
-    const param = ctx.param ?? '';
+    const param = routeTab;
     const todo = todoTabs(), manage = manageTabs();
     const tab = Object.hasOwn(todo, param) || Object.hasOwn(DONE_TABS, param) || Object.hasOwn(manage, param) ? param : Object.hasOwn(FILTER_TABS, param) ? 'done'
       : (state.works && Object.keys(todo).find((id) => tabCount(id))) || 'unverified';
@@ -1123,6 +1202,8 @@ function review(root, ctx) {
       const chips = `<div class="chips review-filters">${Object.entries(CATALOG_FILTERS).map(([id, text]) => `<button class="chip${id === state.catalog.filter ? ' on' : ''}" type="button" data-catalog-filter="${id}" aria-pressed="${id === state.catalog.filter}">${text} · ${questions.filter((q) => catalogIn(q, id)).length}</button>`).join('')}</div>`;
       list = state.questionsError ? `<p class="muted">${esc(state.questionsError)}</p>`
         : `<div class="catalog-tools"><label class="collection-search">${icon('search')}<input type="search" data-catalog-search aria-label="搜索题目或提示词" placeholder="搜索题目或提示词" value="${esc(state.catalog.query)}"></label>${chips}</div><div data-catalog-list>${catalogList()}</div>`;
+    } else if (tab === 'works') {
+      list = managedList();
     } else if (tab === 'content') {
       const waiting = rows('content'), auto = rows('auto');
       list = `${waiting ? `${bulk}<div class="work-list">${waiting}</div>` : empty(REVIEW_EMPTY.content)}
@@ -1158,8 +1239,9 @@ function review(root, ctx) {
     all.checked = n > 0 && n === total;
     all.indeterminate = n > 0 && n < total;
     const unit = BULK[state.tab]?.unit ?? '件';
-    bar.querySelector('[data-bulk-count]').textContent = n ? `已选 ${n} ${unit}` : `全选（${total} ${unit}）`;
-    $$('[data-bulk], [data-bulk-face]', bar).forEach((button) => { button.disabled = !n; });
+    const faces = Boolean(bar.querySelector('[data-bulk-face]'));
+    bar.querySelector('[data-bulk-count]').textContent = `${n ? `已选 ${n} ${unit}` : `全选（${total} ${unit}）`}${faces && (n > 200 || total > 200) ? ' · 每批最多 200 件，请缩小选择范围' : ''}`;
+    $$('[data-bulk], [data-bulk-face]', bar).forEach((button) => { button.disabled = !n || faces && n > 200; });
   }
   // After a decision in a queue, the oldest remaining work of that queue opens right away.
   const nextIn = (bucket, doneKey) => () => {
@@ -1170,19 +1252,26 @@ function review(root, ctx) {
   const open = (work, bucket) => openReview(ctx, work, { questions: state.questions ?? [], onDecided: bucket === 'unverified' ? nextIn(bucket, pickId(work)) : undefined });
   const openHeld = (work, bucket) => openContent(ctx, work, { questions: state.questions ?? [], onDecided: bucket === 'content' ? nextIn(bucket, pickId(work)) : undefined });
   // One face switch for a row, or for every selected row of the decided list (all or none).
+  let switchingFaces = false;
   async function switchFaces(action, works) {
+    if (!works.length || switchingFaces) return;
+    if (works.some((w) => !canDecide(w))) return toast('本人作品的展示设置需由其他管理员处理');
     const [label, faces, done] = FACE_ACTIONS[action];
-    if (works.length > 1 && !(await confirmDialog({ title: `${label} ${works.length} 件？`, message: works.map((w) => `「${w.title}」`).join('、'), confirm: label }))) return;
+    switchingFaces = true;
     try {
+      if (works.length > 1 && !(await confirmDialog({ title: `${label} ${works.length} 件？`, message: works.map((w) => `「${w.title}」`).join('、'), confirm: label }))) return;
       if (works.length > 1) await api('admin/works/batch-face-settings', { method: 'POST', body: { works: works.map(({ task, id }) => ({ task, id })), ...faces } });
       else await setFaces(works[0].task, works[0].id, faces);
+      state.picked.clear();
+      toast(works.length > 1 ? `${works.length} 件${done}` : `${done}：${works[0].title}`);
+      await refreshPlatform('review');
     } catch (error) {
       toast(error.message);
-      return;
+    } finally {
+      switchingFaces = false;
+      syncBulk();
+      $$('[data-face]', root).forEach((button) => { button.disabled = false; });
     }
-    state.picked.clear();
-    toast(works.length > 1 ? `${works.length} 件${done}` : `${done}：${works[0].title}`);
-    await refreshPlatform('review');
   }
   // One decision for every selected item of the current queue. The server decides each item on
   // its own; the ones that failed stay selected and are listed with their reasons.
@@ -1296,6 +1385,11 @@ function review(root, ctx) {
     return true;
   }
   root.onchange = (e) => {
+    const select = e.target.closest('[data-managed-select]');
+    if (select) {
+      state.managed[select.name] = select.value;
+      return updateManaged();
+    }
     const box = e.target.closest('[data-pick], [data-pick-all]');
     if (!box) return;
     if (box.dataset.pick !== undefined) {
@@ -1309,6 +1403,11 @@ function review(root, ctx) {
   };
   // Typing in 全部题目 redraws the list only, so the search keeps its focus.
   root.oninput = (e) => {
+    const managed = e.target.closest('[data-managed-search]');
+    if (managed) {
+      state.managed.query = managed.value.trim();
+      return updateManaged();
+    }
     const search = e.target.closest('[data-catalog-search]');
     if (!search) return;
     state.catalog.query = search.value.trim();
@@ -1316,6 +1415,23 @@ function review(root, ctx) {
     if (list) list.innerHTML = catalogList();
   };
   root.onclick = async (e) => {
+    const managedFilter = e.target.closest('[data-managed-filter]');
+    if (managedFilter) {
+      state.managed.filter = managedFilter.dataset.managedFilter;
+      return updateManaged();
+    }
+    if (e.target.closest('[data-managed-reset]')) {
+      Object.assign(state.managed, { filter: 'all', query: '', task: '', arena: 'all' });
+      state.picked.clear();
+      return draw();
+    }
+    const manageWork = e.target.closest('[data-manage-work]');
+    if (manageWork) {
+      const w = state.works?.find((item) => pickId(item) === manageWork.dataset.manageWork);
+      if (w) openWorkManagement(ctx, w, { questions: state.questions ?? [], audit: state.audit, createEditor: reviewEditor,
+        onReview: () => open(w), onContent: () => openHeld(w) });
+      return;
+    }
     const bulk = e.target.closest('[data-bulk]');
     if (bulk) return bulkDecide(bulk.dataset.bulk);
     const filter = e.target.closest('[data-filter]');
