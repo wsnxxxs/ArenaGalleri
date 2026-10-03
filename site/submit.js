@@ -34,8 +34,9 @@ function checkRow({ state, label, detail }) {
 // then an admin reviews every upload. Older servers do not report the difference. Staff uploads
 // skip content moderation and wait for verification at once.
 export const moderated = () => Boolean(platform.site.contentModeration) && !isStaff();
-// How many works a regular user may keep waiting for verification; the server may set a cap per user.
-export const pendingLimit = () => platform.me?.pendingLimit ?? platform.site.limits.pendingPerUser ?? 5;
+// null means unlimited; staff never use the regular member quota.
+export const pendingLimit = () => isStaff() || platform.me?.pendingLimit === null
+  ? null : platform.me?.pendingLimit ?? platform.site.limits.pendingPerUser ?? 8;
 const automatic = () => moderated() && platform.site.autoModeration !== false;
 export const contentStage = () => ['内容审核', automatic() ? '自动检查，通过前仅你可见' : '管理员检查，通过前仅你可见'];
 
@@ -99,7 +100,7 @@ export function uploadFlow(root, ctx, options) {
   };
 
   const maxBytes = () => (state.template === 'text' ? platform.site.limits.uploadBytes : Math.min(platform.site.limits.uploadBytes, HTML_BYTES));
-  const pendingFull = () => (platform.me?.pending ?? 0) >= pendingLimit();
+  const pendingFull = () => pendingLimit() !== null && (platform.me?.pending ?? 0) >= pendingLimit();
 
   // One line under the dropzone with what most often goes wrong; the rest folds away.
   function fileRules() {
@@ -281,7 +282,7 @@ export function uploadFlow(root, ctx, options) {
           <div class="aside-block">
             <h3>提交之后</h3>
             ${stageTrack(options.stages ?? workStages())}
-            <p class="fine">每人最多 ${pendingLimit()} 件作品同时等待核验。</p>
+            <p class="fine">${pendingLimit() === null ? '等待核验的作品数量不限。' : `最多 ${pendingLimit()} 件作品同时等待核验。`}</p>
           </div>
         </aside>`}
       </section>
