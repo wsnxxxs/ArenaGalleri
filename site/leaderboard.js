@@ -30,6 +30,7 @@ export function mountBoard(container, ctx) {
   let controller = null;
   let destroyed = false;
   let query = '';
+  let text = '';
   // Provenance filters live on the full page only: the embedded board also drives the task page's score sort.
   const filters = { harness: '', provider: '' };
   const filterable = !ctx.embedded;
@@ -50,9 +51,11 @@ export function mountBoard(container, ctx) {
     const unsupported = (filterActive() && !data.filters) || (ctx.category && data.category === undefined) || (ctx.domain && data.domain === undefined);
     const thin = ctx.domain && data.domain !== undefined && rows.length && ((totals.tasks ?? 0) < THIN.tasks || totals.votes < THIN.votes);
     const meta = `${totals.votes} 次有效比较 · ${totals.voters} 位参与者 · ${rows.length} 个${unit === 'model' ? '模型' : '配置'}有评分${data.filters ? ' · 仅统计两件作品来源都符合筛选的比较' : ''}`;
+    // On the full page the sidebar already counts comparisons and voters, so search leads the toolbar.
+    const search = `<label class="collection-search">${icon('search')}<input type="search" data-board-search aria-label="搜索模型" placeholder="搜索模型" value="${esc(text)}"></label>`;
     const unitControl = `<div class="seg" role="group" aria-label="计分单位">${Object.entries(UNITS).map(([value, text]) => `<button data-board-unit="${value}" aria-pressed="${value === unit}">${text}</button>`).join('')}</div>`;
     const head = (filterable
-      ? `<div class="collection-toolbar"><span>${meta}</span><div class="toolbar-actions">${ctx.toolbar ?? ''}${filterSelect('harness', 'Harness', ctx.HARNESSES)}${filterSelect('provider', '服务商', ctx.PROVIDERS)}${unitControl}</div></div>`
+      ? `<div class="collection-toolbar">${search}<div class="toolbar-actions">${ctx.toolbar ?? ''}${filterSelect('harness', 'Harness', ctx.HARNESSES)}${filterSelect('provider', '服务商', ctx.PROVIDERS)}${unitControl}</div></div>${data.filters ? '<p class="muted">仅统计两件作品来源都符合筛选的比较。</p>' : ''}`
       : `<div class="board-head"><p class="board-meta">${meta}</p>${unitControl}</div>`)
       + (unsupported ? '<p class="muted">后端暂不支持这项筛选，下面是未筛选的榜单。</p>' : '')
       + (thin ? `<p class="muted">样本不足：「${esc(ctx.domain)}」目前只有 ${totals.tasks ?? 0} 道题、${totals.votes} 次有效比较参与计分，名次可能随新票大幅变动，仅供参考。</p>` : '');
@@ -107,7 +110,10 @@ export function mountBoard(container, ctx) {
 
   let drawn = false;
   function draw(data) {
+    // A fresh board can land while the reader types; the search keeps its focus.
+    const typing = document.activeElement?.matches('[data-board-search]');
     container.innerHTML = table(data) + (ctx.embedded ? boardNotes() : '');
+    if (typing) $('[data-board-search]', container)?.focus();
     applyQuery();
     ctx.onData?.(data);
     drawn = true;
@@ -155,6 +161,7 @@ export function mountBoard(container, ctx) {
     ready: drawn ? null : loading,
     reload: load,
     search(value) {
+      text = value;
       query = value.trim().toLowerCase();
       applyQuery();
     },
@@ -198,9 +205,8 @@ export function mount(root, ctx) {
       <option value="">全部领域</option>
       ${domains.map((d) => `<option value="${esc(d.name)}"${d.name === domain ? ' selected' : ''}>${esc(d.name)}（${d.tasks.length} 题）</option>`).join('')}
     </select></label>` : '';
-  const search = `<label class="collection-search">${icon('search')}<input type="search" data-board-search aria-label="搜索模型" placeholder="搜索模型"></label>`;
 
-  root.innerHTML = `${ctx.pageStart({ title: '排行榜', section: 'leaderboard', heading: scopeTitle, caption: search, crumbs,
+  root.innerHTML = `${ctx.pageStart({ title: '排行榜', section: 'leaderboard', heading: scopeTitle, crumbs,
     description: '由真实盲评投票计算。分数反映作品在同题比较中被偏好的程度，区间越窄，结论越可靠。',
     meta: `<dl class="side-stats" data-stats>
           <div><dt>有效比较</dt><dd>${pad(platform.totals.votes)}</dd></div>

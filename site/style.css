@@ -383,7 +383,6 @@ body[data-preview-mode="model"] .result-media > a:has(.result-model-poster) > im
 .result h3 { font-size: 18px; }
 .result h3 a { text-decoration: none; }
 .result h3 a:hover { color: var(--ink-2); }
-.result .summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 6px; font-size: 13.5px; line-height: 1.65; color: var(--muted); }
 .result-foot { display: flex; gap: 16px; margin-top: auto; padding-top: 12px; }
 .text-action { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; padding: 2px 0; color: var(--muted); font-size: 12.5px; text-decoration: none; transition: color 0.2s; }
 .text-action .i { width: 14px; height: 14px; }
@@ -436,19 +435,6 @@ body[data-preview-mode="model"] .result-media > a:has(.result-model-poster) > im
 .shot figcaption b { font-weight: 600; font-size: 14px; }
 .shot figcaption span { grid-row: 2; color: var(--muted); font-size: 12.5px; }
 .shot figcaption a { grid-row: 1; grid-column: 2; font-size: 12.5px; white-space: nowrap; }
-
-/* prompt */
-.prompt { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
-.prompt-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 8px 10px 8px 18px; border-bottom: 1px solid var(--line);
-  font: 12.5px var(--mono); color: var(--muted);
-}
-.prompt-tools { display: flex; gap: 6px; }
-.prompt pre {
-  margin: 0; padding: 24px 28px; max-height: 620px; overflow: auto;
-  white-space: pre-wrap; word-break: break-word; font: 14px/1.9 var(--sans); color: var(--ink-2);
-}
 
 /* ---- lightbox (always dark: photographs read best on a dark ground) ---- */
 .lightbox {

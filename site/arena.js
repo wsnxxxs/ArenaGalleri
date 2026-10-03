@@ -50,19 +50,22 @@ function lobby(root, ctx) {
     </a></li>`;
   };
 
-  function list() {
+  // The tasks in view: the chosen category, narrowed by the search.
+  function scope() {
     const query = view.query.trim().toLowerCase();
     const scoped = ctx.DATA.tasks.filter((t) => (!view.track || t.category === view.track)
       && matchesQuery(t, query));
-    const open = scoped.filter(ready);
-    const closed = scoped.filter((t) => !ready(t));
-    const meta = `${open.length} 道题可以开始${closed.length ? ` · ${closed.length} 道作品不足` : ''}`;
+    return { scoped, open: scoped.filter(ready), closed: scoped.filter((t) => !ready(t)) };
+  }
+  const meta = ({ open, closed }) => `${open.length} 道题可以开始${closed.length ? ` · ${closed.length} 道作品不足` : ''}`;
+
+  function list() {
+    const { scoped, open, closed } = scope();
     if (!scoped.length) {
-      return `<div class="collection-toolbar"><span>${meta}</span></div><div class="board-empty">
+      return `<div class="board-empty">
         <p class="board-empty-title">没有找到相关题目</p><p>换个关键词，或切换到全部题目。</p></div>`;
     }
-    return `<div class="collection-toolbar"><span>${meta}</span></div>
-      ${open.length ? `<ul class="arena-tasks">${open.map(row).join('')}</ul>` : `<div class="board-empty">
+    return `${open.length ? `<ul class="arena-tasks">${open.map(row).join('')}</ul>` : `<div class="board-empty">
         <p class="board-empty-title">这里还没有可以盲评的题目</p>
         <p>一道题至少要有两个不同模型配置的作品进入盲评池，才能开始盲评。核验通过、单轮生成且无人工介入的作品会自动进入。</p></div>`}
       ${closed.length ? `<details class="result-group is-questioned arena-closed"><summary><div class="group-head">
@@ -71,14 +74,17 @@ function lobby(root, ctx) {
       </div></summary><ul class="arena-tasks">${closed.map(row).join('')}</ul></details>` : ''}`;
   }
 
-  const drawList = () => { $('[data-arena-list]', root).innerHTML = list(); };
+  // Typing redraws the list only, so the search in the toolbar keeps its focus.
+  const drawList = () => {
+    $('[data-arena-list]', root).innerHTML = list();
+    $('[data-arena-meta]', root).textContent = meta(scope());
+  };
 
   const draw = () => {
     const open = openTasks();
     const track = tracks.find((x) => x.name === view.track);
     const link = (name, glyph, text, count) => `<button class="side-link" data-arena-track="${esc(name)}" aria-pressed="${view.track === name}">${icon(glyph)}${esc(text)}<span class="nav-count">${count}</span></button>`;
     root.innerHTML = `${ctx.pageStart({ title: '盲评', section: 'arena', heading: track ? `${track.label}题目` : '全部题目',
-      caption: `<label class="collection-search">${icon('search')}<input type="search" data-arena-search aria-label="搜索题目" placeholder="搜索题目" value="${esc(view.query)}"></label>`,
       description: '同一道题，两件匿名作品。只凭体验选出你更认可的一件，投票后揭晓模型身份。',
       meta: `<dl class="side-stats">
             <div><dt>可评题目</dt><dd>${pad(open.length)}</dd></div>
@@ -88,6 +94,7 @@ function lobby(root, ctx) {
           ${platform.user ? '' : '<p class="side-note">未登录可以体验，选择不计入榜单。<button class="link" data-auth="login">登录</button></p>'}`,
       nav: `<nav class="side-nav section-nav" aria-label="盲评题型">${link('', 'grid', '全部', open.length)}${tracks.map((x) => link(x.name, x.glyph, x.label, x.tasks.filter(ready).length)).join('')}</nav>` })}
       <section class="block wrap">
+        <div class="collection-toolbar"><label class="collection-search">${icon('search')}<input type="search" data-arena-search aria-label="搜索题目" placeholder="搜索题目" value="${esc(view.query)}"></label><span data-arena-meta>${meta(scope())}</span></div>
         <div data-arena-list>${list()}</div>
         <details class="board-notes">
           <summary>盲评规则${icon('next')}</summary>

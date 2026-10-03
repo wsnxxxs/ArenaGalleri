@@ -287,7 +287,6 @@ dialog.sheet.auth-sheet, .auth-overlay .sheet.auth-sheet { width: min(380px, cal
 .band-leaders b { font: 500 14px var(--mono); }
 
 /* ---- task page ---- */
-.task-actions { margin-top: 22px; }
 .result-group + .result-group { margin-top: 44px; }
 .group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .group-head h3 { display: flex; align-items: baseline; gap: 8px; font: 600 18px var(--serif); letter-spacing: 0.04em; }

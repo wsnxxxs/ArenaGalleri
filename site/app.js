@@ -279,11 +279,12 @@ function renderLibrary(scopes = [], fresh = true) {
   // Only models with an answer can narrow the question list.
   const answering = vendors.map((vendor) => [vendor, modelsByVendor.get(vendor).filter((m) => DATA.tasks.some((t) => answeredBy(t, m.id)))]).filter(([, models]) => models.length);
   if (!answering.some(([, models]) => models.some((m) => m.id === homeState.model))) homeState.model = '';
-  const taskToolbar = `<div class="collection-toolbar"><span>解答数不计存疑作品</span><div class="toolbar-actions">
+  // Search leads every list's toolbar; the heading keeps the page's own actions or a quiet note.
+  const taskToolbar = `<div class="collection-toolbar">${searchControl('home', '搜索题目或提示词', homeState.query)}<div class="toolbar-actions">
     ${selectControl('home-model', '按作答模型筛选', option('', '全部作答模型', !homeState.model) + answering.map(([vendor, models]) => `<optgroup label="${esc(vendor)}">${models.map((m) => option(m.id, `${m.name}（${DATA.tasks.filter((t) => answeredBy(t, m.id)).length} 题）`, m.id === homeState.model)).join('')}</optgroup>`).join(''))}
     ${selectControl('home-sort', '题目排序', Object.entries(questionSorts).map(([value, text]) => option(value, text, value === homeState.sort)).join(''))}
   </div></div>`;
-  const modelToolbar = `<div class="collection-toolbar"><span>点击作品直接进入在线预览</span><div class="toolbar-actions">
+  const modelToolbar = `<div class="collection-toolbar">${searchControl('model', '搜索模型或厂商', homeState.modelQuery)}<div class="toolbar-actions">
     ${selectControl('model-vendor', '按厂商筛选', option('', `全部厂商（${vendors.length}）`, !homeState.vendor) + vendors.map((v) => option(v, `${v}（${modelsByVendor.get(v).length}）`, v === homeState.vendor)).join(''))}
   </div></div>`;
   const rows = vendors.map((vendor) => [vendor, modelsByVendor.get(vendor)]).map(([vendor, models]) => {
@@ -309,12 +310,12 @@ function renderLibrary(scopes = [], fresh = true) {
 
   root.innerHTML = `${libraryStart([{ text: '题库' }])}
       <section data-home-panel="tasks">
-        <div class="collection-heading"><div class="collection-title"><h2 id="h-tasks">全部题目</h2><span data-home-count>${DATA.tasks.length} 道题目</span></div>${searchControl('home', '搜索题目或提示词', homeState.query)}</div>
+        <div class="collection-heading"><div class="collection-title"><h2 id="h-tasks">全部题目</h2><span data-home-count>${DATA.tasks.length} 道题目</span></div><span class="collection-caption">解答数不计存疑作品</span></div>
         ${taskToolbar}
         <div class="task-list">${newCard}${taskCards || (newCard ? '' : '<p class="muted">还没有题目。</p>')}</div>
         <div class="board-empty" data-home-empty hidden><h3>没有找到这道题</h3><p>${platform.available ? '换个关键词或筛选条件，或者把它发起成一道新题。' : '换个关键词或筛选条件，或浏览全部题目。'}</p><div class="board-empty-actions"><button class="btn" data-home-reset>清除筛选</button>${platform.available ? `<a class="btn primary" href="#/new">${icon('plus')}发起题目</a>` : ''}</div></div>
       </section>
-      <section data-home-panel="models" hidden><div class="collection-heading"><div class="collection-title"><h2 id="h-models">模型索引</h2><span data-model-count>${modelsByVendor.size} 家厂商 · ${exhibited.length} 个模型</span></div>${searchControl('model', '搜索模型或厂商', homeState.modelQuery)}</div>
+      <section data-home-panel="models" hidden><div class="collection-heading"><div class="collection-title"><h2 id="h-models">模型索引</h2><span data-model-count>${modelsByVendor.size} 家厂商 · ${exhibited.length} 个模型</span></div><span class="collection-caption">点击作品直接进入在线预览</span></div>
         ${modelToolbar}<div class="dir-rows">${rows}</div>
         <div class="board-empty" data-model-empty hidden><h3>没有找到这个模型</h3><p>换个关键词，或查看全部厂商。</p><div class="board-empty-actions"><button class="btn" data-model-reset>清除筛选</button></div></div></section>
       ${footer()}
@@ -425,13 +426,27 @@ const selectedVariant = (t) => variantsOf(t).find((variant) => variant.id === ta
 const selectedPrompt = (t) => selectedVariant(t)?.prompt ?? t.prompt;
 // Each model leads with one work (per review group); its other works follow, folded until opened.
 const foldKey = (r) => `${r.status}|${modelKey(r)}`;
+// The task's cover work heads the verified grid and is drawn large while nothing narrows the list.
+// It needs a few other models around it to read as the lead, and it leads its own model's fold.
+function coverLead(t) {
+  const cover = taskCover(t, platform.featured?.[t.id]?.cover);
+  if (cover?.status !== 'verified') return null;
+  return new Set(t.results.filter((r) => r.status === 'verified').map(modelKey)).size >= 3 ? cover : null;
+}
+// A tagged cover keeps the lead when the reader switches its prompt version.
+const isLead = (lead, r) => Boolean(lead) && (r.id === lead.id || Boolean(r.promptVariant && lead.promptVariant && variantKey(r) === variantKey(lead)));
 function foldOrder(t, results) {
+  const lead = coverLead(t);
   const leads = new Set();
   for (const status of new Set(results.map((r) => r.status))) {
-    const picks = representatives(results.filter((r) => r.status === status), modelKey, platform.featured?.[t.id]?.models);
+    const featured = { ...platform.featured?.[t.id]?.models, ...(lead && status === 'verified' ? { [modelKey(lead)]: results.find((r) => isLead(lead, r))?.id } : {}) };
+    const picks = representatives(results.filter((r) => r.status === status), modelKey, featured);
     picks.forEach((r) => leads.add(r));
   }
-  return results.filter((r) => leads.has(r)).flatMap((lead) => [lead, ...results.filter((r) => r !== lead && !leads.has(r) && foldKey(r) === foldKey(lead))]);
+  const ordered = results.filter((r) => leads.has(r)).flatMap((first) => [first, ...results.filter((r) => r !== first && !leads.has(r) && foldKey(r) === foldKey(first))]);
+  if (!lead) return ordered;
+  const ahead = (r) => r.status === 'verified' && modelKey(r) === modelKey(lead);
+  return [...ordered.filter(ahead), ...ordered.filter((r) => !ahead(r))];
 }
 const displayedResults = (t) => foldOrder(t, groupVariantResults(t, sortedResults(t), taskState.variants));
 function resultVariantButtons(t, r, pane = null) {
@@ -458,7 +473,8 @@ async function updateResultPreviews(t) {
   }
 }
 // Panels are views of the one task page: they replace the address and add no level to the trail.
-const panels = ['results', 'shots', 'prompt', 'board'];
+// The prompt lives in the sidebar now; an old #prompt address opens the works.
+const panels = ['results', 'shots', 'board'];
 function activatePanel(name, updateHash = true) {
   const target = panels.includes(name) && $(`[data-panel="${name}"]`) ? name : 'results';
   $$('[data-panel]').forEach((el) => { el.hidden = el.dataset.panel !== target; });
@@ -512,20 +528,23 @@ function adminPoolLine(t, pool) {
   return `<p>盲评池 ${pool?.works ?? 0} 件 · ${pool?.entries ?? 0} 个配置${out ? ` · <a href="#/review/noarena">${out} 件已公开但不在池中</a>` : ''}</p>`;
 }
 
+// The model is the card's title; the work's own name follows in grey. Summaries stay in the guide.
 function resultCard(t, r) {
   const m = modelOf(r);
   const screenshotPreview = r.previewMode === 'screenshot';
   const screenshot = r.captures?.first ?? r.gallery?.[0]?.src ?? '';
-  return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${r.upload ? ' is-upload' : ''}" data-vendor="${esc(vendorOf(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
+  const lead = isLead(coverLead(t), r);
+  return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${r.upload ? ' is-upload' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media">
       <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
+      ${lead ? '<span class="lead-seal" aria-hidden="true"><span>代</span><span>表</span></span>' : ''}
       ${t.results.length > 1 ? `<button class="pick" data-pick="${esc(r.id)}" aria-pressed="false" aria-label="加入对比：${esc(r.title)}"><span class="pick-box">${icon('plus')}${icon('check')}</span><span class="pick-text">对比</span></button>` : ''}
     </div>
     <div class="result-body">
       ${resultVariantButtons(t, r)}
       <p class="result-model">${brandMark(m, 'brand-mark sm')}<b>${esc(m.name)}</b>${resultBadges(r)}${platform.featured?.[t.id]?.models?.[modelKey(r)] === r.id ? '<span class="badge featured-badge" title="盲评票选出的代表作">代表作</span>' : ''}${statusBadge(r.status, { reason: r.reason })}</p>
+      ${lead ? `<p class="lead-why">${platform.featured?.[t.id]?.cover === r.id ? '盲评票选的代表作' : '本题封面作品 · 盲评票数足够后改由票选决定'}</p>` : ''}
       <h3><a href="${viewHref(t, r.id)}">${esc(r.title)}${icon('arrow')}</a></h3>
-      ${r.summary ? `<p class="summary">${esc(r.summary)}</p>` : ''}
       ${r.upload ? `<p class="result-by">${esc(r.owner ?? '已注销的用户')} 上传${sourceLine(r) || r.tool ? ` · ${esc(sourceLine(r) || r.tool)}` : ''} · ${formatDate(r.addedAt)}</p>` : ''}
       ${r.status === 'questioned' && r.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(r.reason)}</span></p>` : ''}
       <div class="result-foot">
@@ -588,9 +607,14 @@ function renderTask(t) {
   const captureNotes = t.results.filter((r) => r.captureNote).map((r) => `${esc(r.title)}：${esc(r.captureNote)}`);
   const works = counted(t);
   const pool = platform.arena[t.id];
-  const actions = platform.available ? `<div class="actions task-actions">
-    ${(pool?.entries ?? 0) >= 2 ? `<a class="btn primary sm" href="#/arena/${esc(t.id)}">${icon('blind')}参与盲评</a>` : ''}
-    ${pool?.uploads ? `<a class="btn sm" href="#/submit/${esc(t.id)}">${icon('upload')}上传作品</a>` : '<span class="btn sm is-disabled" title="提示词原文尚未公开">暂不接受投稿</span>'}
+  // Taking part sits beside the works: blind review in vermilion, uploading in ink.
+  const act = (kind, href, glyph, title, note, hint = '') => (href
+    ? `<a class="task-act is-${kind}" href="${href}"><span class="task-act-mark" aria-hidden="true">${glyph}</span><span><b>${title}</b><small>${note}</small></span></a>`
+    : `<span class="task-act is-off" aria-disabled="true"${hint ? ` title="${hint}"` : ''}><span class="task-act-mark" aria-hidden="true">${glyph}</span><span><b>${title}</b><small>${note}</small></span></span>`);
+  const ab = '<span class="task-act-ab">A<i>B</i></span>';
+  const actions = platform.available ? `<div class="task-acts">
+    ${(pool?.entries ?? 0) >= 2 ? act('judge', `#/arena/${esc(t.id)}`, ab, '参与盲评', `可盲评 ${pool.works} 件`) : act('judge', '', ab, '参与盲评', '作品不足', '至少需要两个模型配置的作品进入盲评池')}
+    ${pool?.uploads ? act('upload', `#/submit/${esc(t.id)}`, icon('upload'), '上传作品', '交一份你的答案') : act('upload', '', icon('upload'), '暂不接受投稿', '提示词原文尚未公开')}
   </div>` : '';
 
   root.innerHTML = `${header([LIBRARY, { text: t.title }], false, 'questions')}<div class="app-layout task-layout">
@@ -602,19 +626,25 @@ function renderTask(t) {
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}
-        <button class="side-link" data-go="prompt" aria-pressed="false">${icon('text')}提示词</button>
         ${platform.available ? `<button class="side-link" data-go="board" aria-pressed="false">${icon('rank')}排行榜</button>` : ''}
+        ${hasExhibition(t) ? `<p class="nav-sep">全屏查看</p>
+        <a class="side-link" href="${sandtableHref(t)}">${icon('full')}三维沙盘<span class="nav-ext">${icon('arrow')}</span></a>
+        <a class="side-link" href="#/${t.id}/exhibition">${icon('grid')}原作展厅<span class="nav-ext">${icon('arrow')}</span></a>` : ''}
       </nav>
-      <div class="side-bottom">${actions}
-        ${hasExhibition(t) ? `<div class="side-views"><a class="btn sm" href="${sandtableHref(t)}">${icon('full')}三维沙盘</a><a class="btn sm" href="#/${t.id}/exhibition">${icon('grid')}原作展厅</a></div>` : ''}
-        <p>${new Set(works.map((r) => r.model)).size} 个模型 · ${new Set(works.map(vendorOf)).size} 家厂商</p>
-        ${platform.user?.role === 'admin' ? adminPoolLine(t, pool) : ''}
-      </div>
+      <div class="side-facts"><p>${new Set(works.map((r) => r.model)).size} 个模型 · ${new Set(works.map(vendorOf)).size} 家厂商</p>
+        ${platform.user?.role === 'admin' ? adminPoolLine(t, pool) : ''}</div>
+      <section class="side-prompt" aria-labelledby="side-prompt-title">
+        <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
+          ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}">${esc(variant.label)}</button>`).join('')}</div>` : ''}
+          <button class="text-action" data-copy>复制</button></div>
+        <pre data-prompt-text>${esc(selectedPrompt(t))}</pre>
+        <button class="side-prompt-more" data-prompt-more aria-expanded="false">展开题面</button>
+      </section>
     </aside>
     <main class="workspace page">
     <section id="results" data-panel="results" class="collection-panel">
-      <div class="collection-heading"><div class="collection-title"><h2 id="filter-heading">全部作品</h2><span id="filter-count">${t.results.length} 件作品</span>${aigcLabel()}</div>${searchControl('work', '搜索模型或作品', taskState.query)}</div>
-      <div class="collection-toolbar"><span>每个模型先展示一件代表作，其余可展开</span><div class="toolbar-actions">${previewControl()}<label class="result-sort">厂商<select data-vendor-filter aria-label="按模型厂商筛选">
+      <div class="collection-heading"><div class="collection-title"><h2 id="filter-heading">全部作品</h2><span id="filter-count">${t.results.length} 件作品</span>${aigcLabel()}</div>${actions}</div>
+      <div class="collection-toolbar">${searchControl('work', '搜索模型或作品', taskState.query)}<div class="toolbar-actions">${previewControl()}<label class="result-sort">厂商<select data-vendor-filter aria-label="按模型厂商筛选">
         <option value="">全部厂商（${t.results.length}）</option>
         ${vendors.map((v) => `<option value="${esc(v)}"${v === taskState.vendor ? ' selected' : ''}>${esc(v)}（${vendorCounts.get(v)}）</option>`).join('')}
       </select></label><label class="result-sort">Harness<select data-harness-filter aria-label="按 Harness 筛选">
@@ -636,16 +666,6 @@ function renderTask(t) {
       ${captureNotes.length ? `<p class="fine">${captureNotes.join('<br />')}</p>` : ''}
       <p class="fine">自动截图可能使用软件渲染；实际光影与帧率请以在线预览为准。</p>
     </section>` : ''}
-
-    <section id="prompt" data-panel="prompt" class="block wrap" hidden>
-      <div class="block-head"><h2>提示词</h2><p>${variantsOf(t).length ? '同一道题的长短版本；作品按实际使用的版本展示。' : '所有作品使用的原始提示词。'}</p></div>
-      ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}">${esc(variant.label)}</button>`).join('')}</div>` : ''}
-      <div class="prompt">
-        <div class="prompt-bar"><span data-prompt-label>${esc(selectedVariant(t)?.label ?? `完整提示词 · v${t.version ?? 1}`)}</span>
-          <span class="prompt-tools"><button class="btn sm ghost" data-copy>复制</button></span></div>
-        <pre>${esc(selectedPrompt(t))}</pre>
-      </div>
-    </section>
 
     ${platform.available ? `<section id="board" data-panel="board" class="block wrap" hidden>
       <div class="block-head"><h2>榜单</h2><p>这道题的盲评结果 · 按模型与推理档位分别计分</p>${(pool?.entries ?? 0) >= 2 ? `<a class="block-hint text-link" href="#/arena/${esc(t.id)}">参与这道题的盲评${icon('right')}</a>` : ''}</div>
@@ -677,8 +697,14 @@ function renderTask(t) {
     if (promptVariant) {
       taskState.promptVariant = promptVariant.dataset.promptVariant;
       $$('[data-prompt-variant]').forEach((button) => button.setAttribute('aria-pressed', String(button === promptVariant)));
-      $('#prompt pre').textContent = selectedPrompt(t);
-      $('[data-prompt-label]').textContent = selectedVariant(t).label;
+      $('[data-prompt-text]').textContent = selectedPrompt(t);
+    }
+    // On narrow screens the sidebar sits above the works, so the prompt opens on request.
+    const more = e.target.closest('[data-prompt-more]');
+    if (more) {
+      const open = more.closest('.side-prompt').classList.toggle('is-open');
+      more.setAttribute('aria-expanded', String(open));
+      more.textContent = open ? '收起题面' : '展开题面';
     }
     const resultVariant = e.target.closest('[data-result-variant]');
     if (resultVariant && resultVariant.dataset.variantResult) {
@@ -784,8 +810,10 @@ function filterResults(t) {
     el.classList.toggle('is-fold-open', open);
     if (filtering || !lead?.more || lead.id !== r.id) return;
     const name = modelOf(r).name;
-    $('.result-model', el).insertAdjacentHTML('beforeend', `<button class="fold-chip" data-fold="${esc(foldKey(r))}" aria-expanded="${open}" aria-label="${open ? `收起 ${esc(name)} 的其余作品` : `展开 ${esc(name)} 的另外 ${lead.more} 件作品`}">${open ? '收起' : `+${lead.more} 件`}</button>`);
+    $('.result-model', el).insertAdjacentHTML('beforeend', `<button class="fold-chip" data-fold="${esc(foldKey(r))}" aria-expanded="${open}" aria-label="${open ? `收起 ${esc(name)} 的其余作品` : `展开 ${esc(name)} 的另外 ${lead.more} 件作品`}" title="${open ? '收起' : `同一模型的另外 ${lead.more} 件作品（其他档位或版本）`}">${open ? '收起' : `+${lead.more} 件`}</button>`);
   });
+  // The cover is drawn large only over the full list; a filter or search shows plain matches.
+  $$('.result-grid').forEach((grid) => grid.classList.toggle('is-filtering', filtering));
   $$('[data-group-wrap]').forEach((wrap) => {
     const matches = new Set(shown.map((r) => r.id));
     wrap.hidden = !$$('.result', wrap).some((el) => !el.hidden);
