@@ -15,7 +15,7 @@ import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon
 import { STATUS, accountControl, api, arenaText, avatarFace, connectPlatform, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, requestBootstrap, setFaces, statusBadge, toast } from './platform.js';
 import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
-import { representatives, standard, taskCover } from './featured.js';
+import { effortRank, representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 import { modelResolver } from './models.js';
@@ -421,7 +421,7 @@ function renderLibrary(scopes = [], fresh = true) {
 }
 
 // ---- task -----------------------------------------------------------------------------
-const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, variants: new Map(), open: new Set() };
+const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, variants: new Map(), open: new Set(), view: store.get('task-view') === 'family' ? 'family' : 'featured' };
 const selectedVariant = (t) => variantsOf(t).find((variant) => variant.id === taskState.promptVariant);
 const selectedPrompt = (t) => selectedVariant(t)?.prompt ?? t.prompt;
 // Each model leads with one work (per review group); its other works follow, folded until opened.
@@ -534,7 +534,7 @@ function resultCard(t, r) {
   const screenshotPreview = r.previewMode === 'screenshot';
   const screenshot = r.captures?.first ?? r.gallery?.[0]?.src ?? '';
   const lead = isLead(coverLead(t), r);
-  return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${r.upload ? ' is-upload' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
+  return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${r.upload ? ' is-upload' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-model="${esc(modelKey(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media">
       <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
       ${lead ? '<span class="lead-seal" aria-hidden="true"><span>代</span><span>表</span></span>' : ''}
@@ -562,18 +562,58 @@ const GROUPS = [
   { status: 'unverified', title: '未验证', note: '等待管理员核验 · 可以浏览和贴表情，暂不参与盲评' },
   { status: 'questioned', title: '存疑', note: '核验存疑 · 仅供参考，不参与互动与盲评' },
 ];
+function resultGroup(t, g, items) {
+  const head = `<div class="group-head"><h3>${g.title}<span class="group-count" data-group-count>${items.length}</span></h3><p>${g.note}</p>${g.status === 'questioned' ? `<span class="group-toggle" aria-hidden="true"><span class="when-open">收起</span><span class="when-closed">展开</span>${icon('next')}</span>` : ''}</div>`;
+  const grid = `<div class="result-grid" data-group="${g.status}">${items.map((r) => resultCard(t, r)).join('')}</div>`;
+  return g.status === 'questioned'
+    ? `<details class="result-group is-questioned" data-group-wrap><summary>${head}</summary>${grid}</details>`
+    : `<section class="result-group" data-group-wrap>${head}${grid}</section>`;
+}
 function resultGroups(t) {
   const sorted = displayedResults(t);
   if (t.results.every((r) => r.status === 'verified')) return `<div class="result-grid" data-group="verified">${sorted.map((r) => resultCard(t, r)).join('')}</div>`;
   return GROUPS.map((g) => {
     const items = sorted.filter((r) => r.status === g.status);
-    if (!items.length) return '';
-    const head = `<div class="group-head"><h3>${g.title}<span class="group-count" data-group-count>${items.length}</span></h3><p>${g.note}</p>${g.status === 'questioned' ? `<span class="group-toggle" aria-hidden="true"><span class="when-open">收起</span><span class="when-closed">展开</span>${icon('next')}</span>` : ''}</div>`;
-    const grid = `<div class="result-grid" data-group="${g.status}">${items.map((r) => resultCard(t, r)).join('')}</div>`;
-    return g.status === 'questioned'
-      ? `<details class="result-group is-questioned" data-group-wrap><summary>${head}</summary>${grid}</details>`
-      : `<section class="result-group" data-group-wrap>${head}${grid}</section>`;
+    return items.length ? resultGroup(t, g, items) : '';
   }).join('');
+}
+
+// 同门: each vendor's works in version order, so one lab's versions read left to right. Vendors
+// with a single model share the last row; questioned works keep their folded group below.
+// A task where no vendor answered with two models has no lineage to show, so it stays on 精选.
+function hasLineage(t) {
+  const models = new Map();
+  for (const r of t.results.filter((item) => item.status !== 'questioned')) models.set(vendorOf(r), new Set([...(models.get(vendorOf(r)) ?? []), modelKey(r)]));
+  return [...models.values()].some((keys) => keys.size > 1);
+}
+const familyShown = (t) => taskState.view === 'family' && hasLineage(t);
+// Many models have no release month, so versions follow the name with its numbers read as numbers:
+// a product line stays together and runs Gemini 3.1 → 3.7 → 3.8 → 4.x, then each effort low to max.
+const lineage = (a, b) => modelOf(a).name.localeCompare(modelOf(b).name, 'en', { numeric: true, sensitivity: 'base' }) || effortRank(a) - effortRank(b);
+function familyView(t) {
+  const shown = displayedResults(t);
+  const vendors = new Map();
+  for (const r of shown.filter((item) => item.status !== 'questioned')) vendors.set(vendorOf(r), [...(vendors.get(vendorOf(r)) ?? []), r]);
+  const models = (list) => new Set(list.map(modelKey)).size;
+  const rows = [...vendors].filter(([, list]) => models(list) > 1)
+    .sort(([a, x], [b, y]) => models(y) - models(x) || y.length - x.length || byName(a, b))
+    .map(([vendor, list]) => ({ vendor, list: list.sort(lineage) }));
+  const rest = [...vendors].filter(([, list]) => models(list) === 1).sort(([a], [b]) => byName(a, b)).flatMap(([, list]) => list.sort(lineage));
+  if (rest.length) rows.push({ vendor: '', list: rest });
+  const questioned = shown.filter((r) => r.status === 'questioned');
+  return `<div class="family-list">${rows.map(({ vendor, list }) => `<section class="family" data-family${vendor ? '' : ' data-family-rest'}>
+      <header class="family-head">${vendor ? brandMark(modelOf(list[0]), 'brand-mark') : ''}<h3>${vendor ? esc(vendor) : '其他厂商'}</h3><p data-family-count></p></header>
+      <div class="family-strip">${list.map((r) => resultCard(t, r)).join('')}</div>
+    </section>`).join('')}</div>
+    ${questioned.length ? resultGroup(t, GROUPS[2], questioned) : ''}`;
+}
+const viewControl = (t) => !hasLineage(t) ? '' : `<div class="seg task-view" role="group" aria-label="作品排列">${[['featured', '精选', '每个模型先看一件代表作'], ['family', '同门', '按厂商分组，同一家按系列与版本排开']]
+  .map(([value, text, hint]) => `<button data-task-view="${value}" aria-pressed="${value === (familyShown(t) ? 'family' : 'featured')}" title="${hint}">${text}</button>`).join('')}</div>`;
+// 同门 keeps its own order, so the sort waits until the reader returns to 精选.
+function syncTaskView(t) {
+  const family = familyShown(t);
+  $$('[data-task-view]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.taskView === taskState.view)));
+  Object.assign($('[data-result-sort]'), { disabled: family, title: family ? '同门按系列与版本排列' : '' });
 }
 
 function sourceChoices(results, field, nameField, resolve) {
@@ -636,15 +676,14 @@ function renderTask(t) {
       <section class="side-prompt" aria-labelledby="side-prompt-title">
         <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
           ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}">${esc(variant.label)}</button>`).join('')}</div>` : ''}
-          <button class="text-action" data-copy>复制</button></div>
+          <button class="text-action side-prompt-more" data-prompt-more aria-expanded="false">展开</button><button class="text-action" data-copy>复制</button></div>
         <pre data-prompt-text>${esc(selectedPrompt(t))}</pre>
-        <button class="side-prompt-more" data-prompt-more aria-expanded="false">展开题面</button>
       </section>
     </aside>
     <main class="workspace page">
     <section id="results" data-panel="results" class="collection-panel">
       <div class="collection-heading"><div class="collection-title"><h2 id="filter-heading">全部作品</h2><span id="filter-count">${t.results.length} 件作品</span>${aigcLabel()}</div>${actions}</div>
-      <div class="collection-toolbar">${searchControl('work', '搜索模型或作品', taskState.query)}<div class="toolbar-actions">${previewControl()}<label class="result-sort">厂商<select data-vendor-filter aria-label="按模型厂商筛选">
+      <div class="collection-toolbar">${searchControl('work', '搜索模型或作品', taskState.query)}<div class="toolbar-actions">${viewControl(t)}${previewControl()}<label class="result-sort">厂商<select data-vendor-filter aria-label="按模型厂商筛选">
         <option value="">全部厂商（${t.results.length}）</option>
         ${vendors.map((v) => `<option value="${esc(v)}"${v === taskState.vendor ? ' selected' : ''}>${esc(v)}（${vendorCounts.get(v)}）</option>`).join('')}
       </select></label><label class="result-sort">Harness<select data-harness-filter aria-label="按 Harness 筛选">
@@ -654,7 +693,7 @@ function renderTask(t) {
         <option value="">全部服务商（${t.results.length}）</option>
         ${providerChoices.map(([key, item]) => `<option value="${esc(key)}"${key === taskState.provider ? ' selected' : ''}>${esc(item.name)}（${item.count}）</option>`).join('')}
       </select></label>${sortControl()}</div></div>
-      ${resultGroups(t)}
+      <div data-results>${familyShown(t) ? familyView(t) : resultGroups(t)}</div>
       <p class="muted filter-empty" hidden>${t.results.length ? '没有匹配的作品，请试试其他关键词或筛选条件。' : '还没有作品，点击本题的「上传作品」带来第一份答案。'}</p>
     </section>
 
@@ -674,6 +713,7 @@ function renderTask(t) {
     ${footer()}</main></div>
   <div class="tray" role="region" aria-label="对比栏" hidden></div>`;
   document.title = `${t.title} · ${DATA.title}`;
+  syncTaskView(t);
   filterResults(t);
   syncPicks(t);
   loadTaskScores(t);
@@ -704,7 +744,14 @@ function renderTask(t) {
     if (more) {
       const open = more.closest('.side-prompt').classList.toggle('is-open');
       more.setAttribute('aria-expanded', String(open));
-      more.textContent = open ? '收起题面' : '展开题面';
+      more.textContent = open ? '收起' : '展开';
+    }
+    const view = e.target.closest('[data-task-view]');
+    if (view && view.dataset.taskView !== taskState.view) {
+      taskState.view = view.dataset.taskView;
+      store.set('task-view', taskState.view);
+      $('[data-results]').innerHTML = familyShown(t) ? familyView(t) : resultGroups(t);
+      syncTaskView(t); filterResults(t); syncPicks(t); settleImages(); updateResultPreviews(t);
     }
     const resultVariant = e.target.closest('[data-result-variant]');
     if (resultVariant && resultVariant.dataset.variantResult) {
@@ -792,28 +839,36 @@ function filterResults(t) {
     && (!taskState.harness || sourceKey(r, 'harness', 'harnessName') === taskState.harness)
     && (!taskState.provider || providerKey(r) === taskState.provider)
     && [label(r), r.title, r.summary, vendorOf(r), harnessOf(r)?.name, providerOf(r)?.name].join(' ').toLowerCase().includes(taskState.query.toLowerCase()));
-  // A filter or search lists every match; otherwise each model shows its lead work.
+  // A filter or search lists every match; otherwise each model shows its lead work. 同门 lists them all.
   const filtering = Boolean(taskState.vendor || taskState.harness || taskState.provider || taskState.query.trim());
+  const unfolded = filtering || familyShown(t);
   const leads = new Map(), folded = new Set();
   for (const r of displayed) {
     if (!leads.has(foldKey(r))) leads.set(foldKey(r), { id: r.id, more: 0 });
     else { leads.get(foldKey(r)).more++; folded.add(r.id); }
   }
-  const ids = new Set(shown.filter((r) => filtering || !folded.has(r.id) || taskState.open.has(foldKey(r))).map((r) => r.id));
+  const ids = new Set(shown.filter((r) => unfolded || !folded.has(r.id) || taskState.open.has(foldKey(r))).map((r) => r.id));
   $$('.result').forEach((el) => {
     el.hidden = !ids.has(el.dataset.id);
     $('[data-fold]', el)?.remove();
     const r = displayed.find((item) => item.id === el.dataset.id);
     const lead = r && leads.get(foldKey(r));
-    const open = Boolean(r) && !filtering && Boolean(lead?.more) && taskState.open.has(foldKey(r));
+    const open = Boolean(r) && !unfolded && Boolean(lead?.more) && taskState.open.has(foldKey(r));
     // An opened model's cards share one edge so the group reads as a unit.
     el.classList.toggle('is-fold-open', open);
-    if (filtering || !lead?.more || lead.id !== r.id) return;
+    if (unfolded || !lead?.more || lead.id !== r.id) return;
     const name = modelOf(r).name;
     $('.result-model', el).insertAdjacentHTML('beforeend', `<button class="fold-chip" data-fold="${esc(foldKey(r))}" aria-expanded="${open}" aria-label="${open ? `收起 ${esc(name)} 的其余作品` : `展开 ${esc(name)} 的另外 ${lead.more} 件作品`}" title="${open ? '收起' : `同一模型的另外 ${lead.more} 件作品（其他档位或版本）`}">${open ? '收起' : `+${lead.more} 件`}</button>`);
   });
   // The cover is drawn large only over the full list; a filter or search shows plain matches.
   $$('.result-grid').forEach((grid) => grid.classList.toggle('is-filtering', filtering));
+  // A vendor row marks each step to a newer model; the shared last row has no lineage to mark.
+  $$('[data-family]').forEach((row) => {
+    const cards = $$('.result', row).filter((el) => !el.hidden);
+    row.hidden = !cards.length;
+    cards.forEach((el, i) => el.classList.toggle('is-next-model', i > 0 && !('familyRest' in row.dataset) && el.dataset.model !== cards[i - 1].dataset.model));
+    $('[data-family-count]', row).textContent = `${new Set(cards.map((el) => el.dataset.model)).size} 个模型 · ${cards.length} 件作品`;
+  });
   $$('[data-group-wrap]').forEach((wrap) => {
     const matches = new Set(shown.map((r) => r.id));
     wrap.hidden = !$$('.result', wrap).some((el) => !el.hidden);

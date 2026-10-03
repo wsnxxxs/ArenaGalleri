@@ -172,23 +172,26 @@ function match(root, ctx, task) {
   const el = $('.arena', root);
 
   const letter = (side) => side.toUpperCase();
+  // As in an exam hall, the name is sealed under a strip (糊名) until the vote, then unsealed.
+  const sealStrip = (cls = '') => `<span class="arena-seal${cls}" aria-hidden="true">糊 名<small>投票后拆封</small></span>`;
   function blindHead(side) {
     const ready = state.ready[side];
     const text = ready ? '已就绪' : '载入中';
-    return `<span class="pane-letter">${letter(side)}</span><span class="arena-who">匿名作品</span>${aigcLabel()}
+    return `<span class="pane-letter">${letter(side)}</span><span class="arena-who"><span class="sr">匿名作品</span>${sealStrip()}</span>${aigcLabel()}
       <span class="arena-dot${ready ? ' is-ready' : ''}" title="${text}" role="img" aria-label="${text}"></span>
       <button class="pane-close" data-a="reload" data-side="${side}" title="重新载入作品 ${letter(side)}" aria-label="重新载入作品 ${letter(side)}">${icon('reload')}</button>`;
   }
-  function revealHead(side) {
+  function revealHead(side, unseal) {
     const work = state.result[side];
     if (!work) return `<span class="pane-letter">${letter(side)}</span><span class="arena-who">作品已不可用</span>`;
     const model = ctx.modelOf({ model: work.model, modelName: work.modelName, vendor: work.vendor });
     const chosen = state.result.choice === side;
     return `<span class="pane-letter">${letter(side)}</span>${brandMark(model, 'brand-mark sm')}
       <span class="arena-who revealed"><b>${esc(work.modelName)}</b>${work.effort ? `<span class="badge">${esc(work.effort)}</span>` : ''}<small>${esc(work.title)}</small></span>
-      ${chosen ? '<span class="chosen-tag">你的选择</span>' : ''}
+      ${chosen ? '<span class="arena-pick-seal" title="你的选择"><span>所</span><span>选</span></span>' : ''}
       ${reactionBar(`${task.id}/${work.id}`, { locked: work.status === 'questioned' })}
-      <a class="pane-close" href="#/${esc(task.id)}/${esc(work.id)}" title="在展厅中打开" aria-label="在展厅中打开 ${esc(work.title)}">${icon('arrow')}</a>`;
+      <a class="pane-close" href="#/${esc(task.id)}/${esc(work.id)}" title="在展厅中打开" aria-label="在展厅中打开 ${esc(work.title)}">${icon('arrow')}</a>
+      ${unseal ? sealStrip(' is-leaving') : ''}`;
   }
 
   const canVote = () => Boolean(state.match && !state.result && state.ready.a && state.ready.b && (!mobile() || (state.seen.a && state.seen.b)));
@@ -232,8 +235,11 @@ function match(root, ctx, task) {
   }
 
   function drawHeads() {
+    // The strip comes off once, on the draw that first shows the names.
+    const unseal = Boolean(state.result) && !state.unsealed;
+    if (state.result) state.unsealed = true;
     for (const side of ['a', 'b']) {
-      $(`[data-head="${side}"]`, el).innerHTML = state.result ? revealHead(side) : blindHead(side);
+      $(`[data-head="${side}"]`, el).innerHTML = state.result ? revealHead(side, unseal) : blindHead(side);
       $(`[data-side="${side}"].arena-pane`, el).classList.toggle('chosen', state.result?.choice === side);
       const dot = $(`[data-dot="${side}"]`, el);
       if (dot) dot.className = state.ready[side] ? 'is-ready' : '';
@@ -311,7 +317,7 @@ function match(root, ctx, task) {
     if (state.busy || state.error) return;
     state.busy = true;
     const previous = state.match?.id;
-    Object.assign(state, { match: null, result: null, ready: {}, seen: { a: true }, controls: {}, controlsShown: false, side: 'a', slow: false });
+    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, seen: { a: true }, controls: {}, controlsShown: false, side: 'a', slow: false });
     $$('[data-body]', el).forEach((body) => { body.innerHTML = `<div class="loader blind"><span class="loader-letter" aria-hidden="true">${letter(body.dataset.body)}</span><div class="spinner" aria-hidden="true"></div><span>正在抽取一组作品</span></div>`; });
     update();
     try {

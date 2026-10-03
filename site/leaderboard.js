@@ -22,8 +22,9 @@ export const boardNotes = (open = false) => `<details class="board-notes"${open 
   </dl>
 </details>`;
 
-// Each interval shows its own stretch of one grey-to-vermilion ramp spanning the axis.
-const tone = (at) => `color-mix(in srgb, var(--accent) ${Math.round(at)}%, var(--line-2))`;
+// Each interval shows its own stretch of one grey-to-ink ramp spanning the axis; vermilion is kept
+// for the top three places.
+const tone = (at) => `color-mix(in srgb, var(--ink) ${Math.round(at)}%, var(--line-2))`;
 
 export function mountBoard(container, ctx) {
   let unit = store.get('board-unit') === 'model' ? 'model' : 'config';
@@ -79,7 +80,7 @@ export function mountBoard(container, ctx) {
       const from = at(row.score - row.interval), to = at(row.score + row.interval);
       const m = modelOf(row);
       return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${esc([row.modelName, row.effort, m.vendor].join(' ').toLowerCase())}">
-      <td class="c-rank">${pad(row.rank)}</td>
+      <td class="c-rank${row.rank <= 3 ? ' is-top' : ''}">${pad(row.rank)}</td>
       <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b>${esc(row.modelName)}</b>${row.effort ? `<span class="badge">${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
       <td class="c-score"><b>${row.score}</b><small>±${row.interval}</small></td>
       <td class="c-range" aria-hidden="true"><span class="range"><s style="left:${at(1000)}%"></s><i style="left:${from}%;width:${(to - from).toFixed(2)}%;background:linear-gradient(90deg, ${tone(from)}, ${tone(to)})"></i><em style="left:${at(row.score)}%"></em></span></td>

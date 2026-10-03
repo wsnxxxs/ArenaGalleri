@@ -8,7 +8,7 @@ export const standard = (r) => (!r.generationMode || r.generationMode === 'singl
   && (!r.humanIntervention || r.humanIntervention === 'none');
 
 const EFFORT_RANK = { max: 5, xhigh: 4, high: 3, medium: 2, low: 1 };
-const effortRank = (r) => EFFORT_RANK[String(r.effort ?? '').trim().toLowerCase()] ?? 0;
+export const effortRank = (r) => EFFORT_RANK[String(r.effort ?? '').trim().toLowerCase()] ?? 0;
 const added = (r) => Date.parse(r.addedAt) || Infinity;
 
 // Standard works first, then the highest effort, then the earliest collected.
