@@ -60,10 +60,15 @@ const work = (item) => !item ? item : {
   ...(item.captures ? { captures: Object.fromEntries(Object.entries(item.captures).map(([name, url]) => [name, mediaUrl(url)])) } : {}),
 };
 const works = (items) => items?.map(work);
+const question = (item) => !item?.references ? item : {
+  ...item,
+  references: item.references.map((ref) => ({ ...ref, src: mediaUrl(ref.src), ...(ref.thumb ? { thumb: mediaUrl(ref.thumb) } : {}) })),
+};
 
 // Only the API's known DTOs contain server media. Packaged assets remain on the frontend.
 export function resolveApiMedia(data, endpoint) {
   if (!data || typeof data !== 'object') return data;
+  if (['bootstrap', 'me', 'review', 'questions'].includes(endpoint) && Array.isArray(data.questions)) data = { ...data, questions: data.questions.map(question) };
   if (endpoint === 'bootstrap' || endpoint === 'me' || endpoint === 'review') return Array.isArray(data.works) ? { ...data, works: works(data.works) } : data;
   if (endpoint === 'work') return { ...data, work: work(data.work) };
   if (endpoint === 'draft') return { ...data, preview: data.preview ? new URL(data.preview, new URL('../', apiBaseUrl())).href : data.preview };

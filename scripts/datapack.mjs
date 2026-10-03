@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { readPosterManifest, createPosterFingerprint, posterIsCurrent } from './poster-fingerprint.mjs';
+import { MENTIONS_REFERENCES } from '../site/reference-files.js';
 
 // Validate published assets; source builds and intake belong to the data repository.
 export function checkDatapack(root, site) {
@@ -54,6 +55,16 @@ export function checkDatapack(root, site) {
       errors.push(`${task.id}: missing title, prompt, tags, conditions or results`);
       continue;
     }
+    // Reference images go to every model with the prompt; the prompt says how many and in what order.
+    const names = new Set();
+    for (const ref of task.references ?? []) {
+      if (!/^\d{2}-[^/\\]+\.(?:jpe?g|png|webp)$/i.test(ref.name ?? '') || names.has(ref.name)) errors.push(`${task.id}: invalid or duplicate reference name ${ref.name}`);
+      names.add(ref.name);
+      file(ref.src, `${task.id} reference`);
+      if (ref.thumb) file(ref.thumb, `${task.id} reference`);
+    }
+    const prompts = [task.prompt, ...(task.promptVariants ?? []).map(variant => variant.prompt)].join('\n');
+    if (!task.references?.length && MENTIONS_REFERENCES.test(prompts)) warnings.push(`${task.id}: prompt mentions reference images but the task has none`);
     const ids = new Set();
     for (const result of task.results) {
       works++;

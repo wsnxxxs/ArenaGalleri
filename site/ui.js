@@ -34,6 +34,7 @@ const ICONS = {
   reload: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.2h-4.2"/>',
   rank: '<path d="M5.5 19.5v-6M12 19.5v-14M18.5 19.5v-9"/>',
   upload: '<path d="M12 15.5v-11M7.5 9 12 4.5 16.5 9M4.5 15v4.5h15V15"/>',
+  download: '<path d="M12 4.5v11M7.5 11l4.5 4.5 4.5-4.5M4.5 15v4.5h15V15"/>',
   user: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/>',
   smile: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 14c1.8 2.2 5.2 2.2 7 0M9.2 9.6v.01M14.8 9.6v.01"/>',
   alert: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5M12 16.1v.01"/>',

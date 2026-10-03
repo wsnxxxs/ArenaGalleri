@@ -6,6 +6,8 @@ import { api, platform, refreshPlatform, requireUser, toast } from './platform.j
 import { contentStage, moderated, stageTrack, uploadFlow } from './submit.js';
 import { TEMPLATE_LABELS, categoryLabel, categoryOf } from './categories.js';
 import { categoryField, domainField, syncDomains } from './question-fields.js';
+import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
+import { replaceReferenceNote } from './reference-files.js';
 // Drafts staged for a question that does not exist yet.
 const NEW_QUESTION = '__new__';
 const blank = () => ({ title: '', summary: '', category: '', domains: [], prompt: '', templates: [] });
@@ -15,6 +17,24 @@ const sideSteps = (current) => `<ol class="side-steps">${['题目信息', '选�
 export function mount(root, ctx) {
   let question = blank();
   let flow = null, active = true;
+  // Reference images upload as they are picked and outlive a return to the form.
+  const promptArea = () => $('.publish-form [name="prompt"]', root);
+  function insertNote(text) {
+    const area = promptArea();
+    if (!area) return;
+    const replaced = replaceReferenceNote(area.value, text);
+    if (replaced !== null) { area.value = replaced; area.focus(); return; }
+    const start = area.selectionStart ?? area.value.length, end = area.selectionEnd ?? start;
+    const before = area.value.slice(0, start), after = area.value.slice(end);
+    // The section stands as its own paragraph wherever the cursor is.
+    const lead = !before || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+    const block = `${lead}${text}${!after || after.startsWith('\n') ? '' : '\n\n'}`;
+    area.value = before + block + after;
+    area.focus();
+    area.setSelectionRange(before.length + block.length, before.length + block.length);
+  }
+  const newEditor = () => (referencesEnabled() ? referenceEditor({ prompt: () => promptArea()?.value ?? question.prompt, insert: insertNote }) : null);
+  let refs = newEditor();
 
   // Formats follow the category: a text question takes text, web and 3D questions one HTML file.
   function formatField() {
@@ -40,6 +60,7 @@ export function mount(root, ctx) {
           ${categoryField(question.category)}
           ${domainField(platform, question.domains)}
           <label class="field"><span class="field-label">完整提示词 *</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="粘贴所有参与模型需要使用的同一份完整提示词。">${esc(question.prompt)}</textarea><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
+          ${refs ? '<div data-ref-host></div>' : ''}
           <div class="field" data-formats>${formatField()}</div>
           <p class="form-error" role="alert"></p>
           <div class="form-actions"><button class="btn primary" type="submit" value="plain">提交题目</button><button class="btn" type="submit" value="sample">附上示例结果（选填）${icon('right')}</button><a class="btn" href="#/questions">取消</a><span class="fine">发起即表示你同意<a href="#/terms" target="_blank" rel="noopener">《使用条款》</a>与<a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></div>
@@ -50,6 +71,8 @@ export function mount(root, ctx) {
     const form = $('.publish-form', root);
     const error = $('.form-error', form);
     syncDomains(form);
+    if (refs) refs.mount($('[data-ref-host]', form));
+    root.oninput = (event) => { if (event.target.matches('[name="prompt"]')) refs?.advise(); };
     root.onchange = (event) => {
       if (event.target.matches('[name="domains"]')) { syncDomains(form); error.textContent = ''; return; }
       if (!event.target.matches('[name="category"]')) return;
@@ -71,8 +94,9 @@ export function mount(root, ctx) {
       if (!categoryOf(data.get('category'))) { error.textContent = '请选择题目类型'; $('[name="category"]', form).focus(); return; }
       if (!data.getAll('domains').length) { error.textContent = '请选择所属领域'; $('[name="domains"]', form).focus(); return; }
       if (!data.getAll('templates').length) { error.textContent = '请至少选择一种提交格式'; return; }
+      if (refs?.blocker()) { error.textContent = refs.blocker(); return; }
       question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), category: String(data.get('category')), domains: data.getAll('domains'), prompt: String(data.get('prompt')).trim(),
-        templates: data.getAll('templates') };
+        templates: data.getAll('templates'), ...(refs?.value().length ? { references: refs.value(), referenceCredit: refs.credit() } : {}) };
       if (!(await requireUser('登录后即可发起题目')) || !active) return;
       if (event.submitter?.value === 'sample') { showUpload(); scrollTo({ top: 0 }); return; }
       const buttons = $$('button[type="submit"]', form);
@@ -96,6 +120,7 @@ export function mount(root, ctx) {
         <h3>${esc(question.title)}</h3>
         <p>${esc(question.summary)}</p>
         <p class="work-meta">${[esc(categoryLabel(question.category)), ...question.domains.map(esc), question.templates.map((t) => TEMPLATE_LABELS[t]).join(' / ')].join(' · ')}</p>
+        ${refs ? referenceSheet(refs.previews(), { key: 'new-question', download: false }) : ''}
         <details class="prompt-peek"><summary>${icon('guide')}完整提示词 · 示例结果需按它生成</summary><pre>${esc(question.prompt)}</pre></details>
       </div>
     </section>`;
@@ -134,7 +159,7 @@ export function mount(root, ctx) {
     root.innerHTML = `${ctx.pageStart({ title: '发起题目', section: 'new', heading: '题目已提交审核', meta: sideSteps(0) })}
       <section class="block wrap">${done(result)}</section>${ctx.pageEnd()}`;
     root.onclick = (event) => {
-      if (event.target.closest('[data-act="new-question"]')) { question = blank(); showForm(); scrollTo({ top: 0 }); }
+      if (event.target.closest('[data-act="new-question"]')) { question = blank(); refs?.destroy(); refs = newEditor(); showForm(); scrollTo({ top: 0 }); }
     };
     scrollTo({ top: 0 });
   }
@@ -161,7 +186,7 @@ export function mount(root, ctx) {
       done,
       onAct(act) {
         if (act === 'edit-question') showForm();
-        if (act === 'new-question') { question = blank(); showForm(); scrollTo({ top: 0 }); }
+        if (act === 'new-question') { question = blank(); refs?.destroy(); refs = newEditor(); showForm(); scrollTo({ top: 0 }); }
       },
     });
   }
@@ -175,6 +200,8 @@ export function mount(root, ctx) {
     destroy() {
       active = false;
       flow?.destroy();
+      refs?.destroy();
+      root.oninput = null;
       root.onsubmit = null;
       root.onkeydown = null;
     },

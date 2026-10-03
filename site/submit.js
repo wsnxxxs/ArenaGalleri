@@ -7,6 +7,7 @@ import { api, isStaff, needsEmail, platform, refreshPlatform, toast } from './pl
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
 import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { TEMPLATE_LABELS, templatesOf } from './categories.js';
+import { linkReferences, referenceSheet } from './references.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VIEWS = { desktop: { width: 1440, height: 900, label: '桌面 1440×900' }, phone: { width: 390, height: 844, label: '手机 390×844' } };
@@ -157,9 +158,11 @@ export function uploadFlow(root, ctx, options) {
   function promptPeek() {
     const variants = task.promptVariants ?? [];
     const current = variants.find((v) => v.id === state.peek);
-    return `<details class="prompt-peek"><summary>${icon('guide')}查看本题提示词${variants.length ? ` · ${variants.length} 个版本，任选其一` : ''}</summary>
+    const refs = task.references ?? [];
+    return `<details class="prompt-peek"><summary>${icon('guide')}查看本题提示词${variants.length ? ` · ${variants.length} 个版本，任选其一` : ''}${refs.length ? ` · 附 ${refs.length} 张参考图` : ''}</summary>
       ${variants.length ? `<div class="seg" role="group" aria-label="提示词版本">${variants.map((v) => `<button type="button" data-peek="${esc(v.id)}" aria-pressed="${v.id === state.peek}">${esc(v.label)}</button>`).join('')}</div>` : ''}
-      <pre>${esc(current?.prompt ?? task.prompt)}</pre></details>`;
+      ${refs.length ? `<div class="prompt-peek-refs">${referenceSheet(refs, { key: task.id, credit: task.referenceCredit })}<p class="fine">请把这 ${refs.length} 张图按顺序一并提供给模型，作为附件或放进工作区均可。</p></div>` : ''}
+      <pre>${linkReferences(current?.prompt ?? task.prompt, refs, task.id)}</pre></details>`;
   }
 
   const confirmable = () => state.trial.loaded || state.trial.manual;
@@ -506,7 +509,7 @@ export function uploadFlow(root, ctx, options) {
     if (peek) {
       state.peek = peek.dataset.peek;
       $$('[data-peek]', root).forEach((b) => b.setAttribute('aria-pressed', String(b === peek)));
-      $('.prompt-peek pre', root).textContent = task.promptVariants.find((v) => v.id === state.peek).prompt;
+      $('.prompt-peek pre', root).innerHTML = linkReferences(task.promptVariants.find((v) => v.id === state.peek).prompt, task.references, task.id);
       return;
     }
     const act = e.target.closest('[data-act]')?.dataset.act;

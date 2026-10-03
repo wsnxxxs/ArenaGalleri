@@ -17,6 +17,7 @@ import { mount as renderLanding } from './home.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { effortRank, representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
+import { downloadReference, linkReferences, referenceSheet, useReferenceViewer } from './references.js';
 import { categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 import { modelResolver } from './models.js';
 import { createWorkControls, workFrameUrl } from './work-controls.js';
@@ -273,6 +274,7 @@ function renderLibrary(scopes = [], fresh = true) {
         <p class="prompt-hit" data-prompt-hit hidden></p>
         <div class="question-meta">
           <span class="question-date">${esc(t.date ?? '')}</span>
+          ${t.references?.length ? `<span class="question-refs" title="附 ${t.references.length} 张参考图，作答需要识图">${icon('image')}参考图 ${t.references.length}</span>` : ''}
           <a href="${taskHref(t)}">${modelCount(works)} 个模型 · ${works.length} 件作品${icon('next')}</a>
         </div>
       </div>
@@ -707,7 +709,8 @@ function renderTask(t) {
         <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
           ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}">${esc(variant.label)}</button>`).join('')}</div>` : ''}
           <button class="text-action side-prompt-more" data-prompt-more aria-expanded="false">展开</button><button class="text-action" data-copy>复制</button></div>
-        <pre data-prompt-text>${esc(selectedPrompt(t))}</pre>
+        ${referenceSheet(t.references, { key: t.id, credit: t.referenceCredit })}
+        <pre data-prompt-text>${linkReferences(selectedPrompt(t), t.references, t.id)}</pre>
       </section>
     </aside>
     <main class="workspace page">
@@ -767,7 +770,7 @@ function renderTask(t) {
     if (promptVariant) {
       taskState.promptVariant = promptVariant.dataset.promptVariant;
       $$('[data-prompt-variant]').forEach((button) => button.setAttribute('aria-pressed', String(button === promptVariant)));
-      $('[data-prompt-text]').textContent = selectedPrompt(t);
+      $('[data-prompt-text]').innerHTML = linkReferences(selectedPrompt(t), t.references, t.id);
     }
     // On narrow screens the sidebar sits above the works, so the prompt opens on request.
     const more = e.target.closest('[data-prompt-more]');
@@ -983,10 +986,14 @@ const lightbox = (() => {
   $('.lb-close', el).innerHTML = icon('close');
   $('.lb-prev', el).innerHTML = icon('prev');
   $('.lb-next', el).innerHTML = icon('next');
+  const download = $('.lb-download', el);
+  download.innerHTML = icon('download');
+  const strip = $('.lb-strip', el);
   let items = [];
   let index = 0;
   let vertical = null;
   let lastFocus = null;
+  let label = '';
   const show = () => {
     const it = items[index];
     image.classList.remove('is-loaded');
@@ -994,8 +1001,13 @@ const lightbox = (() => {
     image.alt = it.title;
     if (image.complete) image.classList.add('is-loaded');
     caption.innerHTML = `<b>${esc(it.title)}</b><span>${esc(it.sub ?? '')}</span>`;
-    count.textContent = items.length > 1 ? `${index + 1} / ${items.length}` : '';
+    count.textContent = items.length > 1 ? `${label ? `${label} ` : ''}${index + 1} / ${items.length}` : label;
     el.classList.toggle('single', items.length < 2);
+    // Items with a download name offer the file under that name.
+    download.hidden = !it.download;
+    if (it.download) Object.assign(download, { href: it.download.href, download: it.download.name });
+    $('.lb-file', el).textContent = it.download?.name ?? '';
+    $$('button', strip).forEach((b, i) => b.setAttribute('aria-current', String(i === index)));
   };
   const step = (d) => { index = (index + d + items.length) % items.length; show(); };
   const close = () => {
@@ -1006,8 +1018,15 @@ const lightbox = (() => {
     lastFocus?.focus();
   };
   el.addEventListener('click', (e) => {
+    if (e.target.closest('.lb-download')) {
+      e.preventDefault();
+      downloadReference(items[index].download);
+      return;
+    }
     const act = e.target.closest('[data-lb]')?.dataset.lb;
-    if (act === 'prev') step(-1);
+    const go = e.target.closest('[data-lb-go]');
+    if (go) { index = Number(go.dataset.lbGo); show(); }
+    else if (act === 'prev') step(-1);
     else if (act === 'next') step(1);
     else if (act === 'close' || e.target === el || e.target.matches('.lb-figure')) close();
   });
@@ -1021,7 +1040,7 @@ const lightbox = (() => {
       show();
     } else if (e.key === 'Tab') {
       // Keep focus inside the dialog.
-      const focusable = $$('button:not([hidden])', el).filter((b) => b.offsetParent);
+      const focusable = $$('button, a[href]', el).filter((b) => !b.hidden && b.offsetParent);
       const i = focusable.indexOf(document.activeElement);
       const next = focusable[(i + (e.shiftKey ? -1 : 1) + focusable.length) % focusable.length];
       next?.focus();
@@ -1037,11 +1056,16 @@ const lightbox = (() => {
     touchX = null;
   });
   return {
-    open(list, i = 0, onVertical = null) {
+    // strip: show every item as a thumbnail under the picture; label: what the count counts.
+    open(list, i = 0, onVertical = null, { strip: withStrip = false, label: name = '' } = {}) {
       if (!list.length) return;
       items = list;
       index = i;
       vertical = onVertical;
+      label = name;
+      strip.hidden = !withStrip || list.length < 2;
+      el.classList.toggle('has-strip', !strip.hidden);
+      strip.innerHTML = strip.hidden ? '' : list.map((it, k) => `<button type="button" data-lb-go="${k}" aria-label="${esc(it.title)}"><img src="${esc(it.thumb ?? it.src)}" alt="" decoding="async"></button>`).join('');
       lastFocus = document.activeElement;
       show();
       el.hidden = false;
@@ -1053,6 +1077,8 @@ const lightbox = (() => {
     get isOpen() { return !el.hidden; },
   };
 })();
+
+useReferenceViewer(lightbox.open);
 
 // ---- viewer ---------------------------------------------------------------------------
 // Kept alive across hash changes inside the same task so switching one pane
@@ -1530,9 +1556,13 @@ function mergePlatform() {
   DATA.tasks = ids.map((id) => {
     const pack = PACK.get(id);
     const works = listed ? platform.works.filter((w) => w.task === id) : [...pack.works.values()];
+    // Reference images come from the API when it holds them, otherwise from the pack.
+    const own = listed?.get(id)?.references?.length ? listed.get(id) : pack?.task;
     return stable(tasksById, id, {
       ...(pack?.task ?? { id, conditions: [], promptVariants: [] }),
       ...listed?.get(id),
+      references: own?.references ?? [],
+      referenceCredit: own?.referenceCredit ?? '',
       results: works.map((w) => stable(resultsByKey, `${id}/${w.id}`, resultOf(pack?.works.get(w.id), w))),
     });
   });

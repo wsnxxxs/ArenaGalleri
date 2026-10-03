@@ -5,6 +5,7 @@ import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields
 import { openWorkManagement } from './work-management.js';
 import { categoryLabel, domainsOf, matchesQuery } from './categories.js';
 import { categoryField, domainField, syncDomains } from './question-fields.js';
+import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
 import { sticker, stickerName } from './stickers.js';
 
@@ -852,6 +853,7 @@ function reviewQuestionRow(ctx, q, picked) {
       <p class="work-meta">${esc(publisher(ctx, q))}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.category ? `<span>${esc(categoryLabel(q.category))}</span>` : ''}${domainsOf(q).map((d) => `<span>${esc(d)}</span>`).join('')}</p>
       ${detail ? `<p class="result-reason">${icon(status === 'rejected' ? 'alert' : 'guide')}<span>${esc(detail)}</span></p>` : ''}
       ${samples.length ? `<ul class="question-samples">${samples.map(sampleRow).join('')}</ul>` : shown ? '' : '<p class="result-reason"><span>没有附带示例结果。</span></p>'}
+      ${referenceSheet(q.references, { key: q.id, credit: q.referenceCredit })}
       <details class="prompt-peek"><summary>${icon('guide')}完整提示词</summary><pre>${esc(q.prompt)}</pre></details>
     </div>
     <div class="actions">
@@ -955,17 +957,21 @@ function decideQuestion(q, status) {
 function editQuestion(q, works = []) {
   const locked = questionShown(q) && q.works > 0;
   const covers = works.filter((w) => w.status === 'verified');
+  // Reference images belong to the prompt and lock with it.
+  const refs = !locked && referencesEnabled() ? referenceEditor({ refs: q.references ?? [], credit: q.referenceCredit ?? '',
+    prompt: () => $('[data-q-edit-form] [name="prompt"]')?.value ?? '' }) : null;
   return new Promise((resolve) => {
     let saved = false;
     const sheet = openDialog({
       title: '编辑题目',
       className: 'edit-work-sheet',
-      onClose: () => resolve(saved),
+      onClose: () => { refs?.destroy(); resolve(saved); },
       body: `<form class="submit-form" data-q-edit-form novalidate>
         <label class="field"><span class="field-label">标题<i>*</i></span><input class="input" name="title" maxlength="70" required value="${esc(q.title)}"></label>
         <label class="field"><span class="field-label">测试简述<i>*</i></span><textarea class="input" name="summary" maxlength="400" rows="2" required>${esc(q.summary ?? '')}</textarea></label>
         ${categoryFields(q)}
         <label class="field"><span class="field-label">完整提示词<i>*</i>${locked ? `<small>已有 ${q.works} 件作品，不能再改</small>` : ''}</span><textarea class="input" name="prompt" maxlength="20000" rows="10" required${locked ? ' readonly' : ''}>${esc(q.prompt ?? '')}</textarea></label>
+        ${refs ? '<div data-ref-host></div>' : referenceSheet(q.references, { key: q.id, credit: q.referenceCredit, still: true })}
         <label class="field"><span class="field-label"><input type="checkbox" name="acceptsUploads"${q.acceptsUploads ? ' checked' : ''}> 接受投稿</span><small>关闭后题目照常展示，上传入口停用</small></label>
         ${covers.length ? `<label class="field"><span class="field-label">封面作品<small>题库卡片显示这件作品</small></span><select class="input" name="cover"><option value="">自动（票选代表作，否则按默认规则）</option>${covers.map((w) => `<option value="${esc(w.id)}"${w.id === q.cover ? ' selected' : ''}>${esc(w.modelName)}${w.effort ? ` · ${esc(w.effort)}` : ''} · ${esc(w.title)}</option>`).join('')}</select></label>` : ''}
         <p class="fine">保存不改变审核状态，改动会写入审核记录。</p>
@@ -975,10 +981,13 @@ function editQuestion(q, works = []) {
     });
     const form = $('[data-q-edit-form]', sheet.el);
     syncDomains(form);
+    refs?.mount($('[data-ref-host]', form));
     form.addEventListener('change', () => syncDomains(form));
+    form.prompt.addEventListener('input', () => refs?.advise());
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const error = $('.form-error', form);
+      if (refs?.blocker()) { error.textContent = refs.blocker(); return; }
       const body = {};
       for (const key of ['title', 'summary', 'prompt']) {
         const value = form.elements.namedItem(key).value;
@@ -994,6 +1003,7 @@ function editQuestion(q, works = []) {
       if ([...domains].sort().join('|') !== [...domainsOf(q)].sort().join('|')) body.domains = domains;
       if (form.acceptsUploads.checked !== Boolean(q.acceptsUploads)) body.acceptsUploads = form.acceptsUploads.checked;
       if (form.cover && (form.cover.value || null) !== (q.cover ?? null)) body.cover = form.cover.value || null;
+      if (refs?.changed()) Object.assign(body, { references: refs.value(), referenceCredit: refs.credit() });
       if (!Object.keys(body).length) return sheet.close();
       const button = $('[type="submit"]', form);
       button.disabled = true;

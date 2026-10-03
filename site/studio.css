@@ -445,6 +445,89 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .side-prompt pre { margin: 0; color: var(--ink-2); font: 13px/1.95 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; }
 .side-prompt-more { display: none; }
 
+/* Reference images: a contact sheet beside the prompt. A narrow column shows the first picture
+   across and the rest four to a row; a wider one lines them up five to a row. */
+.ref-sheet { container-type: inline-size; margin: 2px 0 18px; }
+.ref-sheet-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+.ref-sheet-head b { color: var(--ink-2); font-weight: 500; letter-spacing: .12em; }
+.ref-count { padding: 2px 5px; border: 1px solid var(--line-2); border-radius: 4px; font: 11px/1 var(--mono); }
+.ref-sheet-head .text-action { margin-left: auto; font-size: 12px; }
+.ref-sheet-head .text-action:disabled { opacity: .6; }
+.ref-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.ref-tile { position: relative; display: block; padding: 0; border: 0; border-radius: 3px; overflow: hidden; aspect-ratio: 3 / 2; background: var(--surface-2); }
+button.ref-tile { cursor: zoom-in; }
+.ref-tile img { display: block; width: 100%; height: 100%; object-fit: cover; transition: opacity .5s ease, transform .5s var(--ease); }
+button.ref-tile:hover img.is-loaded { transform: scale(1.045); }
+.ref-tile::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 7%); pointer-events: none; }
+:root[data-theme="light"] .ref-tile::after { box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%); }
+.ref-no { position: absolute; left: 5px; bottom: 4px; z-index: 2; color: #fff; font: 500 10px/1 var(--mono); letter-spacing: .04em; text-shadow: 0 1px 3px rgb(0 0 0 / 70%); }
+.ref-no span { display: none; }
+@container (max-width: 300px) {
+  .ref-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ref-grid > .ref-tile:first-child { grid-column: 1 / -1; border-radius: 4px; }
+  .ref-grid > .ref-tile:first-child::before { content: ""; position: absolute; inset: 55% 0 0; z-index: 1; background: linear-gradient(transparent, rgb(0 0 0 / 55%)); pointer-events: none; }
+  .ref-grid > .ref-tile:first-child .ref-no { left: 10px; bottom: 9px; display: flex; align-items: baseline; gap: 8px; font-size: 11px; }
+  .ref-grid > .ref-tile:first-child .ref-no span { display: inline; font: 12px/1 var(--sans); letter-spacing: .02em; }
+}
+.ref-credit { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+/* A file name written in the prompt opens its picture; the text itself is unchanged. */
+.ref-mention { padding: 0; border: 0; border-bottom: 1px dotted var(--muted); background: none; color: var(--ink); font: inherit; cursor: zoom-in; }
+.ref-mention:hover { border-bottom-color: var(--ink); }
+.arena-prompt .ref-sheet { margin: 18px 0 0; }
+.prompt-peek-refs { padding: 2px 16px 12px; }
+.prompt-peek-refs .ref-sheet { max-width: 520px; margin-bottom: 0; }
+.prompt-peek-refs .fine { margin-top: 6px; }
+.review-question .ref-sheet { max-width: 520px; margin: 10px 0 4px; }
+.question-brief .ref-sheet { max-width: 520px; margin: 12px 0; }
+.edit-work-sheet .ref-sheet { margin: 0 0 4px; }
+.question-meta > .question-refs { margin-right: auto; }
+
+/* Publishing: each picked image uploads at once and shows as a card; the number follows the order. */
+.ref-editor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 12px; }
+.ref-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.ref-card-media { position: relative; aspect-ratio: 3 / 2; background: var(--surface-2); }
+.ref-card-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ref-badge { position: absolute; top: 6px; left: 6px; padding: 3px 6px; border-radius: 4px; background: rgb(0 0 0 / 58%); color: #fff; font: 500 10.5px/1 var(--mono); }
+.ref-card-tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.ref-card:hover .ref-card-tools, .ref-card:focus-within .ref-card-tools { opacity: 1; }
+@media (hover: none) { .ref-card-tools { opacity: 1; } }
+.ref-card-tools button { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: rgb(0 0 0 / 58%); color: #fff; }
+.ref-card-tools button:hover { background: rgb(0 0 0 / 78%); }
+.ref-card-tools button:disabled { opacity: .35; }
+.ref-card-tools .i { width: 14px; height: 14px; }
+.ref-card.is-uploading .ref-card-media img { opacity: .45; filter: grayscale(.4); }
+.ref-card.is-failed { border-color: var(--accent); }
+.ref-card.is-failed .ref-card-media img { opacity: .3; }
+.ref-progress { position: absolute; inset: auto 8px 8px; display: grid; gap: 5px; color: #fff; font: 11px/1 var(--mono); text-shadow: 0 1px 2px rgb(0 0 0 / 60%); }
+.ref-progress i { display: block; height: 3px; border-radius: 2px; background: rgb(255 255 255 / 22%); overflow: hidden; }
+.ref-progress i::after { content: ""; display: block; width: var(--p, 0%); height: 100%; background: #fff; transition: width .2s; }
+.ref-failed { position: absolute; inset: auto 8px 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink); font-size: 11.5px; }
+.ref-failed span { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ref-failed .i { flex: none; width: 13px; height: 13px; color: var(--accent); }
+.ref-failed .link { font-size: 11.5px; white-space: nowrap; }
+.ref-card-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; }
+.ref-card-fields .input { min-height: 30px; padding: 5px 8px; font-size: 12px; }
+.ref-name { display: flex; align-items: center; min-height: 30px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--raised); color: var(--muted); font: 11.5px/1 var(--mono); }
+.ref-name:focus-within { border-color: var(--ink-2); }
+.ref-name span { flex: none; }
+.ref-name input { flex: 1; min-width: 0; padding: 6px 1px; border: 0; background: none; color: var(--ink); font: inherit; outline: 0; }
+.ref-add { display: grid; place-content: center; justify-items: center; gap: 6px; min-height: 186px; padding: 16px; border: 1px dashed var(--line-2); border-radius: 6px; background: none; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: center; }
+.ref-add:not(:disabled):hover, .ref-add.is-over { border-color: var(--muted); color: var(--ink); background: var(--surface); }
+.ref-add:disabled { opacity: .55; }
+.ref-add .i { width: 22px; height: 22px; }
+.ref-add b { color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.ref-editor-foot { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+.ref-editor-foot .fine { flex: 1; margin: 0; }
+.ref-editor-foot .btn { flex: none; }
+.ref-warn { display: flex; align-items: center; gap: 9px; margin: 10px 0 0; padding: 9px 12px; border-radius: 6px; background: var(--accent-soft); color: var(--ink-2); font-size: 12.5px; line-height: 1.6; }
+.ref-warn .i { flex: none; width: 16px; height: 16px; color: var(--accent); }
+.ref-warn .link { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+.ref-credit-field { margin-top: 14px; }
+@media (max-width: 760px) {
+  .ref-editor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ref-editor-foot { flex-direction: column; align-items: stretch; }
+}
+
 /* Taking part sits in the works heading: blind review in vermilion, uploading in ink. */
 .task-acts { display: flex; flex: none; gap: 8px; }
 .task-act { display: inline-flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 16px 6px 6px; border-radius: 8px; text-decoration: none; transition: filter .2s, transform .15s, background-color .2s; }

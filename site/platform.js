@@ -96,6 +96,7 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
     throw new ApiError(response.status, data.error ?? `请求失败（${response.status}）`, data.code);
   }
   const endpoint = path === 'me' || path === 'review' ? path
+    : path === 'admin/questions' ? 'questions'
     : path === 'arena/matches' ? 'match'
       : /^arena\/matches\/[^/]+\/vote$/.test(path) ? 'reveal'
       : path === 'works' || /\/review$/.test(path) ? 'work' : null;

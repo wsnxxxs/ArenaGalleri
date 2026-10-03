@@ -5,6 +5,7 @@ import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
 import { api, isStaff, needsEmail, platform, reactionBar, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
 import { domainsOf, matchesQuery, tracksOf } from './categories.js';
+import { linkReferences, referenceSheet } from './references.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', skip: '你跳过了这一组' };
@@ -164,7 +165,8 @@ function match(root, ctx, task) {
       </section>`).join('')}</div>
       <aside class="guide arena-prompt" aria-label="提示词"><div class="guide-in">
         <div class="guide-head"><div><p class="eyebrow">本题提示词</p><h2>${esc(task.title)}</h2></div><button class="icon-btn" data-a="prompt" aria-label="收起提示词">${icon('close')}</button></div>
-        <pre class="arena-prompt-text">${esc(task.prompt)}</pre>
+        ${referenceSheet(task.references, { key: task.id, credit: task.referenceCredit })}
+        <pre class="arena-prompt-text">${linkReferences(task.prompt, task.references, task.id)}</pre>
       </div></aside>
     </div>
     <footer class="vote-bar" data-bar></footer>
@@ -384,7 +386,8 @@ function match(root, ctx, task) {
     }
   });
   const onKey = (e) => {
-    if (e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, textarea, select') || $('dialog[open]')) return;
+    // Keys belong to a dialog or the reference viewer while either is open.
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, textarea, select') || $('dialog[open]') || !$('#lightbox').hidden) return;
     const key = e.key.toLowerCase();
     if (key === 'a' || key === 'd' || key === 's') {
       if (!canVote() || state.busy) return;

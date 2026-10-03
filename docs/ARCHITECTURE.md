@@ -24,6 +24,7 @@
 | `work-fields.js` / `work-management.js` | 共用作品信息字段与作品管理弹窗 |
 | `question-preview.js` / `result-previews.js` | 代表作品选择和卡片模型展示 |
 | `prompt-variants.js` | 提示词版本、同模型结果分组与当前版本选择 |
+| `references.js` / `reference-files.js` | 题目参考图的展示、大图与打包下载、发起与编辑题目时的上传编辑器；后者为无依赖的命名、提示词说明与 zip 工具 |
 | `preview-model.js` / `scene-resources.js` | 模型读取与资源回收 |
 | `sandtable*.js` / `exhibition.js` | 三维沙盘及原作展厅 |
 | `turnstile.js` | 按后台配置展示注册验证 |
@@ -38,6 +39,10 @@
 页面进入时读取的数据（`me`、`auth/me`、`review`、`admin/questions`、各榜单）用 `platform.js` 的 `apiRemembered` 读取，按账号记住上一次的结果。回到页面时先用 `recall` 画出上次的内容，后台刷新；结果有变化才重画。同页操作或平台状态变化引起的刷新一律重画。
 
 作品管理位于 `#/review/works`，题目管理通过 `?task=<题目ID>` 带入筛选。复用 `review` 的全量目录，以 `task/id` 标识单件与批量作品；数据包作品的媒体来自 `packagedWork`，不复制资源。弹窗由 `work-management.js` 绘制，`account.js` 传入共用的差异编辑器与审核回调；先写 metadata，再按实际改动写 face-settings，部分成功保留已保存信息。权限沿用 `canDecide` / `isSenior` 与后台校验，普通管理员本人作品不进入展示批量选择；普通管理员不请求 `admin/questions`。
+
+参考图属于题目：数据包题目的 `references`（`name`、`src`、可选 `thumb`、`caption`、`width`、`height`）与 `referenceCredit` 经 `public-catalog.mjs` 白名单输出，`datapack.mjs` 校验文件名与路径，提示词提到参考图而题目没有时给出提醒。后台题目 DTO 带非空 `references` 时以后台为准，否则沿用数据包；后台媒体路径在 `platform-api.js` 中解析。站点大图层 `#lightbox` 支持下载与胶片条，由 `app.js` 交给 `references.js` 打开；模态对话框内的参考图只显示、不打开大图。上传使用 `POST /api/references`（原始图片字节），提交题目与编辑题目只按 ID 引用已上传的图片。
+
+参考图下载请求携带会话凭据，允许作者与管理员下载待审核题目的私有图片；单张图片读取为 Blob 后保存，使独立 API 域名下的图片也使用题面文件名。
 
 启动时并行读取本地展示目录和后台 bootstrap，bootstrap 8 秒没有响应就按静态档案运行。数据版本仍用于写请求兼容，API 契约不可用时保留静态浏览。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。
 

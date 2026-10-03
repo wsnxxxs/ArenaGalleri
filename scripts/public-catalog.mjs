@@ -9,7 +9,8 @@ export function publicCatalog(data, buildInfo) {
     harnesses: (data.harnesses ?? []).map(item => pick(item, ['id', 'name', 'kind', 'maker', 'url', 'logo', 'aliases', 'listed'])),
     providers: (data.providers ?? []).map(item => pick(item, ['id', 'name', 'kind', 'operator', 'url', 'logo', 'aliases', 'listed'])),
     tasks: data.tasks.map(task => ({
-      ...pick(task, ['id', 'title', 'summary', 'date', 'category', 'domains', 'sandtable', 'sceneProfile', 'prompt', 'promptPending', 'version', 'owner']),
+      ...pick(task, ['id', 'title', 'summary', 'date', 'category', 'domains', 'sandtable', 'sceneProfile', 'prompt', 'promptPending', 'version', 'owner', 'referenceCredit']),
+      references: (task.references ?? []).map(ref => pick(ref, ['name', 'src', 'thumb', 'caption', 'width', 'height'])),
       promptVariants: (task.promptVariants ?? []).map(variant => pick(variant, ['id', 'label', 'prompt'])),
       conditions: (task.conditions ?? []).map(condition => pick(condition, ['id', 'label', 'note', 'mobile'])),
       results: task.results.map(result => ({

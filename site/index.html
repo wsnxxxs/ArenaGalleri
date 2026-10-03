@@ -33,12 +33,13 @@
   <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="图片浏览" hidden>
     <div class="lb-top">
       <span class="lb-count" aria-live="polite"></span>
-      <button class="lb-btn lb-close" data-lb="close" aria-label="关闭（Esc）"></button>
+      <div class="lb-tools"><span class="lb-file"></span><a class="lb-btn lb-download" aria-label="下载这张" hidden></a><button class="lb-btn lb-close" data-lb="close" aria-label="关闭（Esc）"></button></div>
     </div>
     <button class="lb-btn lb-nav lb-prev" data-lb="prev" aria-label="上一张（←）"></button>
     <figure class="lb-figure">
       <img class="lb-img" alt="" />
       <figcaption class="lb-caption"></figcaption>
+      <div class="lb-strip" hidden></div>
     </figure>
     <button class="lb-btn lb-nav lb-next" data-lb="next" aria-label="下一张（→）"></button>
   </div>
