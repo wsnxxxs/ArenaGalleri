@@ -45,6 +45,7 @@ test('versions the complete local module graph and direct HTML assets under eith
     assert.match(html, new RegExp(`href="style\\.css\\?v=${version}"`));
     assert.match(html, new RegExp(`src="runtime-config\\.js\\?v=${version}"`));
     assert.match(html, new RegExp(`src="app\\.js\\?v=${version}"`));
+    assert.deepEqual(JSON.parse(readFileSync(join(dist, 'version.json'), 'utf8')), { assets: version });
     for (const base of ['https://example.test/', 'https://example.test/gallery/']) {
       const staticImport = new URL(imports['./helper.js'], base);
       const dynamicImport = new URL(imports['./lazy.js'], base);

@@ -106,6 +106,22 @@ const interactive = (r) => r.status !== 'questioned';
 document.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('is-loaded'); }, true);
 document.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') e.target.classList.add('is-loaded', 'is-broken'); }, true);
 document.addEventListener('click', (e) => { if (e.target.closest('[data-reload]')) location.reload(); });
+const RELOAD = '<button type="button" class="btn primary" data-reload>刷新页面</button>';
+
+// A tab left open across a release keeps its old import map, so a page it loads later can get new
+// modules that link against old ones. The build writes this tab's ?v= to version.json; when they
+// differ, only a full reload helps, and it keeps the address.
+const loadedVersion = new URL(import.meta.url).searchParams.get('v');
+async function loadFailure(error, title) {
+  if (loadedVersion) {
+    try {
+      const res = await fetch('version.json', { cache: 'no-store' });
+      const { assets } = res.ok ? await res.json() : {};
+      if (assets && assets !== loadedVersion) return { updated: true, title: '页面已更新', text: '网站已发布新版本，这个标签页仍是旧版。刷新后会回到当前页面。' };
+    } catch { /* fall through to the original error */ }
+  }
+  return { updated: false, title, text: error?.message ?? String(error) };
+}
 const settleImages = () => $$('img', root).forEach((im) => { if (im.complete) im.classList.add('is-loaded'); });
 
 // ---- shell ----------------------------------------------------------------------------
@@ -507,9 +523,14 @@ async function mountTaskBoard() {
   if (!body || body.dataset.mounted) return;
   body.dataset.mounted = '1';
   const t = DATA.tasks.find((task) => task.id === taskState.task);
-  const { mountBoard } = await import('./leaderboard.js');
-  if (!body.isConnected) return;
-  taskBoard = mountBoard(body, { ...context(), task: t, embedded: true });
+  try {
+    const { mountBoard } = await import('./leaderboard.js');
+    if (!body.isConnected) return;
+    taskBoard = mountBoard(body, { ...context(), task: t, embedded: true });
+  } catch (error) {
+    const failure = await loadFailure(error, '榜单加载失败');
+    if (body.isConnected) body.innerHTML = `<div class="board-empty"><p class="board-empty-title">${failure.title}</p><p>${esc(failure.text)}</p><div class="board-empty-actions">${RELOAD}</div></div>`;
+  }
 }
 
 function shotGrid(t) {
@@ -1587,8 +1608,9 @@ async function show(version, visit, scrollBack) {
           if (version !== routeVersion) return;
           page = module.mount(root, { ...context(), route: platformPage, param: a ?? null });
         } catch (error) {
+          const failure = await loadFailure(error, '页面加载失败');
           if (version !== routeVersion) return;
-          root.innerHTML = `${header()}<main class="page wrap empty-page"><h1>页面加载失败</h1><p>${esc(error.message)}</p><a class="btn" href="#/">回到首页</a></main>`;
+          root.innerHTML = `${header()}<main class="page wrap empty-page"><h1>${failure.title}</h1><p>${esc(failure.text)}</p><div class="empty-actions">${RELOAD}${failure.updated ? '' : '<a class="btn" href="#/">回到首页</a>'}</div></main>`;
         }
       }
     } else if (!t) notFound(`没有 id 为「${taskId}」的题目。`);
@@ -1604,8 +1626,9 @@ async function show(version, visit, scrollBack) {
         // The 3D views keep the works they opened with; a review elsewhere shows on the next visit.
         page = { destroy: () => stage.destroy(), onPlatformChange() {} };
       } catch (error) {
+        const failure = await loadFailure(error, '展厅加载失败');
         if (version !== routeVersion) return;
-        root.innerHTML = `<main class="empty-page wrap"><h1>展厅加载失败</h1><p>${esc(error.message)}</p><a class="btn" href="${taskHref(t)}">返回作品</a></main>`;
+        root.innerHTML = `<main class="empty-page wrap"><h1>${failure.title}</h1><p>${esc(failure.text)}</p><div class="empty-actions">${RELOAD}${failure.updated ? '' : `<a class="btn" href="${taskHref(t)}">返回作品</a>`}</div></main>`;
       }
     } else if (!inViewer) page = taskPage(t);
     else if (!works.length) notFound(`「${t.title}」下没有 id 为「${a}」的作品。`);

@@ -50,5 +50,7 @@ export function cacheBustSite(dist, site, frontendCommit) {
   html = html.replace(/(<script\b[^>]*\bsrc=")([^"]+)(")/g, (_, before, url, after) => before + appendVersion(url) + after);
   html = html.replace(/(<link\b(?=[^>]*\brel="stylesheet")[^>]*\bhref=")([^"]+)(")/g, (_, before, url, after) => before + appendVersion(url) + after);
   writeFileSync(htmlFile, html);
+  // A tab open across a release compares this with its own ?v= before offering a full reload.
+  writeFileSync(join(dist, 'version.json'), `${JSON.stringify({ assets: version })}\n`);
   return version;
 }
