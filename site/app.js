@@ -122,7 +122,7 @@ function breadcrumbTrail(crumbs = []) {
 // Shown under the top bar while the platform and the archive disagree on the data version.
 const platformNotice = () => `<div class="platform-notice" role="status"><div class="wrap platform-notice-in">
   <span class="platform-notice-mark" aria-hidden="true"></span>
-  <p><strong>有新内容，请刷新</strong><span>刷新后可查看最新馆藏；投稿和盲评可继续使用。</span></p>
+  <p><strong>有新内容，请刷新</strong><span>刷新后可查看最新作品；上传和盲评可继续使用。</span></p>
   <button type="button" class="link" data-reload>刷新页面</button>
 </div></div>`;
 function header(crumbs = [], showPreviewSetting = false, current = '', { notice = true } = {}) {
@@ -526,7 +526,7 @@ function resultCard(t, r) {
       <p class="result-model">${brandMark(m, 'brand-mark sm')}<b>${esc(m.name)}</b>${resultBadges(r)}${platform.featured?.[t.id]?.models?.[modelKey(r)] === r.id ? '<span class="badge featured-badge" title="盲评票选出的代表作">代表作</span>' : ''}${statusBadge(r.status, { reason: r.reason })}</p>
       <h3><a href="${viewHref(t, r.id)}">${esc(r.title)}${icon('arrow')}</a></h3>
       ${r.summary ? `<p class="summary">${esc(r.summary)}</p>` : ''}
-      ${r.upload ? `<p class="result-by">投稿 · ${esc(r.owner ?? '已注销的用户')}${sourceLine(r) || r.tool ? ` · ${esc(sourceLine(r) || r.tool)}` : ''} · ${formatDate(r.addedAt)}</p>` : ''}
+      ${r.upload ? `<p class="result-by">${esc(r.owner ?? '已注销的用户')} 上传${sourceLine(r) || r.tool ? ` · ${esc(sourceLine(r) || r.tool)}` : ''} · ${formatDate(r.addedAt)}</p>` : ''}
       ${r.status === 'questioned' && r.reason ? `<p class="result-reason">${icon('alert')}<span>${esc(r.reason)}</span></p>` : ''}
       <div class="result-foot">
         ${r.gallery.length ? `<button class="text-action" data-gallery="${esc(r.id)}">${icon('image')}${r.upload ? '封面' : `截图 ${r.gallery.length}`}</button>` : ''}
@@ -539,7 +539,7 @@ function resultCard(t, r) {
 // With uploads present the list splits by review state: verified works lead, unverified
 // ones follow, questioned ones stay folded away as reference.
 const GROUPS = [
-  { status: 'verified', title: '已验证', note: '馆藏作品与核验通过的投稿' },
+  { status: 'verified', title: '已验证', note: '核验通过的作品' },
   { status: 'unverified', title: '未验证', note: '等待管理员核验 · 可以浏览和贴表情，暂不参与盲评' },
   { status: 'questioned', title: '存疑', note: '核验存疑 · 仅供参考，不参与互动与盲评' },
 ];
@@ -824,7 +824,7 @@ function syncPicks(t) {
   const chosen = picks.map((id) => t.results.find((r) => r.id === id));
   // Uploads have no scene extract, so they can be compared side by side but not in the sandtable.
   const sandIds = picks.filter((id) => isCurated(t, id));
-  const sandNote = sandIds.length < picks.length ? ' title="投稿作品不进入沙盘"' : '';
+  const sandNote = sandIds.length < picks.length ? ' title="网页上传的作品没有沙盘模型"' : '';
   const slot = (r, i) => (r
     ? `<li class="slot"><span class="slot-thumb">${img(cover(r), '', '', true)}</span><span class="slot-text"><b>${esc(r.title)}</b><small>${esc(label(r))}</small></span><button class="slot-x" data-unpick="${esc(r.id)}" aria-label="移出对比：${esc(r.title)}">${icon('close')}</button></li>`
     : `<li class="slot empty"><span class="slot-thumb">${pad(i + 1)}</span><span class="slot-text"><b>再选一件</b><small>点击作品上的「对比」</small></span></li>`);
@@ -966,7 +966,7 @@ function uploadFacts(r) {
     ${switches.length ? `<div class="actions">${switches.map((action) => `<button class="btn sm" data-face="${action}">${VIEWER_FACES[action][0]}</button>`).join('')}</div>` : ''}
     ${r.reason ? `<p class="guide-reason">${esc(r.reason)}</p>` : ''}
     <dl class="facts">
-      <div><dt>投稿</dt><dd>${esc(r.owner ?? '已注销的用户')} · ${formatDate(r.addedAt)}</dd></div>
+      <div><dt>上传</dt><dd>${esc(r.owner ?? '已注销的用户')} · ${formatDate(r.addedAt)}</dd></div>
       ${sourceFacts(r)}
       <div><dt>文件</dt><dd>${r.files} 个 · ${formatBytes(r.bytes)}</dd></div>
     </dl>
@@ -1280,7 +1280,7 @@ function platformOffline(name) {
   root.innerHTML = `${header([{ text: PAGE_TITLES[name] }], false, PAGE_SECTIONS[name], { notice: false })}<main class="page wrap empty-page">
     <p class="kicker"><span class="num">${esc(PAGE_TITLES[name])}</span></p>
     <h1>${platform.mismatch ? `${esc(PAGE_TITLES[name])}暂时不可用` : '这里需要平台服务'}</h1>
-    <p>${platform.mismatch ? '馆藏版本与平台服务不一致，平台功能已暂停。可能是新版本正在发布，稍后刷新即可恢复；作品可照常浏览。' : `当前打开的是静态作品档案。连接平台服务后即可使用${esc(PAGE_TITLES[name])}。`}</p>
+    <p>${platform.mismatch ? '作品数据与平台服务版本不一致，平台功能已暂停。可能是新版本正在发布，稍后刷新即可恢复；作品可照常浏览。' : `当前打开的是静态作品档案。连接平台服务后即可使用${esc(PAGE_TITLES[name])}。`}</p>
     <div class="empty-actions"><a class="btn primary" href="#/questions">回到题库${icon('right')}</a>${platform.mismatch ? '<button type="button" class="btn" data-reload>刷新页面</button>' : ''}</div>
   </main>${footer()}`;
 }
