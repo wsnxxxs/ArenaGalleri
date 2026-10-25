@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { apiBaseUrl, apiUrl, compatibleBuild, createUploadRequest, fetchApi, mediaUrl, resolveApiMedia, setDatapackVersion, staleBuild } from '../site/platform-api.js';
+import { cdnMediaUrl, normalizeMediaCdnBase } from '../site/media-cdn.js';
 
 globalThis.document = { baseURI: 'https://gallery.example/archive/' };
 
@@ -90,4 +91,35 @@ test('API media maps only known DTO fields, with a separate media service', () =
   assert.equal(work.cover, 'media/work/cover.webp');
   assert.equal(mediaUrl('data:image/png;base64,AAAA'), 'data:image/png;base64,AAAA');
   assert.equal(mediaUrl('blob:https://gallery.example/abc'), 'blob:https://gallery.example/abc');
+});
+
+test('the media CDN base rewrites only synced scene and API media keys', () => {
+  const cdn = 'https://media.arenaofbias.icu';
+  globalThis.SAME_PROMPT_CONFIG = { apiBaseUrl: 'https://server.example/api/', mediaBaseUrl: 'https://cdn.example/gallery', mediaCdnBaseUrl: '', mediaCdnEnabled: true };
+  assert.equal(normalizeMediaCdnBase('https://media.arenaofbias.icu/'), cdn);
+  assert.equal(mediaUrl('media/work/first.jpg'), 'https://cdn.example/gallery/media/work/first.jpg');
+  assert.equal(cdnMediaUrl('assets/scenes/task/model.sbox'), 'assets/scenes/task/model.sbox');
+  assert.equal(cdnMediaUrl('assets/work.sbox'), 'assets/work.sbox');
+  assert.equal(cdnMediaUrl('results/work/first.jpg'), 'results/work/first.jpg');
+
+  globalThis.SAME_PROMPT_CONFIG.mediaCdnBaseUrl = `${cdn}/`;
+  assert.equal(mediaUrl('/media/work/first.jpg'), `${cdn}/media/work/first.jpg`);
+  assert.equal(mediaUrl('media/work/cover.webp'), `${cdn}/media/work/cover.webp`);
+  assert.equal(mediaUrl('media/work/preview.sbox?v=123'), `${cdn}/media/work/preview.sbox?v=123`);
+  assert.equal(mediaUrl('/assets/scenes/task/model.sbox'), `${cdn}/assets/scenes/task/model.sbox`);
+  assert.equal(cdnMediaUrl('assets/scenes/task/poster.webp'), `${cdn}/assets/scenes/task/poster.webp`);
+  assert.equal(cdnMediaUrl('./assets/scenes/task/model.sbox'), `${cdn}/assets/scenes/task/model.sbox`);
+  assert.equal(mediaUrl('assets/brands/claude.svg'), 'https://cdn.example/gallery/assets/brands/claude.svg');
+  assert.equal(cdnMediaUrl('assets/avatars/a.svg'), 'assets/avatars/a.svg');
+  assert.equal(cdnMediaUrl('assets/work.sbox'), 'assets/work.sbox');
+  assert.equal(cdnMediaUrl('results/work/first.jpg'), 'results/work/first.jpg');
+  assert.equal(mediaUrl('https://sand.example/media/b/'), 'https://sand.example/media/b/');
+  assert.equal(mediaUrl('https://api.example/media/work/first.jpg'), 'https://api.example/media/work/first.jpg');
+  assert.equal(mediaUrl('data:image/png;base64,AAAA'), 'data:image/png;base64,AAAA');
+  assert.equal(resolveApiMedia({ preview: '/draft-preview/' }, 'draft').preview, 'https://server.example/draft-preview/');
+  const match = resolveApiMedia({ a: '/media/a/', b: 'https://sand.example/b/' }, 'match');
+  assert.equal(match.a, `${cdn}/media/a/`);
+  assert.equal(match.b, 'https://sand.example/b/');
+  globalThis.SAME_PROMPT_CONFIG.mediaCdnBaseUrl = 'https://staging.media.example';
+  assert.equal(mediaUrl('media/work/first.jpg'), 'https://staging.media.example/media/work/first.jpg');
 });
