@@ -26,7 +26,7 @@ import { downloadReference, linkReferences, referenceSheet, useReferenceViewer }
 import { aiJudged, aiScoreOf, categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 import { textMatches } from './match.js';
 import { modelResolver } from './models.js';
-import { recommendQuestions } from './question-recommendations.js';
+import { popularQuestions, recommendQuestions } from './question-recommendations.js';
 import { createWorkControls, workFrameUrl } from './work-controls.js';
 import { hasModelPreview, screenshotOf } from './work-preview-media.js';
 import { watchViewerFrame } from './viewer-loading.js';
@@ -228,9 +228,11 @@ function pageStart({ title, description, descriptionOriginal = false, section, m
 const sideNav = (label, links) => `<nav class="side-nav section-nav" aria-label="${esc(label)}">${links.map(([href, glyph, text, current, count]) => `<a class="side-link" href="${esc(href)}"${current ? ' aria-current="page"' : ''}>${icon(glyph)}${esc(text)}${count === undefined ? '' : `<span class="nav-count">${count}</span>`}</a>`).join('')}</nav>`;
 const pageEnd = () => `${footer()}</main></div>`;
 const searchControl = (type, placeholder, value = '') => `<label class="collection-search">${icon('search')}<input type="search" data-${type}-search aria-label="${placeholder}" placeholder="${placeholder}" value="${esc(value)}"></label>`;
-const questionSorts = { recommended: '推荐（热门与探索）', date: '发布时间（最新在前）', works: '解答数量（多到少）', title: '题目名称（A–Z）' };
+const questionSorts = { random: '随机排序', popularity: '热度（高到低）', recommended: '推荐（热门与探索）', date: '发布时间（最新在前）', works: '解答数量（多到少）', title: '题目名称（A–Z）' };
 const recommendationLabels = { popular: '热门', unanswered: '等你来测', explore: '待探索', recent: '新题' };
-const homeState = { category: '', domain: '', model: '', unanswered: false, query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'recommended', recommendationBatch: 0, modelQuery: '', vendor: '' };
+const homeState = { category: '', domain: '', model: '', unanswered: false, query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'random', recommendationBatch: 0, modelQuery: '', vendor: '' };
+// Keep one random position per question until reload, including across filters and catalog updates.
+const questionRandomOrder = new Map();
 
 // ---- home -----------------------------------------------------------------------------
 // Questioned works stay visible as reference but are left out of every count.
@@ -270,6 +272,11 @@ const option = (value, text, selected, suffix = null) => `<option${suffix === nu
 const tagLine = (t) => `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}`;
 function rankedTasks(tasks = DATA.tasks, now = Date.now()) {
   if (homeState.sort === 'recommended') return recommendQuestions(tasks, { now, batch: homeState.recommendationBatch, modelKey: r => registeredOf(r) ?? modelKey(r) });
+  if (homeState.sort === 'popularity') return popularQuestions(tasks, { now, modelKey: r => registeredOf(r) ?? modelKey(r) });
+  if (homeState.sort === 'random') {
+    for (const task of DATA.tasks) if (!questionRandomOrder.has(task.id)) questionRandomOrder.set(task.id, Math.random());
+    return [...tasks].sort((a, b) => questionRandomOrder.get(a.id) - questionRandomOrder.get(b.id) || byName(a.id, b.id)).map(task => ({ task, reason: null }));
+  }
   const order = new Map(DATA.tasks.map((t, i) => [t.id, i]));
   return [...tasks].sort((a, b) => {
     if (homeState.sort === 'works') return counted(b).length - counted(a).length || order.get(b.id) - order.get(a.id);

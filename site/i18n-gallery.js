@@ -359,6 +359,7 @@ export default {
   '模型名字（A–Z）': 'Model name (A–Z)', '榜单评分（高到低）': 'Score (highest first)',
   '发布时间（最新在前）': 'Published (newest first)', '解答数量（多到少）': 'Answers (most first)', '题目名称（A–Z）': 'Question title (A–Z)',
   '推荐（热门与探索）': 'Recommended (popular & discovery)',
+  '随机排序': 'Random order', '热度（高到低）': 'Popularity (highest first)',
   '热门、新题与待探索题目穿插展示': 'A mix of popular, new and less-explored questions',
   '换一批': 'Show another batch', '热门': 'Popular', '等你来测': 'Try this question', '待探索': 'Explore', '新题': 'New',
   '截图生成中': 'Generating screenshots', '暂无截图': 'No screenshots yet', '暂无作品': 'No works yet',

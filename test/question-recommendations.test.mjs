@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { recommendQuestions } from '../site/question-recommendations.js';
+import { popularQuestions, recommendQuestions } from '../site/question-recommendations.js';
 
 const NOW = Date.parse('2026-10-19T12:01:00Z');
 const DAY = 86_400_000;
@@ -16,6 +16,25 @@ const fixture = () => [
   ...Array.from({ length: 8 }, (_, i) => question(`low-${i}`, 2)),
   ...Array.from({ length: 8 }, (_, i) => question(`new-${i}`, 5, { createdAt: '2026-10-18T09:00:00Z' })),
 ];
+
+test('popularity sorts every question by participation without recommendation slots', () => {
+  const tasks = [question('empty'), question('archive', 100, { results: Array.from({ length: 100 }, (_, i) => work(`old-${i}`, 90)) }),
+    question('rising', 20), question('small', 2)];
+  const original = structuredClone(tasks);
+  const result = popularQuestions(tasks, { now: NOW });
+  assert.deepEqual(ids(result), ['rising', 'archive', 'small', 'empty']);
+  assert.ok(result.every(row => row.reason === null));
+  assert.deepEqual(ids(popularQuestions(tasks.slice().reverse(), { now: NOW })), ids(result));
+  assert.deepEqual(tasks, original);
+});
+
+test('popularity shares model alias caps and verified-only activity with recommendations', () => {
+  const repeated = question('repeated', 0, { results: Array.from({ length: 100 }, (_, i) => work(i % 2 ? 'MODEL 0' : 'model-0')) });
+  const pending = question('pending', 0, { results: Array.from({ length: 100 }, (_, i) => work(`pending-${i}`, 0, { status: i % 2 ? 'unverified' : 'questioned' })) });
+  const result = popularQuestions([pending, repeated, question('genuine', 2)], { now: NOW, modelKey: item => item.model.toLowerCase().replace(/[\s-]/g, '') });
+  assert.deepEqual(ids(result), ['genuine', 'repeated', 'pending']);
+  assert.deepEqual(popularQuestions([]), []);
+});
 
 test('a full recommendation block reserves popular, unanswered, recent and under-tested positions', () => {
   const result = rank(fixture());

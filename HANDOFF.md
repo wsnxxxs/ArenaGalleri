@@ -1,3 +1,12 @@
+## 2026-10-26 · 题库默认随机与热度排序（已部署，已授权提交推送）
+
+- 首次访问无有效排序偏好时默认「随机排序」；刷新重新随机，同页筛选、目录更新和离开后返回保留顺序。手动选择过的排序继续记忆，原有数量、时间、名称及推荐选项保持。
+- 新增「热度（高到低）」，复用推荐模式的已验证模型覆盖、受限作品数和衰减近期投稿分数；包含全部匹配题目。中英文选项、产品说明与4项回归同步。
+- 基于最新 origin/main bcb47a7 的独立工作树整合；语法118/0、全量测试154/154，桌面1440中文/手机390英文候选实际浏览器检查通过。原主检出的既有 HANDOFF/platform 修改保留。
+- 标准 build 缺少私有 datapack.json；旧176件包在最新代码下严格intake有170个既存过期海报错误、8条既有提示。没有修改原作或校验；候选以线上完整壳层 + 3个本轮模块用真实 cacheBustSite 构建，线上数据、媒体、runtime与其他模块原字节保持。
+- 增量上线3JS及生成index/version共5文件，资产 cc33513800d9e7434bcb0c94；公网逐文件SHA一致，回滚 /www/wwwroot/gallery.before-question-sort-20261026。私有脚本、清单及回执在父工作区 .local/question-sort-20261026/。最终公网交互结果见同目录 public-browser.json。
+- 用户授权一条英文提交推送main，使用 wsnxxxs / 269096463+wsnxxxs@users.noreply.github.com。[本轮归档](docs/archive/2026-10-26-question-random-popularity-wsnxxxs.md)。
+
 ## 2026-10-26 · 启动回归的 CI 调度修复（仅测试，待补充提交与 CI）
 
 - main `206d89c` 的 [CI 40285371643](https://github.com/wsnxxxs/ArenaGalleri/actions/runs/40285371643) 仅失败于启动预取测试：测试把 15 秒截止缩为 100ms，CI 首次 fetch 尚未连接就超时，服务器读数为 0；这没有到达原本要验证的正文挂起阶段。

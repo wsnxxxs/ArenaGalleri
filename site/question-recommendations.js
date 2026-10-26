@@ -15,11 +15,9 @@ const rotate = (rows, turn) => {
 };
 
 // Use public participation signals, without pretending to know impressions or clicks.
-// A fixed six-hour turn keeps refreshes stable; an explicit batch changes exploration.
-export function recommendQuestions(tasks, { now = Date.now(), batch = 0, modelKey = work => work.model ?? work.modelName ?? 'unknown' } = {}) {
+function questionRows(tasks, { now = Date.now(), modelKey = work => work.model ?? work.modelName ?? 'unknown' } = {}) {
   const day = Math.floor(now / DAY);
-  const turn = Math.floor(now / ROTATION) + batch;
-  const rows = tasks.map(task => {
+  return tasks.map(task => {
     const answers = (task.results ?? []).filter(work => work.status !== 'questioned');
     const verified = answers.filter(work => work.status === 'verified');
     const models = new Map(), activity = new Map();
@@ -41,7 +39,20 @@ export function recommendQuestions(tasks, { now = Date.now(), batch = 0, modelKe
       score: 2 * Math.log1p(models.size) + Math.log1p([...models.values()].reduce((sum, value) => sum + value, 0))
         + 4 * Math.log1p([...activity.values()].reduce((sum, value) => sum + value, 0)) };
   });
-  const ranked = [...rows].sort((a, b) => b.score - a.score || byId(a, b));
+}
+
+const byPopularity = (a, b) => b.score - a.score || byId(a, b);
+
+// Rank every question by the same participation score used by the recommendation's popular lane.
+export function popularQuestions(tasks, options = {}) {
+  return questionRows(tasks, options).sort(byPopularity).map(({ task }) => ({ task, reason: null }));
+}
+
+// A fixed six-hour turn keeps refreshes stable; an explicit batch changes exploration.
+export function recommendQuestions(tasks, { now = Date.now(), batch = 0, modelKey } = {}) {
+  const turn = Math.floor(now / ROTATION) + batch;
+  const rows = questionRows(tasks, { now, modelKey });
+  const ranked = [...rows].sort(byPopularity);
   const pools = {
     popular: ranked.filter(row => row.models >= 4),
     unanswered: rotate(rows.filter(row => row.open && row.answers === 0).sort(byId), turn),
