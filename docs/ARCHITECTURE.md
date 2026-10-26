@@ -27,7 +27,7 @@
 | `references.js` / `reference-files.js` | 题目参考图的展示、大图与打包下载、发起与编辑题目时的上传编辑器；后者为无依赖的命名、提示词说明与 zip 工具 |
 | `preview-model.js` / `scene-resources.js` | 模型读取与资源回收 |
 | `sandtable*.js` / `exhibition.js` | 三维沙盘及原作展厅 |
-| `turnstile.js` | 按后台配置展示注册验证 |
+| `turnstile.js` | 按后台配置展示注册验证；SDK 15 秒截止、失败可重试，旧事件与新尝试隔离 |
 | `ui.js` / CSS | 公共组件、布局、主题与偏好 |
 
 `site/arena.js` 是画廊原有界面模块，不是另一前端的合并副本。
@@ -46,13 +46,15 @@
 
 参考图下载请求携带会话凭据，允许作者与管理员下载待审核题目的私有图片；单张图片读取为 Blob 后保存，使独立 API 域名下的图片也使用题面文件名。
 
-启动时并行读取本地展示目录、公开 `catalog` 与轻量 `session`；公开目录一到即可展示，`activity` 的统计、表情与权限补充独立加载。三个请求各有就绪、连接与错误状态，题库使用局部骨架和重试，账号或统计慢不阻塞公开内容。公开目录以后台可见性为准，不因超时回退本地旧包；仅未配置独立 API 且默认相对接口返回 404 的独立静态站点使用包内档案。旧后端缺少 catalog 时合并为一次兼容 bootstrap 请求。
+启动时并行读取本地展示目录、公开 `catalog` 与轻量 `session`；预取立即消费正文，响应头与正文共同受 15 秒截止控制，较晚加载的模块仍可复用已经完成的数据。公开目录一到即可展示，`activity` 的统计、表情与权限补充独立加载。三个请求各有就绪、连接与错误状态，题库使用局部骨架和重试，账号或统计慢不阻塞公开内容。公开目录以后台可见性为准，不因超时回退本地旧包；仅未配置独立 API 且默认相对接口返回 404 的独立静态站点使用包内档案。旧后端缺少 catalog 时合并为一次兼容 bootstrap 请求。Turnstile SDK 独立以 15 秒截止、清理事件与代际隔离实现失败后重试。
 
-`catalog` 不带凭据，使用 HTTP `public, no-cache` 与 ETag，每次使用须向服务端确认；`session` / `activity` 携带凭据并禁止缓存。不持久化私有聚合响应。请求合并在途工作。`catalog`、兼容 `bootstrap`、`session` 与 `activity` 都是 GET，经 `platform-api.js` 的 `retryRead` 读取：无响应、超时、响应不是 JSON 或 429 时按 1/3/6 秒退避，最多再试 3 次（429 至少等到 Retry-After），其他 HTTP 状态不重试；单次读取最长 15 秒，整次读取连同等待不超过 45 秒，用尽后才显示原有错误和倒计时。退避期间页面保持加载状态。之后启动恢复仍自动再试一次并遵守 Retry-After；手动、恢复网络及回到页面可以恢复连接。刷新失败保留已经验证的内容。账号或角色变化清理私有记忆与权限覆盖，旧身份响应不得回写；写操作使在途旧统计失效，随后重新读取。单纯状态或统计变化不重建正在编辑的表单，确认身份改变才清理身份相关页面。数据版本仍用于写请求兼容。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。 `MEDIA_CDN_BASE_URL`（别名 `VITE_MEDIA_CDN_BASE_URL`，运行时 `mediaCdnBaseUrl`）为空或缺省时媒体仍走原主机；设为 `https://media.arenaofbias.icu`（无尾斜杠）时，仅相对路径 `/media/` 与 `/assets/scenes/` 改从该基址读取，其余地址不变。
+`catalog` 不带凭据，使用 HTTP `public, no-cache` 与 ETag，每次使用须向服务端确认；`session` / `activity` 携带凭据并禁止缓存。不持久化私有聚合响应。请求合并在途工作。`catalog`、兼容 `bootstrap`、`session` 与 `activity` 都是 GET，经 `platform-api.js` 的 `retryRead` 读取：无响应、超时、响应不是 JSON 或 429 时按 1/3/6 秒退避，最多再试 3 次（429 至少等到 Retry-After），其他 HTTP 状态不重试；单次读取最长 15 秒，整次读取连同等待不超过 45 秒，用尽后才显示原有错误和倒计时。退避期间页面保持加载状态。之后启动恢复仍自动再试一次并遵守 Retry-After；手动、恢复网络及回到页面可以恢复连接。刷新失败保留已经验证的内容。账号或角色变化清理私有记忆与权限覆盖，旧身份响应不得回写；写操作使在途旧统计失效，随后重新读取。单纯状态或统计变化不重建正在编辑的表单，确认身份改变才清理身份相关页面。数据版本仍用于写请求兼容。后台地址由 `runtime-config.js` 或构建环境变量配置，服务端密钥不得进入前端。
+
+`MEDIA_CDN_BASE_URL`（别名 `VITE_MEDIA_CDN_BASE_URL`，运行时 `mediaCdnBaseUrl`）只影响静态 `/assets/scenes/`，空或缺省保持画廊同源。动态 `/media/` 以 API 根解析并逐次验权，附稳定 `access=20261026` 避开旧 301 缓存；参考图也保持 API 路径。私密模型仅向精确 API origin 及其 `media/` 目录、无内嵌账号密码的 URL 使用 `credentials: 'include'`，其余保持 `same-origin`。公开媒体与参考图为浏览器私有强制重验证，私密读取为 `no-store`，不能由共享 CDN 缓存替代当前权限检查。云端存量动态媒体匿名直链和缓存需用户另行关闭。
 
 Gallery 独立主机的生产构建必须设置 `API_BASE_URL=https://api.arenaofbias.icu/api/` 再运行 `npm run build`，不能发布默认相对 `api/` 的本地配置。上线后运行 `npm run check:deployment -- https://gallery.arenaofbias.icu/ https://api.arenaofbias.icu/api/`，校验网站实际配置的 API、CORS、数据包兼容性及公开题目总数；浏览器另核对全部社区题目 ID 均出现在题库中。静态数据包只有20题，显示20题不能作为完整生产题库验收。
 
-部署检查同时核对目录ETag重验证与匿名会话no-store；相同ETag仍返回200视为代理配置故障。API的动态代理须包含后台的 `deploy/nginx/api-proxy.conf`，关闭继承的Nginx proxy_cache，保留应用的公开缓存与条件头；媒体location保持独立策略。
+部署检查同时核对目录 ETag 重验证与匿名会话 no-store；相同 ETag 仍返回 200 视为代理配置故障。API 动态代理须包含后台的 `deploy/nginx/api-proxy.conf`，关闭继承的 Nginx proxy_cache。`/media/` 使用后台 `deploy/nginx/protected-media.conf` 代理当前权限检查，不保留无条件 CDN 跳转或共享缓存；公开媒体 304、私密 no-store、撤下后 404 分别验收。
 
 题库只对有解答的题读取代表作品榜单，空题直接显示等待首份答案，避免无用请求触发共享读取限制。同题长短版本保持题目 ID，卡片按模型、推理档位与来源分组；每份作品保留独立 ID，并排预览两栏各自选择已收录版本。
 

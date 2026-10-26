@@ -10,11 +10,18 @@ export function loadTurnstile() {
       const script = document.createElement('script');
       script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
       script.async = true;
-      script.onload = () => {
-        if (globalThis.turnstile) resolve(globalThis.turnstile);
-        else { script.remove(); reject(new Error('人机验证加载失败，请稍后重试。')); }
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(deadline);
+        script.onload = script.onerror = null;
+        if (error) { script.remove(); reject(error); }
+        else resolve(globalThis.turnstile);
       };
-      script.onerror = () => { script.remove(); reject(new Error('人机验证加载失败，请检查网络后重试。')); };
+      const deadline = setTimeout(() => finish(new Error('人机验证加载失败，请检查网络后重试。')), 15000);
+      script.onload = () => finish(globalThis.turnstile ? null : new Error('人机验证加载失败，请稍后重试。'));
+      script.onerror = () => finish(new Error('人机验证加载失败，请检查网络后重试。'));
       document.head.append(script);
     }).catch((error) => { scriptTask = null; throw error; });
   }

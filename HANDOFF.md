@@ -1,3 +1,14 @@
+## 2026-10-26 · 加载截止与媒体访问边界（已授权发布准备，生产验收待执行）
+
+- 用户已明确授权本轮 commit、push 和上线；负责人 wsnxxxs（GitHub ID 269096463），使用其 noreply 身份，由主代理统一执行。执行 Codex（子任务 GPT-6.1 Sol / max）。本节写入时尚未执行正式生产安装与验收，实际状态以 `/root/aob-performance-20261026/` 本轮发布 receipt 为准。
+- 已先 fetch 四仓；本仓基于最新 origin/main 31f3364，在独立候选中保留原仓尚未提交的 dots 邮箱豁免，原仓工作区未改。
+- data.json 预取立即消费正文并有 15 秒截止；完成的数据不因后续模块较晚加载而丢失。失败页可刷新重试。Turnstile SDK 同样有截止和重试，旧事件不能结束新尝试。
+- 动态 /media/ 固定走 API 权限检查，并用稳定 access 参数避开旧 301；静态 assets/scenes 继续使用现有 CDN 开关。私密模型仅向精确 API 媒体路径携带会话，第三方和静态 CDN 不扩大凭据范围。
+- 最新语法 117/0、测试 150/150；真实浏览器含正文挂起/恢复、晚模块、验证码 SDK 重试及跨源私密 SBOX 读取已通过。现场壳层真实 cacheBust 构建及 20 路由×1440/390 共40场通过，异常/CSP错误/整页溢出0；公告在本地关闭后已抽查主体截图。
+- 本机已有 176 件缓存包对最新及现场渲染代码均有 170 个既存 stale poster 校验错误，未改指纹或原作；不能称完整标准 build/intake 通过。发布候选采用现场完整资源保留、只更换本轮静态模块并真实 cacheBustSite。
+- 生产 CDN 已确认绕过删除作品的媒体门禁，云端 COS 策略/EdgeOne 路径拦截与缓存清理由用户执行；配置未完成前不得宣称存量直链已关闭。私有验收材料在本次 Codex 工作目录 work/。
+- [本轮归档](docs/archive/2026-10-26-loading-media-access-wsnxxxs.md)。下方 2026-10-25 读开关中动态 `/media/` 切 CDN 的历史描述由本轮策略覆盖；仅静态 `assets/scenes/` 可用 CDN。
+
 ## 媒体 CDN 读开关（2026-10-25，kme7kme7-prog，合入 wsnxxxs/ArenaGalleri）
 
 - 读路径默认不变：图库 `/assets/scenes/` 仍同源，API `/media/` 仍由 `mediaBaseUrl` 或 API 主机解析。仅当构建注入非空 `MEDIA_CDN_BASE_URL`（别名 `VITE_MEDIA_CDN_BASE_URL`，运行时 `mediaCdnBaseUrl`）时，这两类相对路径改读该主机（正式值为 `https://media.arenaofbias.icu`，无尾斜杠），对象键前缀不变。作品 iframe、头像、品牌标和已写绝对地址不改。

@@ -73,12 +73,32 @@ export function createUploadRequest(path) {
 
 export function mediaUrl(value) {
   if (!value || typeof value !== 'string') return value;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(value) && !value.startsWith('//')) {
+    const path = new URL(value, 'https://media.invalid/');
+    if (path.pathname.startsWith('/media/')) {
+      const protectedUrl = new URL(value.replace(/^\/+/, ''), new URL('../', apiBaseUrl()));
+      // Bypass the permanent CDN redirects cached by the former /media/ rule.
+      protectedUrl.searchParams.set('access', '20261026');
+      return protectedUrl.href;
+    }
+  }
   const cdn = cdnMediaUrl(value);
   if (cdn !== value) return cdn;
   const configured = globalThis.SAME_PROMPT_CONFIG?.mediaBaseUrl;
   const base = configured ? new URL(configured, document.baseURI) : new URL('../', apiBaseUrl());
   if (!base.pathname.endsWith('/')) base.pathname += '/';
   return new URL(value.replace(/^\/+/, ''), base).href;
+}
+
+// Uploaded previews can be private. Send the session only to the configured
+// API's media directory; static CDN and foreign URLs keep fetch's default mode.
+export function mediaCredentials(value) {
+  try {
+    const target = new URL(value, document.baseURI);
+    const media = new URL('media/', new URL('../', apiBaseUrl()));
+    if (!target.username && !target.password && target.origin === media.origin && target.pathname.startsWith(media.pathname)) return 'include';
+  } catch { /* An invalid URL is still rejected by the actual fetch. */ }
+  return 'same-origin';
 }
 
 // The API sends media fields only for works whose files it hosts; packaged works keep the

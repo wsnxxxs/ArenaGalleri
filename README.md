@@ -40,13 +40,15 @@ npm start
 
 ## 后台与发布
 
-构建时通过 `API_BASE_URL` 配置后台 API，通过可选 `MEDIA_BASE_URL` 配置投稿资源根地址；地址是公开运行配置，不含服务端密钥。
+构建时通过 `API_BASE_URL` 配置后台 API；可选 `MEDIA_BASE_URL` 只作为其它媒体相对地址的回退根，动态 `/media/` 始终以 API 根解析。地址是公开运行配置，不含服务端密钥。
 
-场景模型 `assets/scenes/...` 与后台 `/media/...`（封面、`preview.sbox`、`first.jpg` 等）默认仍从现有图库源站和 API 主机读取。读开关是 `MEDIA_CDN_BASE_URL`（运行时字段 `mediaCdnBaseUrl`，不要末尾斜杠）。空字符串、未设置或缺失都表示关闭。设为非空地址（例如 `https://media.arenaofbias.icu`）后，仅这两类相对路径改到该主机，路径键保持 `/assets/scenes/...` 与 `/media/...`。可选别名是 `VITE_MEDIA_CDN_BASE_URL`；两个变量都写了且规范化后不一致时构建失败。`mediaCdnEnabled` 不再作为开关，空的 base 优先，保持关闭。其它资源、作品 iframe 和已经写好的绝对地址不变。预发与正式是各自的构建或各自的 `runtime-config.js`：预发写入该 base，正式在确认前保持空字符串。回滚是把 `mediaCdnBaseUrl` 发布为空，不改对象键。
+`MEDIA_CDN_BASE_URL`（运行时字段 `mediaCdnBaseUrl`，不要末尾斜杠）只切换静态 `assets/scenes/...` 模型与海报。空字符串、未设置或缺失都表示关闭，保持画廊同源；设为非空地址（例如 `https://media.arenaofbias.icu`）时沿用 `/assets/scenes/...` 键。可选别名是 `VITE_MEDIA_CDN_BASE_URL`；两个变量都写了且规范化后不一致时构建失败。`mediaCdnEnabled` 不再作为开关，空的 base 优先，保持关闭。动态 `/media/...`（封面、模型预览、截图、上传及数据包参考图）不使用该 CDN 开关，始终请求 API 实时验权，并附稳定 `access=20261026` 查询参数避开旧 301 浏览器缓存；参数本身不授予权限。其它资源、作品 iframe 和已经写好的绝对地址不变。回滚静态 CDN 读取只需把 `mediaCdnBaseUrl` 发布为空，不改对象键。
 
-CDN 与存储桶的 CORS 由运维并行配置。卡片 `.sbox` 使用跨源 `fetch`，首页海报使用 `crossorigin="anonymous"` 后再读像素，因此媒体主机需要对画廊来源允许匿名 GET。参考图打包下载仍对 `/media/` 携带会话凭据，这类请求不能用 `*`，需要回显画廊来源并允许凭据。本仓页面的脚本 CSP 不限制图片和连接；若边缘另有更严的 `img-src` / `connect-src`，需同时放行该媒体主机。
+静态 CDN 与存储桶的 CORS 由运维配置，`assets/scenes/` 跨源模型与海报按匿名读取。私密投稿模型仅在目标 URL 无内嵌账号密码、origin 精确等于配置的 API、且路径在其 `media/` 目录时使用 `credentials: 'include'`；第三方和静态 CDN 保持 `same-origin`，不向它们扩大跨源凭据。参考图打包下载同样从 API 携带会话，后台必须回显精确画廊来源并允许凭据，不能使用 `*`。若边缘另有更严的 `img-src` / `connect-src`，需同时放行实际使用的 API 与静态媒体主机。
 
-新烘焙或发布的场景 `.sbox` 必须上传到 COS 的同一 `assets/scenes/...` 键（沿用运维同步脚本，或放进数据包发布步骤）。本仓库不包含上传脚本。只发布图库页面而不把新文件放到这些键上时，打开读开关会让这些模型 404。后台 `/media/` 的新上传由服务端双写负责，不在这里实现。
+新烘焙或发布的场景 `.sbox` 必须上传到 COS 的同一 `assets/scenes/...` 键（沿用运维同步脚本，或放进数据包发布步骤）。本仓库不包含上传脚本。只发布图库页面而不把新文件放到这些键上时，打开读开关会让这些模型 404。后台动态媒体镜像默认关闭；只有另行建成每次读取都执行当前权限检查的 CDN 链路后，才可由运维启用，不能仅凭配置密钥上传。存量 COS `/media/` 匿名直链、EdgeOne 路径拦截与缓存清理由用户执行；前端更新不能代替云端关闭。
+
+启动预取立即消费 `data.json` 正文，响应头与正文共同受 15 秒截止控制，模块较晚到达仍可复用已经完成的数据；失败可刷新重试。Turnstile SDK 加载同样有 15 秒截止和重试，旧加载事件不能结束新一次尝试。
 
 ```powershell
 $env:API_BASE_URL = 'https://api.example.com/api/'

@@ -2091,7 +2091,7 @@ onPlatformChange((reason) => {
 
 try {
   const requests = requestPlatform();
-  const res = await (bootRead('data') ?? fetch('data.json', { cache: 'no-cache' }));
+  const res = await (bootRead('data') ?? fetch('data.json', { cache: 'no-cache', signal: AbortSignal.timeout(15000) }));
   if (res.status === 429) {
     const error = new Error('请稍后刷新页面。');
     error.status = 429;
@@ -2125,7 +2125,8 @@ try {
   startPlatformRecovery();
 } catch (err) {
   window.ArenaEntry?.fail();
+  const message = err.name === 'TimeoutError' ? '连接超时，请重试。' : err.message;
   root.innerHTML = err.status === 429
     ? `<main class="wrap empty-page">${languageButton()}<h1>访问较频繁</h1><p>${esc(err.message)}</p></main>`
-    : `<main class="wrap empty-page">${languageButton()}<h1>数据加载失败</h1><p>${esc(err.message)}</p><p>本地查看请先运行 <code>npm run build</code>，再用 <code>npm start</code> 打开。</p></main>`;
+    : `<main class="wrap empty-page">${languageButton()}<h1>数据加载失败</h1><p>${esc(message)}</p><div class="empty-actions">${RELOAD}</div></main>`;
 }

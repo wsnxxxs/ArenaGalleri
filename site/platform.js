@@ -696,7 +696,7 @@ export function openBindEmail({ change = false, reason = '' } = {}) {
 }
 
 // Accounts made before registration required an email have none; the session says so.
-export const needsEmail = () => platform.user?.emailBound === false;
+export const needsEmail = () => platform.user?.emailBound === false && platform.user?.emailOptional !== true;
 
 // Password recovery in two steps: the emailed code is checked first, then spent on the new
 // password. The server answers the same whether or not the account has an email.

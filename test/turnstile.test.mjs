@@ -34,6 +34,48 @@ test('Turnstile loads on demand and can retry a failed script', async () => {
   }
 });
 
+test('a stalled Turnstile script times out, releases its shared request and ignores late events', async () => {
+  const original = { document: globalThis.document, turnstile: globalThis.turnstile,
+    setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+  const scripts = [], timers = new Map();
+  let sequence = 0;
+  globalThis.document = {
+    createElement: () => ({ remove() { this.removed = true; } }),
+    head: { append(script) { scripts.push(script); } },
+  };
+  delete globalThis.turnstile;
+  globalThis.setTimeout = (callback, delay) => { const id = ++sequence; timers.set(id, { callback, delay }); return id; };
+  globalThis.clearTimeout = (id) => timers.delete(id);
+  try {
+    const { loadTurnstile: load } = await import('../site/turnstile.js?case=stalled-script');
+    const first = load();
+    assert.equal(load(), first, 'concurrent consumers share one script');
+    const failure = assert.rejects(first, /加载失败/);
+    const lateLoad = scripts[0].onload;
+    assert.equal(timers.size, 1, 'an unanswered script must have a recovery deadline');
+    const deadline = [...timers.values()][0];
+    assert.equal(deadline.delay, 15000);
+    deadline.callback();
+    await failure;
+    assert.equal(scripts[0].removed, true);
+    assert.equal(scripts[0].onload, null);
+    assert.equal(scripts[0].onerror, null);
+    assert.equal(timers.size, 0);
+
+    let settled = false;
+    const retry = load().then((value) => { settled = true; return value; });
+    assert.equal(scripts.length, 2);
+    lateLoad();
+    await Promise.resolve();
+    assert.equal(settled, false, 'an event from the removed script cannot finish the new attempt');
+    const widgetApi = { render() {}, reset() {}, remove() {} };
+    globalThis.turnstile = widgetApi;
+    scripts[1].onload();
+    assert.equal(await retry, widgetApi);
+    assert.equal(timers.size, 0, 'success also releases its deadline');
+  } finally { Object.assign(globalThis, original); }
+});
+
 test('Turnstile clears expired or rejected tokens and removes its widget', async () => {
   const originalTurnstile = globalThis.turnstile;
   let options;

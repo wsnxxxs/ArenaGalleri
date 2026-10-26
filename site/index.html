@@ -96,13 +96,19 @@
       const api = new URL(globalThis.SAME_PROMPT_CONFIG?.apiBaseUrl || 'api/', document.baseURI);
       if (api.pathname === '/') api.pathname = '/api/';
       if (!api.pathname.endsWith('/')) api.pathname += '/';
-      const read = (url, options) => {
-        const request = fetch(url, options);
+      const read = (url, options, json = false) => {
+        const request = fetch(url, options).then((response) => {
+          if (!json) return response;
+          // Finish the body while modules download; an already completed read must survive its deadline.
+          const body = response.json();
+          body.catch(() => {});
+          return { ok: response.ok, status: response.status, json: () => body };
+        });
         request.catch(() => {});
         return request;
       };
       globalThis.GALLERY_BOOT = {
-        data: read('data.json', { cache: 'no-cache' }),
+        data: read('data.json', { cache: 'no-cache', signal: AbortSignal.timeout(15000) }, true),
         catalog: read(new URL('catalog', api), { credentials: 'omit', cache: 'no-cache', signal: AbortSignal.timeout(15000) }),
         session: read(new URL('session', api), { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(15000) }),
       };

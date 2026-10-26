@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { cdnMediaUrl } from './media-cdn.js';
+import { mediaCredentials } from './platform-api.js';
 
 const arrayTypes = { Float32Array, Float64Array, Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array };
 
 export async function readModel(url, signal) {
-  const response = await fetch(cdnMediaUrl(url), { signal });
+  const target = cdnMediaUrl(url);
+  const response = await fetch(target, { signal, credentials: mediaCredentials(target) });
   if (!response.ok) throw new Error(`Model request failed: ${response.status}`);
   const buffer = await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   const headerSize = new DataView(buffer).getUint32(0, true);

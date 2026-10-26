@@ -1,10 +1,10 @@
 // Read switch for objects already stored on the media CDN.
 // The source of truth is mediaCdnBaseUrl (build env MEDIA_CDN_BASE_URL).
-// Empty, unset, or invalid means off: gallery /assets/scenes/ stays same-origin,
-// and API /media/ stays on the API host or mediaBaseUrl.
+// Empty, unset, or invalid means off: gallery /assets/scenes/ stays same-origin.
+// Uploaded /media/ requires a live access check and must stay on the API host.
 // A non-empty HTTP(S) base rewrites only those relative keys. An old mediaCdnEnabled
 // boolean is not read; an empty base stays off even if that boolean is true.
-const CDN_ROOTS = ['/media/', '/assets/scenes/'];
+const CDN_ROOTS = ['/assets/scenes/'];
 
 export function normalizeMediaCdnBase(value, strict = false) {
   if (typeof value !== 'string' || !value.trim()) return '';
