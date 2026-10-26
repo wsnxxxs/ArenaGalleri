@@ -12,13 +12,15 @@ const early = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
 const start = app.indexOf('  const requests = requestPlatform();', app.lastIndexOf('\ntry {'));
 const read = app.slice(start, app.indexOf('\n  PACK =', start));
 
-const bounded = (task) => new Promise((resolve, reject) => {
-  const deadline = setTimeout(() => reject(new Error('The data body remained pending without a deadline')), 500);
-  task.then((value) => { clearTimeout(deadline); resolve(value); }, (error) => { clearTimeout(deadline); reject(error); });
-});
+const pending = () => {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+};
 
 async function fixture(run, { stalled = true } = {}) {
-  let reads = 0, delayed;
+  let reads = 0, bodyReads = 0, delayed;
+  const bodyStarted = pending(), bodyFinished = pending();
   const server = createServer((request, response) => {
     reads++;
     response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -32,10 +34,27 @@ async function fixture(run, { stalled = true } = {}) {
   const context = {
     URL, document: { baseURI }, DATA: undefined, requestPlatform: () => ({}),
     SAME_PROMPT_CONFIG: { apiBaseUrl: `${baseURI}api/` },
-    AbortSignal: { timeout(ms) { timeouts.push(ms); return AbortSignal.timeout(100); } },
-    fetch: (url, options) => new URL(url, baseURI).pathname === '/data.json'
-      ? fetch(new URL(url, baseURI), options)
-      : Promise.resolve(new Response('{}')),
+    // Advance the application's deadline explicitly after the native body reader starts.
+    // A slow CI connection must not turn a body-timeout test into a pre-header timeout.
+    AbortSignal: { timeout(ms) {
+      const controller = new AbortController();
+      timeouts.push({ ms, signal: controller.signal, expire: () => controller.abort(new DOMException('Deadline elapsed', 'TimeoutError')) });
+      return controller.signal;
+    } },
+    fetch: async (url, options) => {
+      if (new URL(url, baseURI).pathname !== '/data.json') return new Response('{}');
+      const response = await fetch(new URL(url, baseURI), options);
+      const json = response.json.bind(response);
+      response.json = () => {
+        bodyReads++;
+        const body = json();
+        bodyStarted.resolve(options.signal);
+        body.then((value) => bodyFinished.resolve({ ok: true, value, signal: options.signal }),
+          () => bodyFinished.resolve({ ok: false, signal: options.signal }));
+        return body;
+      };
+      return response;
+    },
   };
   context.bootRead = (name) => {
     const request = context.GALLERY_BOOT?.[name];
@@ -43,39 +62,54 @@ async function fixture(run, { stalled = true } = {}) {
     return request ?? null;
   };
   const reading = () => vm.runInNewContext(`(async () => {${read}\nreturn DATA;})()`, context);
-  try { await run({ context, reading, timeouts, reads: () => reads, late: () => delayed?.end('"late"}') }); }
+  try { await run({ context, reading, timeouts, reads: () => reads, bodyReads: () => bodyReads,
+    bodyStarted: bodyStarted.promise, bodyFinished: bodyFinished.promise, late: () => delayed?.end('"late"}') }); }
   finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); }
 }
 
-for (const preload of [true, false]) test(`startup ${preload ? 'preloaded' : 'fallback'} data has a body deadline and a fresh retry`, async () => {
-  await fixture(async ({ context, reading, timeouts, reads, late }) => {
+for (const preload of [true, false]) test(`startup ${preload ? 'preloaded' : 'fallback'} data has a body deadline and a fresh retry`, { timeout: 10000 }, async () => {
+  await fixture(async ({ context, reading, timeouts, reads, bodyStarted, late }) => {
     if (preload) vm.runInNewContext(early, context);
-    await assert.rejects(bounded(reading()), (error) => ['AbortError', 'TimeoutError'].includes(error.name));
-    assert.ok(timeouts.includes(15000), 'startup uses the same 15-second deadline as other Gallery reads');
+    const read = reading();
+    read.catch(() => {});
+    const signal = await bodyStarted;
+    const deadline = timeouts.find((item) => item.signal === signal);
+    assert.equal(deadline?.ms, 15000, 'the body reader uses the same 15-second deadline as other Gallery reads');
     assert.equal(reads(), 1);
+    const failure = assert.rejects(read, (error) => ['AbortError', 'TimeoutError'].includes(error.name));
+    deadline.expire();
+    await failure;
+    assert.equal(signal.aborted, true);
     late();
+    await new Promise(setImmediate);
     assert.equal(context.DATA, undefined, 'the unfinished response never becomes the mounted data');
-    assert.equal((await bounded(reading())).marker, 'fresh', 'a reload can make a new request after the stalled read');
+    assert.equal((await reading()).marker, 'fresh', 'a reload can make a new request after the stalled read');
     assert.equal(context.DATA.marker, 'fresh');
     assert.equal(reads(), 2);
   });
 });
 
-test('startup consumes its completed preload without issuing a duplicate data request', async () => {
+test('startup consumes its completed preload without issuing a duplicate data request', { timeout: 10000 }, async () => {
   await fixture(async ({ context, reading, reads }) => {
     vm.runInNewContext(early, context);
-    assert.equal((await bounded(reading())).marker, 'fresh');
+    assert.equal((await reading()).marker, 'fresh');
     assert.equal(reads(), 1);
     assert.equal(context.GALLERY_BOOT.data, undefined);
   }, { stalled: false });
 });
 
-test('a completed preload remains usable when app modules arrive after its network deadline', async () => {
-  await fixture(async ({ context, reading, reads }) => {
+test('a completed preload remains usable when app modules arrive after its network deadline', { timeout: 10000 }, async () => {
+  await fixture(async ({ context, reading, reads, bodyReads, bodyFinished, timeouts }) => {
     vm.runInNewContext(early, context);
     await context.GALLERY_BOOT.data;
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    assert.equal((await bounded(reading())).marker, 'fresh');
+    assert.equal(bodyReads(), 1, 'the preload consumes its body while app modules are still absent');
+    const completed = await bodyFinished;
+    assert.equal(completed.ok, true);
+    const deadline = timeouts.find((item) => item.signal === completed.signal);
+    assert.equal(deadline?.ms, 15000);
+    deadline.expire();
+    assert.equal(completed.signal.aborted, true);
+    assert.equal((await reading()).marker, 'fresh');
     assert.equal(reads(), 1, 'late modules reuse the downloaded data without another request');
   }, { stalled: false });
 });
