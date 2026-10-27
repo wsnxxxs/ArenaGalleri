@@ -22,6 +22,7 @@ import { startAnnouncements } from './announcements.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { effortRank, representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
+import { boostOrder } from './work-boost.js';
 import { downloadReference, linkReferences, referenceSheet, useReferenceViewer } from './references.js';
 import { aiJudged, aiScoreOf, categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 import { textMatches } from './match.js';
@@ -630,7 +631,7 @@ function foldOrder(t, results) {
   const ahead = (r) => r.status === 'verified' && modelKey(r) === modelKey(lead);
   return [...ordered.filter(ahead), ...ordered.filter((r) => !ahead(r))];
 }
-const displayedResults = (t) => foldOrder(t, groupVariantResults(t, sortedResults(t), taskState.variants));
+const displayedResults = (t) => boostOrder(foldOrder(t, groupVariantResults(t, sortedResults(t), taskState.variants)), { sort: resultSort, vendorOf });
 function resultVariantButtons(t, r, pane = null) {
   const choices = variantChoices(t, r);
   if (!choices.length) return '';
