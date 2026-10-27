@@ -494,7 +494,7 @@ export const riskLabels = (list = []) => list.map((id) => RISK_LABELS[id] ?? id)
 // A rejection nobody decided by hand, and one that came from an injection attempt aimed at the reviewer.
 export const autoRejected = (moderation) => moderation?.status === 'rejected' && moderation.source !== 'human';
 export const injected = (moderation) => Boolean(moderation?.categories?.includes('prompt-injection'));
-// Three tiers: senior admins run the site; moderators review and verify works only, never their own.
+// Senior admins run the site; both staff roles may review and verify their own works.
 export const ROLE_LABELS = { admin: '高级管理员', moderator: '普通管理员', user: '成员' };
 // Levels: 0 member, 1 certified member, 2 moderator, 3 senior admin. Older servers send only a role.
 export const LEVEL_NAMES = ['成员', '认证成员', '普通管理员', '高级管理员'];
@@ -506,7 +506,7 @@ export const levelText = (level) => `Lv${level} ${LEVEL_NAMES[level]}`;
 export const can = (name, user = platform.user) => Boolean(user && (user.capabilities ? user.capabilities[name] : name === 'canTakeQualificationExam' ? levelOf(user) === 0 : true));
 export const isStaff = (user = platform.user) => user?.role === 'admin' || user?.role === 'moderator';
 export const isSenior = (user = platform.user) => user?.role === 'admin';
-export const canDecide = (w) => platform.sessionReady && (isSenior() || (isStaff() && w.mine === false));
+export const canDecide = () => platform.sessionReady && isStaff();
 // Staff permissions are separate from public authorship.
 export const byStaff = (item) => (item?.author?.role ?? 'admin') !== 'user';
 // Packaged items have no personal publisher; uploaded works keep their author's name.

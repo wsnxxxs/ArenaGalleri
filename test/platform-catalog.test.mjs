@@ -317,3 +317,23 @@ test('leaderboard task choices remain selectable while pool statistics are unkno
     assert.match(selected, /value="short" selected>Short task/);
   });
 });
+
+
+test('both staff roles may review own works while members and unresolved sessions cannot', async () => {
+  await environment('self-review', async ({ platform, canDecide }) => {
+    for (const role of ['moderator', 'admin']) {
+      platform.user = { id: 'staff', role };
+      platform.sessionReady = true;
+      assert.equal(canDecide({ mine: true }), true);
+      assert.equal(canDecide({ mine: false }), true);
+      platform.sessionReady = false;
+      assert.equal(canDecide({ mine: true }), false);
+    }
+    platform.sessionReady = true;
+    for (const user of [null, { id: 'member', role: 'user' }]) {
+      platform.user = user;
+      assert.equal(canDecide({ mine: true }), false);
+      assert.equal(canDecide({ mine: false }), false);
+    }
+  });
+});

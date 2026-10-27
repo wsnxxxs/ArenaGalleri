@@ -158,7 +158,7 @@ const pickBox = (id, title, picked) => `<label class="row-pick"><input type="che
 const publisher = (ctx, item) => (byStaff(item) ? `${item.author?.name ?? ctx.DATA.title} · ${ROLE_LABELS[item.author?.role ?? 'admin']}` : item.author.name ?? '已注销的用户');
 const publisherHtml = (ctx, item) => `<span data-i18n-ignore>${esc(item.author?.name ?? (byStaff(item) ? ctx.DATA.title : ''))}</span>${byStaff(item) ? ` · <span>${ROLE_LABELS[item.author?.role ?? 'admin']}</span>` : item.author?.name ? '' : '<span>已注销的用户</span>'}`;
 // What the admin does next with a work, by bucket; one primary action per row. A moderator's
-// own work opens read-only, for another admin to decide; only senior admins delete.
+// Both administrator roles may review their own works; only senior admins delete.
 function adminAction(w, bucket) {
   const id = esc(pickId(w));
   const details = `<button class="btn sm ghost" data-review="${id}">详情</button>`;
@@ -749,7 +749,7 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
         ${w.status === 'verified' ? '' : '<label class="field"><span class="field-label"><input type="checkbox" name="toInbox"> 娱乐作品（进竞技场收件箱）</span><small>勾选后不进展览馆，也不进任何池子</small></label>'}
         <label class="field"><span class="field-label">存疑原因<small>标记存疑时必填，作者与访客都能看到</small></span><textarea data-i18n-ignore class="input" name="reason" rows="3" maxlength="500">${esc(w.status === 'questioned' ? w.reason : '')}</textarea></label>
         <p class="form-error" role="alert"></p>
-        ${canDecide(w) ? '' : `<div class="review-blocked">${icon('alert')}<p>这是你发布的作品，需要由其他管理员核验。</p></div>`}
+        ${canDecide(w) ? '' : `<div class="review-blocked">${icon('alert')}<p>需要管理员权限</p></div>`}
         <div class="sheet-actions">
           ${isSenior() ? `<button type="button" class="btn danger ghost" data-remove>${icon('trash')}下架</button>` : ''}
           <span class="spacer"></span>
@@ -873,7 +873,7 @@ function openContent(ctx, w, { questions = [], onChanged, onDecided } = {}) {
         <div class="sheet-actions">
           ${canDecide(w) && platform.site.contentModeration && platform.site.autoModeration !== false && m.status !== 'pending' ? '<button type="button" class="btn ghost" data-content-act="retry">重新自动审核</button>' : ''}
           <span class="spacer"></span>
-          ${!canDecide(w) ? '<span class="fine">你发布的作品需要由其他管理员审核</span>' : `${m.status === 'rejected' ? '' : `<button type="button" class="btn danger" data-content-act="rejected">${icon('close')}拒绝</button>`}
+          ${!canDecide(w) ? '<span class="fine">需要管理员权限</span>' : `${m.status === 'rejected' ? '' : `<button type="button" class="btn danger" data-content-act="rejected">${icon('close')}拒绝</button>`}
           <button type="button" class="btn primary" data-content-act="approved">${icon('check')}内容通过</button>`}
         </div>
       </form>
@@ -1352,7 +1352,7 @@ function review(root, ctx) {
         : { unverified: '待核验', questioned: '存疑', verified: '已验证', off: '已验证', rejected: '未通过' }[bucket] ?? '待核验';
     const ready = displayReady(w), selectable = ready && canDecide(w);
     const arena = arenaState(w), arenaText = { in_pool: '在盲评池', off: '已关闭', not_qualified: '生成方式不符', not_ready: '尚不能盲评' }[arena] ?? '尚不能盲评';
-    const pickHint = !canDecide(w) ? '本人作品的展示设置需由其他管理员处理' : !ready ? '通过审核并公开题目后可批量管理展示' : `选择「${w.title}」`;
+    const pickHint = !canDecide(w) ? '需要管理员权限' : !ready ? '通过审核并公开题目后可批量管理展示' : `选择「${w.title}」`;
     return `<article class="work-row is-pickable work-managed-row" data-status="${esc(w.status)}">
       <label class="row-pick"><input type="checkbox"${selectable ? ` data-pick="${key}"` : ' disabled'}${state.picked.has(pickId(w)) ? ' checked' : ''} aria-label="${esc(pickHint)}" title="${esc(pickHint)}"></label>
       ${thumb(ctx, w, { link: false })}<div class="work-main">
@@ -1369,7 +1369,7 @@ function review(root, ctx) {
   function managedResults() {
     const works = managedWorks(), total = state.scopeTotal;
     const bulk = pickable().length ? `<div class="bulk-bar" data-bulk-bar><label class="row-pick"><input type="checkbox" data-pick-all aria-label="全选当前页可管理的作品"></label><span data-bulk-count></span>${['gallery-on', 'hide', 'arena-off'].map((action, i) => `<button class="btn sm${i ? '' : ' primary'}" type="button" data-bulk-face="${action}" disabled>${FACE_ACTIONS[action][0]}</button>`).join('')}</div>` : '';
-    return `<p class="work-manage-list-meta">显示 ${state.total} / ${total} 件作品${works.some((w) => !canDecide(w)) ? ' · 本人作品可编辑信息，展示设置由其他管理员处理' : ''}</p>${bulk}
+    return `<p class="work-manage-list-meta">显示 ${state.total} / ${total} 件作品${works.some((w) => !canDecide(w)) ? ' · 需要管理员权限' : ''}</p>${bulk}
       ${works.length ? `<div class="work-list">${pageItems(works).map(managedRow).join('')}</div>${pagination(works)}` : '<div class="board-empty"><p class="board-empty-title">没有匹配的作品</p><button class="btn sm" type="button" data-managed-reset>清除筛选</button></div>'}`;
   }
   function managedList() {
@@ -1562,7 +1562,7 @@ function review(root, ctx) {
   let switchingFaces = false;
   async function switchFaces(action, works) {
     if (!works.length || switchingFaces) return;
-    if (works.some((w) => !canDecide(w))) return toast('本人作品的展示设置需由其他管理员处理');
+    if (works.some((w) => !canDecide(w))) return toast('需要管理员权限');
     const [label, faces, done] = FACE_ACTIONS[action];
     switchingFaces = true;
     try {

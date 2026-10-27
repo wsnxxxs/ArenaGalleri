@@ -35,7 +35,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
     : questionHidden ? '所属题目尚未公开，暂不能开启展示。'
       : w.status !== 'verified' ? '通过作品核验后可开启。'
         : w.entertainment_route ? '这是娱乐收件箱作品，暂不能开启展示。' : '';
-  const ownReason = canDecide(w) ? '' : '这是你发布的作品。可以编辑信息，审核和展示设置需要由其他管理员处理。';
+  const ownReason = canDecide(w) ? '' : '需要管理员权限';
   const initial = flagsOf(w);
   const decision = held(w) ? 'content' : 'review';
   const canOpenDecision = canDecide(w) && (decision === 'content' ? Boolean(onContent) : !questionHidden && Boolean(onReview));
@@ -43,7 +43,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
   const movable = !packaged && canDecide(w);
   const homes = new Map([...ctx.DATA.tasks, ...questions].map((q) => [q.id, q.title]));
   if (!homes.has(w.task)) homes.set(w.task, task?.title ?? w.task);
-  const homeHint = packaged ? '数据包作品的归属题目由数据仓库维护。' : !movable ? '你发布的作品需由其他管理员调整归属题目。'
+  const homeHint = packaged ? '数据包作品的归属题目由数据仓库维护。' : !movable ? '需要管理员权限'
     : '改到其他题目后，这件作品的盲评记录、评论和表情一起迁移。';
   const sheet = openDialog({
     title: '管理作品',

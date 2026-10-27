@@ -1,3 +1,23 @@
+## 2026-10-27 · 桌面项目整理与提交
+
+- 用户授权提交推送并直接清理，不备份。同步 origin/main，去掉已提交的随机/热度排序和 dots 邮箱豁免重复差异；保留普通管理员自审及界面、产品说明和回归。合并交接记录，保留远端新增条目。
+- npm run check：118 文件/0错误；npm test：155/155。npm run build 因缺私有 datapack.json 失败；CI=1 npm run check:intake：旧包176件、170个既存海报过期错误、8提示。未重新部署或进行浏览器交互验收。
+- 推送核对后清理旧候选、历史本地输出、缓存与生成物；历史 .local/output 证据路径失效。正式源码、作品及 Git 历史保留。后续无需重复提交下节所述已上线改动。
+- [本轮归档](docs/archive/2026-10-27-workspace-cleanup-wsnxxxs.md)。
+
+## 2026-10-27 · 普通管理员允许审核本人作品（已上线，未提交）
+
+- 用户明确普通管理员也可审核本人作品。canDecide统一按已确认会话+管理员角色判断，单件/批量审核、核验与展示设置不再依赖mine=false；管理弹窗、成员等级说明及中英文提示同步。题目管理、删除及调整等级仍限高级管理员。
+- 语法114/0、全量147/147通过；后端本地535/535、Linux生产源码候选相关51/51通过。桌面1440/手机390真实模块夹具验证本人作品审核/核验入口、已核验作品展示开关可用，删除隐藏、页面异常0；手机弹窗目检通过。没有用生产普通管理员账号实际提交审核。
+- 标准build因缺私有datapack.json失败；CI=1 check:intake176件/0错/8既有提示通过。采用现场完整目录增量更新六JS，并用真实cacheBustSite生成index/version，共八文件，资产e9a184f6450b00cee41482f6；公网八文件SHA一致，其余2374文件保持。回退/www/wwwroot/gallery.before-moderator-self-review-20261027；后端两文件同步上线，服务active。
+- 仅叠加本轮改动，保留既有脏文件内容。未commit/push；私有证据在父目录.local/moderator-self-review-20261027/。后端Linux全套因capture停滞终止，不称全套通过；最终相关51项通过。
+
+## 2026-10-25 · dots 无邮箱投稿入口（已上线，未提交）
+
+- 用户要求 dots 未绑定邮箱仍可使用最高管理员权限。needsEmail 尊重后端 emailOptional；保持真实 emailBound=false，不伪造邮箱。其他账号仍沿用原邮箱门禁。
+- check113/0、test142/142；未执行完整数据包 build/intake（本机未配置 datapack.json）。以现场完整目录为底，仅改 platform.js 并用真实 cacheBustSite 重建 index.html/version.json，资产829712d7c3aeb105e312c88a。现场其他资源保持，目录备份 /www/wwwroot/gallery.before-dots-email-20261025。
+- 公网核对实际 platform.js 含豁免条件，生产 dots 会话确认无邮箱仍为 Lv3，管理和草稿读取200；短期验收会话已清理。未 commit/push；私有安装记录及测试日志在父目录 .local/dots-email-20261025。未进行完整浏览器交互验收。
+
 ## 2026-10-26 · 题库默认随机与热度排序（已部署，已授权提交推送）
 
 - 首次访问无有效排序偏好时默认「随机排序」；刷新重新随机，同页筛选、目录更新和离开后返回保留顺序。手动选择过的排序继续记忆，原有数量、时间、名称及推荐选项保持。
