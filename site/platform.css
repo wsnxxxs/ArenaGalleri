@@ -1173,6 +1173,40 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .vote-status [data-status].is-flash { animation: none; }
 }
 
+/* ---- guided blind vote: the question card docked where the vote bar sits ---- */
+.vote-in.vote-q { grid-template-areas: "head head head" "text text text" "hint hint hint" "status actions links"; gap: 6px 20px; padding-top: 10px; }
+.q-head { grid-area: head; display: flex; align-items: center; gap: 14px; color: var(--muted); font: 500 12px var(--mono); }
+.q-text { grid-area: text; margin: 2px 0 0; font: 600 clamp(17px, 1.8vw, 21px)/1.4 var(--serif); text-align: center; text-wrap: balance; }
+.q-hint { grid-area: hint; margin: 0; color: var(--ink-2); font-size: 13px; text-align: center; }
+.q-hint span { color: var(--muted); }
+.vote-q .vote-status { grid-area: status; }
+.vote-q .vote-actions { grid-area: actions; }
+.vote-q .btn.vote { min-width: 112px; }
+.q-links { grid-area: links; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 16px; margin: 0; }
+.q-links .link { color: var(--muted); font-size: 13px; }
+.q-step { color: var(--muted); font: 500 12px var(--mono); white-space: nowrap; }
+.kw { margin: 0 1px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.kw:hover, .kw[aria-expanded="true"] { text-decoration-color: var(--accent); }
+.q-toggle { display: inline-flex; flex: none; align-items: center; gap: 7px; margin-left: auto; padding: 2px 9px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: none; color: var(--ink-2); font: 12px/1.5 var(--sans); cursor: pointer; }
+.q-toggle:hover { border-color: var(--ink-2); color: var(--ink); }
+.q-toggle i { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); }
+.q-toggle[aria-expanded="false"] i { transform: translateY(2px) rotate(-135deg); }
+/* Folded: the question and its answers on one line, wrapping only when the window is narrow. */
+.vote-in.vote-q.is-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-block: 10px calc(10px + env(safe-area-inset-bottom)); }
+.vote-q.is-compact .q-text { flex: 1 1 220px; margin: 0; font-size: 16px; text-align: left; }
+.vote-q.is-compact .btn.vote { min-width: 0; min-height: 36px; padding: 0 12px; }
+.vote-q.is-compact .vote-status { flex: 0 1 auto; font-size: 12.5px; }
+.vote-q.is-compact .q-links { flex: none; }
+.vote-q.is-compact .q-toggle { margin-left: 0; }
+.vote-q.is-compact .q-hint { flex-basis: 100%; text-align: left; }
+@media (max-width: 860px) {
+  .vote-in.vote-q { grid-template-columns: 1fr; grid-template-areas: "head" "text" "hint" "actions" "status" "links"; gap: 8px; }
+  .vote-q .btn.vote { min-width: 0; }
+  .q-links { justify-content: center; }
+  .vote-q.is-compact .q-text { flex-basis: calc(100% - 64px); }
+  .vote-q.is-compact .vote-actions, .vote-q.is-compact .vote-status { flex-basis: 100%; }
+}
+
 /* ---- the human check ---- */
 dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .challenge-sheet .sheet-text { margin: 0 0 14px; font-size: 14px; line-height: 1.7; }

@@ -92,7 +92,10 @@ if (mediaBase !== undefined && viteBase !== undefined && mediaBase !== viteBase)
 }
 // Empty or unset stays off. An explicit empty MEDIA_CDN_BASE_URL wins over a missing alias.
 const mediaCdnBaseUrl = mediaBase !== undefined ? mediaBase : (viteBase ?? '');
-if (process.env.API_BASE_URL || process.env.MEDIA_BASE_URL || mediaCdnBaseUrl || mediaBase !== undefined || viteBase !== undefined) {
+// GUIDED_VOTING=1 builds the staff-only trial of guided blind voting: a separate preview, never the public site.
+if (![undefined, '', '0', '1'].includes(process.env.GUIDED_VOTING)) throw new Error('GUIDED_VOTING must be 1 or 0');
+const guidedVoting = process.env.GUIDED_VOTING === '1';
+if (process.env.API_BASE_URL || process.env.MEDIA_BASE_URL || mediaCdnBaseUrl || mediaBase !== undefined || viteBase !== undefined || guidedVoting) {
   const runtime = {};
   for (const [variable, field] of [['API_BASE_URL', 'apiBaseUrl'], ['MEDIA_BASE_URL', 'mediaBaseUrl']]) {
     if (!process.env[variable]) continue;
@@ -102,6 +105,7 @@ if (process.env.API_BASE_URL || process.env.MEDIA_BASE_URL || mediaCdnBaseUrl ||
   }
   if (!runtime.apiBaseUrl) runtime.apiBaseUrl = 'api/';
   runtime.mediaCdnBaseUrl = mediaCdnBaseUrl;
+  if (guidedVoting) runtime.guidedVoting = true;
   writeFileSync(join(DIST, 'runtime-config.js'), `globalThis.SAME_PROMPT_CONFIG = ${JSON.stringify(runtime)};\n`);
 }
 
