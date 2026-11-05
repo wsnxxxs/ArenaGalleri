@@ -1,3 +1,11 @@
+## 2026-11-06 · 引导式盲评测试版（仅管理员的单独构建）
+
+- `GUIDED_VOTING=1` 构建时 runtime-config 写入 `guidedVoting: true`。盲评页抽题带 `guided: true`，投票栏换成停靠问题卡：建模题先问引导题（1/2）再问综合题（2/2），其他题只问综合题。四个选项 A 更好/都很好/都不好/B 更好，快捷键 A/S/X/D；虚线关键词点开「看哪里」，「看不出，跳过这题」只跳过引导题；卡片可收起为一行（localStorage `arena-question-compact`）。卡片头与揭晓行都写明测试版不计入榜单。
+- 测试版只对管理员（普通与高级）开放：未登录或非管理员看到「引导式盲评测试版只对管理员开放」，不抽题，也不弹未登录计票说明；后端同样返回 403。不带该变量的正式构建与原来一致（三个按钮，S 为不分伯仲）。
+- 改动 `site/arena.js`、`site/platform.css`、`site/i18n-experience.js`、`site/runtime-config.js`（注释）、`scripts/assemble-site.mjs`。npm run check 118/0，npm test 155/155；本地 `.demo/` 数据包分别构建开、关两版，在内置浏览器核对拦截、两步作答入 trial 表、正式三按钮计票。
+- 测试链接 `https://gallery.arenaofbias.icu/guided-trial/`：服务器上用正式后端当前数据包另行构建，放在独立目录，不动正式 Gallery 目录。上线记录在服务器 `/root/aob-guided-trial-20261106/`。
+- [本轮归档](docs/archive/2026-11-06-guided-voting-trial-wsnxxxs.md)。
+
 ## 2026-11-02 · 公开作品媒体直连 CDN（待 kme7 确认，未合并）
 
 - 非空 `mediaCdnBaseUrl` 时，公开 `/media/**` 与 `/assets/scenes/` 直接读 CDN 源站，避开 API 主机 `/media/` 的 301。`/media/references/` 与 `/media/pack-references/` 仍由 `mediaUrl` 落到 API，并带 `access=20261026`。绝对地址只在主机为配置的 API 或 `api.arenaofbias.icu`、且路径是公开 `/media/` 时改写，保留路径与查询。

@@ -2,7 +2,7 @@
 // match (#/arena/random) where every pair may come from a different task.
 // The server picks every pair and hands out opaque frame addresses; nothing on this page
 // knows which work is which until the vote comes back with the reveal.
-import { $, $$, brandMark, esc, icon, pad, themeButton } from './ui.js';
+import { $, $$, brandMark, esc, icon, pad, store, themeButton } from './ui.js';
 import { accountVersion, api, arenaScope, isSenior, isStaff, levelOf, openAuth, openDialog, platform, reactionBar, requireUser, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
 import { domainsOf, matchesQuery, tracksOf, votedTask } from './categories.js';
@@ -13,7 +13,16 @@ import { loadTurnstile, mountTurnstile } from './turnstile.js';
 import { curatedInfo, curatedKnown } from './curated.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
-const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', skip: '你跳过了这一组' };
+const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', good: '你认为两件都很好', bad: '你认为两件都不好', skip: '你跳过了这一组' };
+// Guided blind voting is a staff-only trial, built into a separate preview (GUIDED_VOTING=1) and never
+// into the public site. Its pairs ask questions with four answers, and the server keeps their ballots off every board.
+const guidedTrial = () => globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
+// Every trial question has the same four answers (keys A S X D); a tie says whether both works were good or both bad.
+const PICKS = { a: 'A 更好', good: '都很好', bad: '都不好', b: 'B 更好' };
+// The trial's overall question. A pair from a pilot category first asks about one aspect (测评点).
+const OVERALL = { question: '哪个的综合效果，你更满意？', keyword: '综合效果', hint: '整体来看，你更愿意用哪一个。' };
+// The question card stays open unless the reader folds it to one line; the choice is kept on this device.
+const COMPACT = 'arena-question-compact';
 const NOTICE = 'arena-login-notice';
 // Two boxes for the header layout switch; the filled ones are the works on view.
 const layoutGlyph = (a, b) => `<svg viewBox="0 0 20 14" aria-hidden="true"><rect${a > 3 ? ' class="on"' : ''} x="1" y="1" width="${a}" height="12" rx="1.5"/><rect${b > 3 ? ' class="on"' : ''} x="${a + 3}" y="1" width="${b}" height="12" rx="1.5"/></svg>`;
@@ -25,6 +34,7 @@ const REASON = {
   changed: '作品的核验状态刚刚变化，这一票没有计入',
   own: '其中有你上传的作品，不计入',
   skipped: '跳过的组合不计入榜单，也不揭晓',
+  trial: '测试版：这一票不计入任何榜单',
 };
 
 // Why a person is asked to prove they are one, and what we say about it.
@@ -185,7 +195,8 @@ function lobby(root, ctx) {
 // A random match (scope given) may draw each pair from a different task; `task` is the one on view.
 function match(root, ctx, first, scope) {
   let task = first;
-  const state = { random: Boolean(scope), scope: scope ?? ctx.DATA.tasks.filter(isOpen), pin: pinned(), tally: { win: 0, tie: 0, loss: 0 }, place: '', done: new Set(), unavailable: false, prefetch: null, match: null, result: null, ready: {}, seen: {}, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', round: 0, counted: 0, busy: false, prompt: false, slow: false, error: null, held: null, needVerify: null };
+  const guided = guidedTrial();
+  const state = { random: Boolean(scope), scope: scope ?? ctx.DATA.tasks.filter(isOpen), pin: pinned(), tally: { win: 0, tie: 0, loss: 0 }, place: '', done: new Set(), unavailable: false, prefetch: null, match: null, result: null, ready: {}, seen: {}, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', round: 0, counted: 0, busy: false, prompt: false, slow: false, error: null, held: null, needVerify: null, step: 'overall', aspectPick: null, compact: store.get(COMPACT) === '1', hint: false };
   const mobile = () => matchMedia('(max-width: 860px)').matches;
   const timers = new Set(), frameLoads = new Map();
   // Two holds start when both works have loaded: 5 seconds before a vote, 3 before a skip.
@@ -338,7 +349,8 @@ function match(root, ctx, first, scope) {
     const unseen = mobile() && !(state.seen.a && state.seen.b) ? (state.seen.a ? 'B' : 'A') : '';
     if (voteWait() > 0) return unseen ? `${seconds(voteWait())} 秒后可投票 · 请先切换到作品 ${unseen} 看一看` : `先体验一下，${seconds(voteWait())} 秒后可以投票`;
     if (unseen) return `请先切换到作品 ${unseen} 看一看`;
-    return platform.user ? '体验过两件作品后，选出你更认可的一件' : '未登录：选择计入大众榜，登录并通过资格考试后同时计入精选榜';
+    if (platform.user) return !guided ? '体验过两件作品后，选出你更认可的一件' : state.step === 'aspect' ? '答完这题，还有一道综合题' : '选完即揭晓两边的模型';
+    return '未登录：选择计入大众榜，登录并通过资格考试后同时计入精选榜';
   }
 
   // Once a second only the words, the buttons and the line move; the bar is not rebuilt.
@@ -369,26 +381,76 @@ function match(root, ctx, first, scope) {
       const { win, tie, loss } = state.tally;
       const tally = state.pin && win + tie + loss ? `<span class="arena-tally"><span data-i18n-ignore>${esc(state.pin.name)}</span>：<span>${win + tie + loss} 组 · ${win} 胜 ${tie} 平 ${loss} 负</span>${state.place ? ` · <span>${state.place}</span>` : ''}</span>` : '';
       const verdict = counted ? (countedFor?.curated ? REASON.countedCurated : platform.user ? REASON.counted : REASON.anonymous) : REASON[reason] ?? '';
+      const aspect = state.match?.aspect && choice !== 'skip' ? ` <span>· <span>${esc(state.match.aspect.keyword)}</span> · <span>${state.aspectPick ? PICKS[state.aspectPick] : '跳过了'}</span></span>` : '';
       bar.innerHTML = `<div class="vote-in is-result">
-        <p class="vote-verdict"><b>${VERDICT[choice]}</b>${tally}<span><span>${verdict}</span>${state.counted ? ` <span>· 本次已计入 ${state.counted} 组</span>` : ''}${counted && !platform.user ? ' <button class="link" data-auth="login">登录</button>' : ''}${state.result.examHint ? ' <span>· 通过资格考试后也计入精选榜</span> <a class="link" href="#/exam">去考试</a>' : ''}</span></p>
+        <p class="vote-verdict"><b>${VERDICT[choice === 'tie' && state.result.tieKind ? state.result.tieKind : choice]}</b>${tally}<span><span>${verdict}</span>${aspect}${state.counted ? ` <span>· 本次已计入 ${state.counted} 组</span>` : ''}${counted && !platform.user ? ' <button class="link" data-auth="login">登录</button>' : ''}${state.result.examHint ? ' <span>· 通过资格考试后也计入精选榜</span> <a class="link" href="#/exam">去考试</a>' : ''}</span></p>
         <div class="vote-actions"><a class="btn" href="#/leaderboard/${esc(task.id)}">${icon('rank')}查看榜单</a><button class="btn primary" data-a="next">下一组<kbd>N</kbd></button></div>
       </div>`;
       return;
     }
     const disabled = canVote() && !state.busy ? '' : ' disabled';
-    const held = (side) => (state.held === side ? ' is-held' : '');
+    const held = (pick) => (state.held === pick ? ' is-held' : '');
     const counting = voteWait() > 0;
     shownStatus = status();
-    bar.innerHTML = `<div class="vote-in">
-      ${counting ? `<span class="vote-gate" data-gate style="--gate: ${viewMs()}ms; animation-delay: -${Math.round(hold.waited)}ms" aria-hidden="true"></span>` : ''}
-      <p class="vote-status"><span data-status>${shownStatus}</span>${!platform.user && state.match ? ' <button class="link" data-auth="login">登录</button>' : ''}${state.needVerify ? ' <button class="link" data-a="verify">继续验证</button>' : ''}</p>
+    const gate = counting ? `<span class="vote-gate" data-gate style="--gate: ${viewMs()}ms; animation-delay: -${Math.round(hold.waited)}ms" aria-hidden="true"></span>` : '';
+    const line = `<p class="vote-status"><span data-status>${shownStatus}</span>${!platform.user && state.match ? ' <button class="link" data-auth="login">登录</button>' : ''}${state.needVerify ? ' <button class="link" data-a="verify">继续验证</button>' : ''}</p>`;
+    const skip = `<button class="link vote-skip" data-vote="skip" data-label="${skipLabel()}"${canSkip() ? '' : ' disabled'}>${skipLabel()}</button>`;
+    if (!guided) {
+      bar.innerHTML = `<div class="vote-in">
+        ${gate}
+        ${line}
+        <div class="vote-actions">
+          <button class="btn vote${held('a')}" data-vote="a"${disabled}><kbd>A</kbd><span class="ab">A</span>更好</button>
+          <button class="btn vote${held('tie')}" data-vote="tie"${disabled}><kbd>S</kbd>不分伯仲</button>
+          <button class="btn vote${held('b')}" data-vote="b"${disabled}><span class="ab">B</span>更好<kbd>D</kbd></button>
+        </div>
+        ${skip}
+      </div>`;
+      return;
+    }
+    // The question arrives with its pair; until then only the answers show.
+    const aspect = state.match && state.step === 'aspect' ? state.match.aspect : null;
+    const ask = state.match ? aspect ?? OVERALL : null;
+    const steps = state.match?.aspect ? (aspect ? '1 / 2' : '2 / 2') : '';
+    const toggle = `<button class="q-toggle" type="button" data-a="compact" aria-expanded="${!state.compact}">${state.compact ? '展开' : '收起'}<i aria-hidden="true"></i></button>`;
+    const question = ask ? `<p class="q-text">${questionText(ask)}</p><p class="q-hint" id="arena-q-hint"${state.hint ? '' : ' hidden'}><span>看哪里：</span>${esc(ask.hint)}</p>` : '';
+    const head = !ask ? '' : state.compact ? `<span class="q-step">${steps || '综合题'}</span>`
+      : `<div class="q-head"><span>${aspect ? '引导题' : '综合题'}${steps ? ` · ${steps}` : ''}</span><span>${aspect ? `<span>${esc(aspect.dimensionName)}</span> · ` : ''}<span>测试版，不计入榜单</span></span>${toggle}</div>`;
+    bar.innerHTML = `<div class="vote-in${ask ? ' vote-q' : ''}${ask && state.compact ? ' is-compact' : ''}">
+      ${gate}
+      ${head}${question}
+      ${line}
       <div class="vote-actions">
-        <button class="btn vote${held('a')}" data-vote="a"${disabled}><kbd>A</kbd><span class="ab">A</span>更好</button>
-        <button class="btn vote${held('tie')}" data-vote="tie"${disabled}><kbd>S</kbd>不分伯仲</button>
-        <button class="btn vote${held('b')}" data-vote="b"${disabled}><span class="ab">B</span>更好<kbd>D</kbd></button>
+        <button class="btn vote${held('a')}" data-vote="a" aria-label="A 更好"${disabled}><kbd>A</kbd><span class="ab">A</span>更好</button>
+        <button class="btn vote tie${held('good')}" data-vote="good"${disabled}><kbd>S</kbd>都很好</button>
+        <button class="btn vote tie${held('bad')}" data-vote="bad"${disabled}><kbd>X</kbd>都不好</button>
+        <button class="btn vote${held('b')}" data-vote="b" aria-label="B 更好"${disabled}><span class="ab">B</span>更好<kbd>D</kbd></button>
       </div>
-      <button class="link vote-skip" data-vote="skip" data-label="${skipLabel()}"${canSkip() ? '' : ' disabled'}>${skipLabel()}</button>
+      <p class="q-links">${aspect ? `<button class="link" type="button" data-a="skip-aspect"${state.busy ? ' disabled' : ''}>${state.compact ? '跳过这题' : '看不出，跳过这题'}</button>` : ''}${skip}</p>
+      ${ask && state.compact ? toggle : ''}
     </div>`;
+  }
+  // The keyword is dotted; it opens the hint on where to look.
+  function questionText({ question, keyword }) {
+    const at = keyword ? question.indexOf(keyword) : -1;
+    if (at < 0) return esc(question);
+    return `${esc(question.slice(0, at))}<button class="kw" type="button" data-a="hint" aria-expanded="${state.hint}" aria-controls="arena-q-hint" title="看哪里">${esc(keyword)}</button>${esc(question.slice(at + keyword.length))}`;
+  }
+  // An aspect answer stays on the page until the overall one is sent with it; skipping it skips only that question.
+  function answer(pick) {
+    if (state.step !== 'aspect') return vote(pick);
+    if (state.busy || (pick !== null && !canVote())) return;
+    const focused = $('[data-bar]', el).contains(document.activeElement);
+    Object.assign(state, { aspectPick: pick, step: 'overall', hint: !state.compact });
+    drawBar();
+    if (focused) $('.vote-actions [data-vote]', el)?.focus({ preventScroll: true });
+    live(`下一题：${OVERALL.question}`);
+  }
+  function setCompact(compact) {
+    Object.assign(state, { compact, hint: !compact });
+    store.set(COMPACT, compact ? '1' : '0');
+    drawBar();
+    $('.q-toggle', el)?.focus({ preventScroll: true });
   }
 
   function drawHeads() {
@@ -611,6 +673,14 @@ function match(root, ctx, first, scope) {
   function showError(error) {
     state.error = error;
     state.controls = {};
+    if (error.code === 'guided-staff-only') {
+      for (const body of $$('[data-body]', el)) body.innerHTML = `<div class="arena-layer"><div class="board-empty arena-empty">
+        <p class="board-empty-title">${esc(error.message)}</p><p>${platform.user ? '当前账号不是管理员。换一个管理员账号登录后再试。' : '用管理员账号登录后即可试用。'}</p>
+        <div class="board-empty-actions">${platform.user ? '' : '<button class="btn primary" data-auth="login">登录</button>'}<a class="btn" href="#/arena">返回盲评大厅</a></div>
+      </div></div>`;
+      drawBar();
+      return;
+    }
     if (!error.code || error.code === 'challenge-cancelled' || error.code === 'match-timeout' || error.status >= 500 || [408, 429].includes(error.status)) {
       const cancelled = error.code === 'challenge-cancelled';
       for (const body of $$('[data-body]', el)) body.innerHTML = `<div class="arena-layer"><div class="board-empty arena-empty">
@@ -655,7 +725,7 @@ function match(root, ctx, first, scope) {
       const token = turnstileToken;
       turnstileToken = undefined;
       try {
-        const match = await api('arena/matches', { method: 'POST', signal, body: { task: t.id, previous: t === from ? previous : undefined, avoidCooling: avoid || undefined, pin: state.pin?.key, ...(token ? { turnstileToken: token } : {}) } });
+        const match = await api('arena/matches', { method: 'POST', signal, body: { task: t.id, previous: t === from ? previous : undefined, avoidCooling: avoid || undefined, pin: state.pin?.key, ...(guided ? { guided: true } : {}), ...(token ? { turnstileToken: token } : {}) } });
         signal.throwIfAborted();
         return { task: t, match };
       } catch (error) {
@@ -748,6 +818,7 @@ function match(root, ctx, first, scope) {
 
   async function next() {
     if (!alive || state.busy || state.error) return;
+    if (guided && !isStaff()) return showError(Object.assign(new Error('引导式盲评测试版只对管理员开放'), { code: 'guided-staff-only' }));
     state.busy = true;
     const generation = ++drawGeneration;
     frameLoads.forEach((stop) => stop());
@@ -759,7 +830,7 @@ function match(root, ctx, first, scope) {
     state.prefetch = null;
     $('.arena-switched', el)?.remove();
     // Every pair starts side by side at an even split, so the last pair's layout favours neither.
-    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, loadErrors: {}, seen: { a: true }, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', slow: false, held: null, needVerify: null });
+    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, loadErrors: {}, seen: { a: true }, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', slow: false, held: null, needVerify: null, step: 'overall', aspectPick: null });
     drawSplit();
     for (const body of $$('[data-body]', el)) {
       body.innerHTML = `<div class="arena-layer">${loader(body.dataset.body, '正在抽取一组作品')}</div>`;
@@ -803,6 +874,7 @@ function match(root, ctx, first, scope) {
       }
       if (drawn.task !== task) setTask(drawn.task);
       state.match = drawn.match;
+      Object.assign(state, { step: state.match.aspect ? 'aspect' : 'overall', hint: !state.compact });
       if (state.round > 0 && task !== earlier) noteSwitch();
       state.round++;
       frame('a');
@@ -841,7 +913,11 @@ function match(root, ctx, first, scope) {
       if (result.counted) place(state.pin);
     }
   }
-  const postVote = (match, choice, turnstileToken) => api(`arena/matches/${match.id}/vote`, { method: 'POST', body: { choice, ...(turnstileToken ? { turnstileToken } : {}) } });
+  // A pick is a, b, good, bad or skip: 都很好 and 都不好 are ties that say which kind. The aspect answer rides along.
+  const tieOf = (pick) => (pick === 'good' || pick === 'bad' ? { choice: 'tie', tieKind: pick } : { choice: pick });
+  const postVote = (match, pick, turnstileToken) => api(`arena/matches/${match.id}/vote`, { method: 'POST', body: { ...tieOf(pick),
+    ...(match.aspect && state.aspectPick && pick !== 'skip' ? { aspect: { id: match.aspect.id, ...tieOf(state.aspectPick) } } : {}),
+    ...(turnstileToken ? { turnstileToken } : {}) } });
 
   function finishVote() {
     state.busy = false;
@@ -863,7 +939,7 @@ function match(root, ctx, first, scope) {
     if (!owns(current, version)) return;
     humanSheet = null;
     state.held = null;
-    if (answer?.value) { accept(answer.value, choice); return finishVote(); }
+    if (answer?.value) { accept(answer.value, tieOf(choice).choice); return finishVote(); }
     if (answer?.error) {
       toast(answer.error.message);
       if (answer.error.status === 404) { state.busy = false; return next(); }
@@ -882,7 +958,7 @@ function match(root, ctx, first, scope) {
     try {
       const result = await postVote(current, choice);
       if (!owns(current, version)) return;
-      accept(result, choice);
+      accept(result, tieOf(choice).choice);
     } catch (error) {
       if (!owns(current, version)) return;
       if (error.code === 'turnstile_required') return verifyVote(choice, error.data?.challenge);
@@ -917,13 +993,20 @@ function match(root, ctx, first, scope) {
 
   el.addEventListener('click', (e) => {
     const voteButton = e.target.closest('[data-vote]');
-    if (voteButton && !voteButton.disabled) return vote(voteButton.dataset.vote);
+    if (voteButton && !voteButton.disabled) return voteButton.dataset.vote === 'skip' ? vote('skip') : answer(voteButton.dataset.vote);
     const layoutButton = e.target.closest('[data-layout]');
     if (layoutButton) return setLayout(layoutButton.dataset.layout);
     const action = e.target.closest('[data-a]');
     if (!action) return;
     const kind = action.dataset.a;
     if (kind === 'next') next();
+    else if (kind === 'skip-aspect' && !action.disabled) answer(null);
+    else if (kind === 'hint') {
+      state.hint = !state.hint;
+      action.setAttribute('aria-expanded', String(state.hint));
+      $('#arena-q-hint', el).hidden = !state.hint;
+    }
+    else if (kind === 'compact') setCompact(!state.compact);
     else if (kind === 'retry-policy' && state.error) { state.error = null; void start(); }
     else if (kind === 'retry-pair' && state.error) { state.error = null; next(); }
     else if (kind === 'verify' && state.needVerify && !state.busy) void verifyVote(state.needVerify.choice, state.needVerify.challenge);
@@ -951,7 +1034,8 @@ function match(root, ctx, first, scope) {
     // Keys belong to a dialog or the reference viewer while either is open.
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, textarea, select') || $('dialog[open]') || !$('#lightbox').hidden) return;
     const key = e.key.toLowerCase();
-    if (key === 'a' || key === 'd' || key === 's') {
+    const picks = guided ? { a: 'a', s: 'good', x: 'bad', d: 'b' } : { a: 'a', s: 'tie', d: 'b' };
+    if (picks[key]) {
       if (state.match && !state.result && bothReady() && voteWait() > 0) {
         // Too early: no vote and no message, only a blink of the count.
         const node = $('[data-status]', el);
@@ -962,7 +1046,7 @@ function match(root, ctx, first, scope) {
         return;
       }
       if (!canVote() || state.busy) return;
-      vote(key === 'a' ? 'a' : key === 'd' ? 'b' : 'tie');
+      answer(picks[key]);
     } else if (key === 'n' && state.result) next();
     else if (['1', '2', '3'].includes(key) && !mobile() && !e.target.closest('.split-bar')) setLayout({ 1: 'a', 2: 'ab', 3: 'b' }[key]);
     else if (key === 'escape' && state.prompt) togglePrompt(false);
@@ -1074,7 +1158,8 @@ function match(root, ctx, first, scope) {
     const version = accountVersion();
     let seen = false;
     try { seen = sessionStorage.getItem(NOTICE) === '1'; } catch { /* private mode */ }
-    if (platform.available && !platform.user && !seen) {
+    // The trial asks for an administrator's account instead.
+    if (platform.available && !platform.user && !seen && !guided) {
       let selection;
       try { selection = await countNotice(); } catch (error) {
         if (!alive || version !== accountVersion() || error.name === 'AbortError') return;
