@@ -1,3 +1,11 @@
+## 2026-11-06 · 引导式盲评维度图（测试版，仅管理员）
+
+- 新增 `#/dimensions`（`site/dimensions.js`）：每个模型一张雷达图，四条轴审美、工程完备、逻辑、发散，取引导题的单项胜率（平局算半场，50% 持平）。作答不足 5 票的轴空心、灰色，暂按 50% 画并写票数。悬停或键盘聚焦显示胜平负和各测评点胜率；下方明细表；可切换按模型、按配置（localStorage `dimensions-unit`）。
+- 只有 `GUIDED_VOTING=1` 构建才认这个路由（`site/app.js`），测试版盲评大厅给管理员加入口（`site/arena.js`）；非管理员看到「维度图只对管理员开放」。正式构建与改动前一致。数据来自后端 `GET /api/arena/guided/dimensions`（arenaofbias-server 同日归档）。
+- 样式在 `site/platform.css` 新类名下，英文在 `site/i18n-experience.js`，新增 `test/dimensions.test.mjs`。npm run check 120/0，npm test 156/156；本地 `.demo/` 写入 160 组模拟测试票后在内置浏览器核对桌面、375px、深浅主题与提示。
+- 测试链接 `https://gallery.arenaofbias.icu/guided-trial/#/dimensions`，在服务器上重建测试目录，记录在 `/root/aob-guided-trial-20261106/RECEIPT.md`。
+- [本轮归档](docs/archive/2026-11-06-guided-dimension-chart-wsnxxxs.md)。
+
 ## 2026-11-06 · 引导式盲评测试版（仅管理员的单独构建）
 
 - `GUIDED_VOTING=1` 构建时 runtime-config 写入 `guidedVoting: true`。盲评页抽题带 `guided: true`，投票栏换成停靠问题卡：建模题先问引导题（1/2）再问综合题（2/2），其他题只问综合题。四个选项 A 更好/都很好/都不好/B 更好，快捷键 A/S/X/D；虚线关键词点开「看哪里」，「看不出，跳过这题」只跳过引导题；卡片可收起为一行（localStorage `arena-question-compact`）。卡片头与揭晓行都写明测试版不计入榜单。
