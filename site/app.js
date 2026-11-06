@@ -1715,9 +1715,11 @@ function notFound(msg) {
 }
 
 // Platform pages live in their own modules and need the server; task ids never use these names.
-const PLATFORM_PAGES = { arena: './arena.js', leaderboard: './leaderboard.js', changelog: './changelog.js', new: './publish.js', exam: './exam.js', submit: './submit.js', me: './account.js', review: './account.js' };
-const PAGE_TITLES = { arena: '盲评', leaderboard: '榜单', changelog: '更新日志', new: '发起题目', exam: '资格考试', submit: '上传作品', me: '个人中心', review: '审核' };
-const PAGE_SECTIONS = { arena: 'arena', leaderboard: 'leaderboard', changelog: '', new: 'new', exam: 'new', submit: 'questions', me: 'me', review: 'me' };
+// dimensions is the guided trial's staff chart and exists only in GUIDED_VOTING builds (see guidedTrial).
+const PLATFORM_PAGES = { arena: './arena.js', leaderboard: './leaderboard.js', changelog: './changelog.js', new: './publish.js', exam: './exam.js', submit: './submit.js', me: './account.js', review: './account.js', dimensions: './dimensions.js' };
+const PAGE_TITLES = { arena: '盲评', leaderboard: '榜单', changelog: '更新日志', new: '发起题目', exam: '资格考试', submit: '上传作品', me: '个人中心', review: '审核', dimensions: '维度图' };
+const PAGE_SECTIONS = { arena: 'arena', leaderboard: 'leaderboard', changelog: '', new: 'new', exam: 'new', submit: 'questions', me: 'me', review: 'me', dimensions: 'arena' };
+const guidedTrial = () => globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
 // A pointer resting on a link to one of these pages (or a finger landing on it) starts fetching the
 // page's code, so the click usually finds it ready.
 const warmed = new Set();
@@ -2002,7 +2004,7 @@ async function show(version, visit, scrollBack) {
   if (version !== routeVersion) return;
   const parts = routeParts(location.hash);
   const [taskId, a, vs, b] = parts ?? [];
-  const platformPage = Object.hasOwn(PLATFORM_PAGES, taskId ?? '') ? taskId : null;
+  const platformPage = Object.hasOwn(PLATFORM_PAGES, taskId ?? '') && (taskId !== 'dimensions' || guidedTrial()) ? taskId : null;
   const t = platformPage ? null : DATA.tasks.find((x) => x.id === taskId);
   const inExhibition = t && hasExhibition(t) && (a === 'exhibition' || a === 'sandtable');
   const inViewer = t && a && !inExhibition;
