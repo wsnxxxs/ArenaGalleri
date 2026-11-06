@@ -1173,7 +1173,9 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .vote-status [data-status].is-flash { animation: none; }
 }
 
-/* ---- guided blind vote: the question card docked where the vote bar sits ---- */
+/* ---- guided blind vote (trial build only): the question card ----
+   These base rules dock the card below the work, which is what narrow screens use. On wide screens the
+   trial build floats it over the pair instead (the q-float rules further down). */
 .vote-in.vote-q { grid-template-areas: "head head head" "text text text" "hint hint hint" "status actions links"; gap: 6px 20px; padding-top: 10px; }
 .q-head { grid-area: head; display: flex; align-items: center; gap: 14px; color: var(--muted); font: 500 12px var(--mono); }
 .q-text { grid-area: text; margin: 2px 0 0; font: 600 clamp(17px, 1.8vw, 21px)/1.4 var(--serif); text-align: center; text-wrap: balance; }
@@ -1205,6 +1207,54 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .q-links { justify-content: center; }
   .vote-q.is-compact .q-text { flex-basis: calc(100% - 64px); }
   .vote-q.is-compact .vote-actions, .vote-q.is-compact .vote-status { flex-basis: 100%; }
+  /* Before the pair arrives there is no question to fold to, so the docked card shows no toggle. */
+  .vote-in.is-compact:not(.vote-q) > .q-toggle { display: none; }
+}
+/* Floating card: the works keep the whole height and the card sits over the bottom middle of the pair,
+   beside the prompt drawer when that is open. Folded, it shrinks to one line with the step, the question
+   and the status. A click anywhere on that line opens it again, and the keys still answer. */
+@media (min-width: 861px) {
+  .arena.q-float .vote-bar {
+    position: absolute; inset: auto 0 calc(18px + env(safe-area-inset-bottom)); z-index: 30;
+    width: min(580px, calc(100% - 40px)); margin-inline: auto; overflow: hidden;
+    border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--raised); box-shadow: var(--shadow-lg);
+    animation: q-float-in 0.45s var(--ease) both;
+  }
+  .arena.q-float.guide-open .vote-bar { right: 344px; width: min(580px, calc(100% - 384px)); }
+  .q-float .vote-gate { top: 0; }
+  .q-float .vote-in:not(.is-result) { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "actions actions" "status links"; gap: 0; padding: 12px 16px 10px; }
+  .q-float .vote-in.vote-q { grid-template-areas: "head head" "text text" "hint hint" "actions actions" "status links"; }
+  .q-float .q-head { flex-wrap: wrap; justify-content: center; gap: 2px 12px; padding: 0 72px; font-size: 11.5px; text-align: center; }
+  .q-float .q-head .q-toggle { position: absolute; top: 8px; right: 8px; }
+  .q-float .q-toggle { border-color: transparent; color: var(--muted); }
+  .q-float .q-toggle:hover { border-color: transparent; background: var(--surface-2); color: var(--ink); }
+  .q-float .q-text { margin-top: 4px; font-size: 19px; }
+  .q-float .q-hint { margin-top: 2px; }
+  .q-float .vote-in:not(.is-result) > .vote-actions { grid-area: actions; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .q-float .vote-in .btn.vote { min-width: 0; min-height: 40px; padding: 0 8px; font-size: 13.5px; }
+  .q-float .vote-in > .vote-status, .q-float .vote-in > .q-links { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--line); }
+  .q-float .vote-in > .vote-status { grid-area: status; padding-right: 16px; font-size: 12px; }
+  .q-float .vote-in > .q-links { grid-area: links; }
+  .q-float .q-links .link { font-size: 12px; }
+  .q-float .vote-in.is-result { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 10px; padding: 14px 16px; text-align: center; }
+  .q-float .vote-in.is-result .vote-verdict { align-items: center; }
+  .arena.q-float .vote-bar:has(> .is-compact) { width: fit-content; max-width: min(580px, calc(100% - 40px)); cursor: pointer; }
+  .arena.q-float.guide-open .vote-bar:has(> .is-compact) { max-width: min(580px, calc(100% - 384px)); }
+  .arena.q-float .vote-bar:has(> .is-compact):hover { border-color: var(--ink-2); }
+  .q-float .vote-in.is-compact { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; padding: 7px 8px 7px 16px; }
+  .q-float .vote-in.is-compact > .q-step { flex: none; }
+  .q-float .vote-in.is-compact > .q-text, .q-float .vote-in.is-compact > .vote-status { flex: 0 1 auto; min-width: 0; margin: 0; padding: 0; overflow: hidden; border: 0; text-overflow: ellipsis; white-space: nowrap; }
+  .q-float .vote-in.is-compact > .q-text { font-size: 15px; line-height: 1.75; text-align: left; }
+  .q-float .vote-in.is-compact > :is(.q-hint, .vote-actions, .q-links) { display: none; }
+  .q-float .vote-in.is-compact > .q-toggle { margin-left: 4px; }
+}
+.q-text.is-new { animation: q-new 0.4s var(--ease) both; }
+.vote-in.is-flip { animation: q-flip 0.25s var(--ease) both; }
+@keyframes q-float-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes q-new { from { opacity: 0; transform: translateY(4px); } }
+@keyframes q-flip { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .arena.q-float .vote-bar, .q-text.is-new, .vote-in.is-flip { animation: none; }
 }
 
 /* ---- the human check ---- */
