@@ -202,7 +202,7 @@ function match(root, ctx, first, scope) {
   const timers = new Set(), frameLoads = new Map();
   // Two holds start when both works have loaded: 5 seconds before a vote, 3 before a skip.
   const hold = createHold(() => tickGate());
-  let shownStatus = '';
+  let shownStatus = '', shownAsk = null;
   let activeDraw = null, drawGeneration = 0;
   let owner = accountVersion(), policyController = null, placeController = null;
   const owns = (current, version) => alive && version === accountVersion() && state.match === current;
@@ -210,7 +210,8 @@ function match(root, ctx, first, scope) {
 
   document.body.classList.add('is-viewer');
   setPageTitle(['盲评', { text: task.title, original: true }]);
-  root.innerHTML = `<div class="viewer arena">
+  // In the trial build the question card floats over the pair on wide screens (q-float in platform.css).
+  root.innerHTML = `<div class="viewer arena${guided ? ' q-float' : ''}">
     <header class="vbar">
       ${ctx.backLink('vback')}
       <div class="arena-heading"><b><span data-title data-i18n-ignore>${esc(task.title)}</span><span class="arena-scope" data-scope hidden></span></b><span data-round>正在准备</span></div>
@@ -409,15 +410,21 @@ function match(root, ctx, first, scope) {
       </div>`;
       return;
     }
-    // The question arrives with its pair; until then only the answers show.
+    // The question arrives with its pair; until then only the answers show. Folded, the card keeps the
+    // question and the status on one line, and the keys still answer. A held or unverified vote unfolds
+    // it, because its status line says what to do next.
     const aspect = state.match && state.step === 'aspect' ? state.match.aspect : null;
     const ask = state.match ? aspect ?? OVERALL : null;
+    const folded = state.compact && !state.held && !state.needVerify;
     const steps = state.match?.aspect ? (aspect ? '1 / 2' : '2 / 2') : '';
-    const toggle = `<button class="q-toggle" type="button" data-a="compact" aria-expanded="${!state.compact}">${state.compact ? '展开' : '收起'}<i aria-hidden="true"></i></button>`;
-    const question = ask ? `<p class="q-text">${questionText(ask)}</p><p class="q-hint" id="arena-q-hint"${state.hint ? '' : ' hidden'}><span>看哪里：</span>${esc(ask.hint)}</p>` : '';
-    const head = !ask ? '' : state.compact ? `<span class="q-step">${steps || '综合题'}</span>`
+    // A new question fades in, so the move from the aspect question to the overall one is noticed.
+    const fresh = Boolean(ask) && ask.question !== shownAsk;
+    shownAsk = ask?.question ?? null;
+    const toggle = `<button class="q-toggle" type="button" data-a="compact" aria-expanded="${!folded}">${folded ? '展开' : '收起'}<i aria-hidden="true"></i></button>`;
+    const question = ask ? `<p class="q-text${fresh ? ' is-new' : ''}">${questionText(ask)}</p><p class="q-hint" id="arena-q-hint"${state.hint ? '' : ' hidden'}><span>看哪里：</span>${esc(ask.hint)}</p>` : '';
+    const head = !ask ? '' : folded ? `<span class="q-step">${steps || '综合题'}</span>`
       : `<div class="q-head"><span>${aspect ? '引导题' : '综合题'}${steps ? ` · ${steps}` : ''}</span><span>${aspect ? `<span>${esc(aspect.dimensionName)}</span> · ` : ''}<span>测试版，不计入榜单</span></span>${toggle}</div>`;
-    bar.innerHTML = `<div class="vote-in${ask ? ' vote-q' : ''}${ask && state.compact ? ' is-compact' : ''}">
+    bar.innerHTML = `<div class="vote-in${ask ? ' vote-q' : ''}${folded ? ' is-compact' : ''}">
       ${gate}
       ${head}${question}
       ${line}
@@ -427,8 +434,8 @@ function match(root, ctx, first, scope) {
         <button class="btn vote tie${held('bad')}" data-vote="bad"${disabled}><kbd>X</kbd>都不好</button>
         <button class="btn vote${held('b')}" data-vote="b" aria-label="B 更好"${disabled}><span class="ab">B</span>更好<kbd>D</kbd></button>
       </div>
-      <p class="q-links">${aspect ? `<button class="link" type="button" data-a="skip-aspect"${state.busy ? ' disabled' : ''}>${state.compact ? '跳过这题' : '看不出，跳过这题'}</button>` : ''}${skip}</p>
-      ${ask && state.compact ? toggle : ''}
+      <p class="q-links">${aspect ? `<button class="link" type="button" data-a="skip-aspect"${state.busy ? ' disabled' : ''}>${folded ? '跳过这题' : '看不出，跳过这题'}</button>` : ''}${skip}</p>
+      ${folded ? toggle : ''}
     </div>`;
   }
   // The keyword is dotted; it opens the hint on where to look.
@@ -451,6 +458,7 @@ function match(root, ctx, first, scope) {
     Object.assign(state, { compact, hint: !compact });
     store.set(COMPACT, compact ? '1' : '0');
     drawBar();
+    $('.vote-in', el)?.classList.add('is-flip');
     $('.q-toggle', el)?.focus({ preventScroll: true });
   }
 
@@ -993,6 +1001,8 @@ function match(root, ctx, first, scope) {
   }
 
   el.addEventListener('click', (e) => {
+    // Folded on a wide screen, the floating card is one line; a click anywhere on it opens it again.
+    if (!mobile() && e.target.closest('.vote-in.is-compact')) return setCompact(false);
     const voteButton = e.target.closest('[data-vote]');
     if (voteButton && !voteButton.disabled) return voteButton.dataset.vote === 'skip' ? vote('skip') : answer(voteButton.dataset.vote);
     const layoutButton = e.target.closest('[data-layout]');
@@ -1007,7 +1017,7 @@ function match(root, ctx, first, scope) {
       action.setAttribute('aria-expanded', String(state.hint));
       $('#arena-q-hint', el).hidden = !state.hint;
     }
-    else if (kind === 'compact') setCompact(!state.compact);
+    else if (kind === 'compact') setCompact(action.getAttribute('aria-expanded') === 'true');
     else if (kind === 'retry-policy' && state.error) { state.error = null; void start(); }
     else if (kind === 'retry-pair' && state.error) { state.error = null; next(); }
     else if (kind === 'verify' && state.needVerify && !state.busy) void verifyVote(state.needVerify.choice, state.needVerify.challenge);

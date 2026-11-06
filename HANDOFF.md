@@ -1,3 +1,11 @@
+## 2026-11-06 · 引导式盲评浮窗问题卡（测试版，仅管理员）
+
+- 测试版（`GUIDED_VOTING=1`）的问题卡在 861px 以上改为浮在两件作品下方正中：`site/arena.js` 给根节点加 `q-float`，样式在 `site/platform.css`。作品占满整个高度；提示词抽屉打开时，卡片在剩下的作品区域里居中。手机端仍停靠，正式构建不变。
+- 收起后是一行：步骤、题目、状态和「展开」，点任意处展开，A S X D 照常作答。选择被保留或需要人机验证时自动展开；换题时题目淡入。两步提问、按键、投票前的等待都没变。
+- npm run check 120/0，npm test 156/156。本地 `.demo/` 在内置浏览器核对了 1440 与 900 宽、提示词抽屉、浅色主题和 375px。
+- 测试链接 `https://gallery.arenaofbias.icu/guided-trial/`，在服务器上重建测试目录，记录在 `/root/aob-guided-trial-20261106/RECEIPT.md`。
+- [本轮归档](docs/archive/2026-11-06-guided-floating-card-wsnxxxs.md)。
+
 ## 2026-11-06 · 引导式盲评维度图（测试版，仅管理员）
 
 - 新增 `#/dimensions`（`site/dimensions.js`）：每个模型一张雷达图，四条轴审美、工程完备、逻辑、发散，取引导题的单项胜率（平局算半场，50% 持平）。作答不足 5 票的轴空心、灰色，暂按 50% 画并写票数。悬停或键盘聚焦显示胜平负和各测评点胜率；下方明细表；可切换按模型、按配置（localStorage `dimensions-unit`）。
