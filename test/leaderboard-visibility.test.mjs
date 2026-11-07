@@ -11,14 +11,17 @@ test('sample visibility respects the five-work boundary without changing scores,
   finally { Object.assign(globalThis, original); }
   for (const by of ['config', 'model']) {
     const data = { by, rows: [
-      { key: 'small', works: 4, rank: 1, score: 1400, provisional: false },
-      { key: 'five', works: 5, rank: 2, score: 1300, provisional: true },
-      { key: 'large', works: 12, rank: 3, score: 1200, provisional: false },
+      { key: 'small', works: 4, games: 21, rank: 1, score: 1400, provisional: false },
+      { key: 'five', works: 5, games: 21, rank: 2, score: 1300, provisional: true },
+      { key: 'large', works: 12, games: 30, rank: 3, score: 1200, provisional: false },
     ], unranked: [{ key: 'unrated-small', works: 4 }, { key: 'unrated-five', works: 5 }] };
     const before = structuredClone(data);
     assert.deepEqual(visibleBoardEntries(data).rows, data.rows.slice(1));
-    assert.deepEqual(visibleBoardEntries(data).unranked, data.unranked.slice(1));
-    assert.deepEqual(visibleBoardEntries(data, true), { rows: data.rows, unranked: data.unranked });
+    assert.deepEqual(visibleBoardEntries(data).unranked, []);
+    assert.deepEqual(visibleBoardEntries(data, true), { rows: data.rows, unranked: [] });
+    const boundary = { rows: [{ works: 12, games: 20 }, { works: 1, games: 21 }], unranked: [] };
+    assert.deepEqual(visibleBoardEntries(boundary).rows, []);
+    assert.deepEqual(visibleBoardEntries(boundary, true).rows, boundary.rows.slice(1));
     assert.deepEqual(data, before);
   }
 });
@@ -37,8 +40,8 @@ test('full and embedded boards reveal small provisional entries locally and reta
     calls++;
     const by = new URL(url).searchParams.get('by');
     return Response.json({ by, rows: [{ key: 'small', modelName: 'Small sample sentinel', model: 'small',
-      rank: 1, works: 4, score: 1300, interval: 100, games: 8, wins: 5, draws: 0, losses: 3, winRate: .625, provisional: true }],
-    unranked: [], totals: { votes: 8, voters: 3 }, provisionalGames: 30 });
+      rank: 1, works: 4, score: 1300, interval: 100, games: 21, wins: 13, draws: 0, losses: 8, winRate: 13 / 21, provisional: true }],
+    unranked: [], totals: { votes: 21, voters: 3 }, provisionalGames: 30 });
   };
   try {
     const { mountBoard } = await import('../site/leaderboard.js');

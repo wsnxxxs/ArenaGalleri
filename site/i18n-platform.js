@@ -6,7 +6,8 @@ const phrases = Object.fromEntries(`
 已隐藏 {value} 个作品不足 5 件的条目|Hidden {value} entries with fewer than 5 works
 当前没有作品数达到 5 件的条目|No entries currently have at least 5 works
 勾选「显示作品少于 5 件的条目」可查看已有评分，暂定标记仍保留。|Select “Show entries with fewer than 5 works” to view existing ratings. Provisional labels are retained.
-默认隐藏当前榜单作品少于 5 件的条目，可勾选显示。评分和名次保留，「暂定」仍按比较次数标记。|Entries with fewer than 5 works in the current ranking are hidden by default. Select the option to show them. Scores and ranks are retained; provisional labels still depend on comparison counts.
+每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。比较少于 30 场仍标为「暂定」。|Each model or configuration needs at least 21 valid comparisons within the current board to appear. Entries with fewer than 5 works are additionally hidden by default; the display option cannot bypass the comparison threshold. Entries with fewer than 30 comparisons remain provisional.
+当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。|At least 21 valid comparisons in the current scope are required to appear; 21–29 comparisons are marked provisional.
 更新|Updates
 每 10 分钟计算一次，新投票将在下一次更新时计入。|Rankings are calculated every 10 minutes. New votes appear in the next update.
 列表分页|List pagination
@@ -90,7 +91,7 @@ const phrases = Object.fromEntries(`
 精选榜|Curated rankings
 入榜|Qualification
 来源筛选后，仍须为已收录且非暂定的模型才能入榜。|After source filtering, models must still be registered and non-provisional to qualify.
-入榜资格按模型判断，单独配置比较不足 30 次时仍标为暂定。|Qualification is assessed per model. Individual configurations with fewer than 30 comparisons remain provisional.
+入榜同时要求模型与当前配置各有至少 21 场有效比较。|Both the model and the current configuration need at least 21 valid comparisons to qualify.
 先以这些题目重算「按模型」榜，只允许已收录且非暂定的模型入榜；「按配置」沿用相同的模型资格。来源筛选后也按筛选内的模型比较数判断。有效对手的比较仍参与计分。|Model rankings are recalculated within these tasks. Only registered, non-provisional models qualify, including in configuration view. Source filters also apply to model qualification. Valid comparisons against all opponents remain in the fit.
 后端尚未支持精选榜，请更新后端后重试|The backend does not support curated rankings yet. Update it and retry.
 前端|Frontend

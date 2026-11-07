@@ -12,10 +12,11 @@ const UNITS = { config: '按配置', model: '按模型' };
 // A domain board below either line is shown, but flagged as too thin to rank on.
 const THIN = { tasks: 2, votes: 50 };
 const MIN_WORKS = 5;
+const MIN_GAMES = 21;
 
 export function visibleBoardEntries(data, showSmallSamples = false) {
-  const visible = (row) => showSmallSamples || row.works >= MIN_WORKS;
-  return { rows: data.rows.filter(visible), unranked: data.unranked.filter(visible) };
+  const visible = (row) => row.games >= MIN_GAMES && (showSmallSamples || row.works >= MIN_WORKS);
+  return { rows: data.rows.filter(visible), unranked: [] };
 }
 
 export function watchBoardRefresh(reload) {
@@ -60,12 +61,12 @@ export const boardNotes = (open = false, curated = null) => `<details class="boa
     <div><dt>区间</dt><dd>分数后的 ± 与横条表示约 95% 的不确定范围，横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits.provisionalGames ?? 30} 次的配置标为「暂定」。</dd></div>
     ${curated ? `<div><dt>范围</dt><dd>精选总榜合并全部精选题，各分区只合并本分区的题，各自重新计算，不截取总榜。只计同题比较，不平均各题分数。题目加入、移出或换分区后，下一次计算（10 分钟内）生效。</dd></div>
     <div><dt>计入</dt><dd>${curated.since ? `只统计 ${formatDate(curated.since)} 之后、投票当时为 Lv1 及以上的成员的选择` : '只统计投票当时为 Lv1 及以上的成员的选择'}；Lv0 和访客的选择只进大众榜。同一用户对同一对作品只计一次，跳过不计。同一配置（按模型时为同一模型）的两件作品之间的比较不参与计分，也不计入有效比较数。作品被标记存疑或删除后，相关投票自动移出，恢复后重新计入。</dd></div>
-    <div><dt>入榜</dt><dd>模型在本榜范围内有效比较满 ${curated.threshold} 次才入榜（总榜和每个分区分别判断，不借用大众榜的比较数）；按配置沿用模型资格。</dd></div>
+    <div><dt>入榜</dt><dd>模型在本榜范围内有效比较至少 21 场才入榜（总榜和每个分区分别判断，不借用大众榜的比较数）；按配置还要求该配置至少 21 场。</dd></div>
     <div><dt>与大众榜</dt><dd>两张榜用的是同一批盲评，计票范围不同。Lv1+ 在精选题上的一票同时计入两张榜。</dd></div>` : `<div><dt>范围</dt><dd>「综合」合并全部题目的比较；各类型（文本 / 设计 / 三维）只统计该类题目，选择具体题目时只统计这道题。比较本身始终发生在同一道题之内。票数多的类型对综合影响更大，所以综合榜在厂商之后列出各类型名次。</dd></div>
     <div><dt>领域</dt><dd>选择领域时只统计属于该领域的题目，可以和类型叠加；一道题属于两个领域时，它的比较在两边都完整计入。领域内少于 ${THIN.tasks} 道题有比较、或有效比较少于 ${THIN.votes} 次时标为「样本不足」，名次仅供参考。</dd></div>
     <div><dt>计入</dt><dd>统计全部计票的选择，包括 Lv0 成员、未绑定邮箱的账号和未登录的访客（访客按浏览器区分）；同一用户对同一对作品只计一次，跳过不计。同一配置（按模型时为同一模型）的两件作品之间的比较不参与计分，也不计入有效比较数。作品被标记存疑或删除后，相关投票自动移出，恢复后重新计入。</dd></div>`}
     <div><dt>单位</dt><dd>「按配置」把同一模型的不同推理档位分开计分；「按模型」把它们合并。</dd></div>
-    <div><dt>显示</dt><dd>默认隐藏当前榜单作品少于 5 件的条目，可勾选显示。评分和名次保留，「暂定」仍按比较次数标记。</dd></div>
+    <div><dt>显示</dt><dd>每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。比较少于 30 场仍标为「暂定」。</dd></div>
     <div><dt>来源筛选</dt><dd>按 Harness 或服务商筛选时，只统计两件作品在投票当时都满足条件的比较；计分单位不变。服务商分为官方、非官方，未填写的为「未注明」；只填了「其他」的 Harness 和未记录来源的较早投票按「未注明」统计。</dd></div>
     <div><dt>不计分</dt><dd>表情互动与浏览次数都不影响榜单。</dd></div>
     <div><dt>更新</dt><dd>每 10 分钟计算一次，新投票将在下一次更新时计入。</dd></div>
@@ -119,8 +120,8 @@ export function mountBoard(container, ctx) {
       ? '统计认证成员的新选择，并纳入普通管理员和高级管理员的历史有效票；只计精选题，和大众榜分开计票。'
       : '这里只统计 Lv1 及以上成员在精选题上的选择，和大众榜分开计票。';
     return votes
-      ? `<div class="board-empty"><p class="board-empty-title">精选榜收集中</p><p>已有 ${votes} 次有效比较，${data.scope?.provisionalModels ?? 0} 个模型正在积累，满 ${data.scope?.provisionalGames ?? 30} 次比较后上榜。</p><p class="board-meta">${counts}</p><div class="board-empty-actions">${go}</div></div>`
-      : `<div class="board-empty"><p class="board-empty-title">精选榜等待比较</p><p>${explanation}模型在本榜比较满 ${data.scope?.provisionalGames ?? 30} 次后上榜，在那之前不给出没有依据的名次。</p><p class="board-meta">${counts}</p><div class="board-empty-actions">${go}</div></div>`;
+      ? `<div class="board-empty"><p class="board-empty-title">精选榜收集中</p><p>已有 ${votes} 次有效比较，模型或配置在本榜范围内至少有 ${data.minimumGames ?? 21} 场有效比较才显示。</p><p class="board-meta">${counts}</p><div class="board-empty-actions">${go}</div></div>`
+      : `<div class="board-empty"><p class="board-empty-title">精选榜等待比较</p><p>${explanation}模型或配置在本榜至少有 ${data.minimumGames ?? 21} 场有效比较后上榜，在那之前不给出没有依据的名次。</p><p class="board-meta">${counts}</p><div class="board-empty-actions">${go}</div></div>`;
   }
 
   function table(data) {
@@ -138,7 +139,8 @@ export function mountBoard(container, ctx) {
       : `<div class="board-head"><p class="board-meta">${meta}</p>${unitControl}</div>`)
       + `<p class="board-meta"><span>每 10 分钟更新一次</span>${data.updatedAt ? ` · <span>最近计算</span> <time datetime="${esc(data.updatedAt)}" data-i18n-time="${esc(data.updatedAt)}">${esc(formatTime(data.updatedAt))}</time>` : ''}</p>`
       + `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>`
-      + (ctx.curated && unit === 'config' ? '<p class="muted">入榜资格按模型判断，单独配置比较不足 30 次时仍标为暂定。</p>' : '')
+      + '<p class="muted">当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。</p>'
+      + (ctx.curated && unit === 'config' ? '<p class="muted">入榜同时要求模型与当前配置各有至少 21 场有效比较。</p>' : '')
       + (ctx.curated && rows.length && totals.votes < 50 ? `<p class="muted">精选榜刚开始计票：目前 ${totals.votes} 次有效比较，名次可能随新票大幅变动。</p>` : '')
       + (unsupported ? '<p class="muted">后端暂不支持这项筛选，下面是未筛选的榜单。</p>' : '')
       + (thin ? `<p class="muted">样本不足：「${esc(ctx.domain)}」目前只有 ${totals.tasks ?? 0} 道题、${totals.votes} 次有效比较参与计分，名次可能随新票大幅变动，仅供参考。</p>` : '');
