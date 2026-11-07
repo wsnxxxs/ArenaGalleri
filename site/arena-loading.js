@@ -1,20 +1,30 @@
 // A draw has one deadline across random-task fallbacks. Cancelled/late responses
 // must never install a pair after the reader has left or started another draw.
-export function loadPair(read, { timeout = 30_000 } = {}) {
-  const controller = new AbortController();
+function withDeadline(read, controller, timeout, expired) {
   let reject;
   const cancelled = new Promise((_, fail) => { reject = fail; });
   const onAbort = () => reject(controller.signal.reason);
   controller.signal.addEventListener('abort', onAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(Object.assign(new Error('抽取作品超时，请重试'), { code: 'match-timeout' })), timeout);
-  const promise = Promise.race([Promise.resolve().then(() => {
+  const timer = setTimeout(() => controller.abort(expired), timeout);
+  return Promise.race([Promise.resolve().then(() => {
     controller.signal.throwIfAborted();
     return read(controller.signal);
   }), cancelled]).finally(() => {
     clearTimeout(timer);
     controller.signal.removeEventListener('abort', onAbort);
   });
-  return { promise, cancel: () => controller.abort(new DOMException('Pair cancelled', 'AbortError')) };
+}
+
+export function loadPair(read, { timeout = 30_000 } = {}) {
+  const controller = new AbortController();
+  const expired = Object.assign(new Error('抽取作品超时，请重试'), { code: 'match-timeout' });
+  return { promise: withDeadline(read, controller, timeout, expired), cancel: () => controller.abort(new DOMException('Pair cancelled', 'AbortError')) };
+}
+
+// Keep the deadline active through the response body. A timed-out write may have reached
+// the server, so the caller must decide how to recover without resending automatically.
+export function writeWithDeadline(write, { controller = new AbortController(), timeout = 15_000 } = {}) {
+  return withDeadline(write, controller, timeout, new DOMException('Arena write timed out', 'TimeoutError'));
 }
 
 // A side is ready only when its own document says so: the work shell forwards the plain

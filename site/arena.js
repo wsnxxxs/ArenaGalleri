@@ -8,7 +8,7 @@ import { aigcLabel } from './legal.js';
 import { domainsOf, matchesQuery, tracksOf, votedTask } from './categories.js';
 import { linkReferences, referenceSheet } from './references.js';
 import { languageButton, setPageTitle } from './i18n.js';
-import { createHold, loadPair, watchFrameLoad } from './arena-loading.js';
+import { createHold, loadPair, watchFrameLoad, writeWithDeadline } from './arena-loading.js';
 import { loadTurnstile, mountTurnstile } from './turnstile.js';
 import { curatedInfo, curatedKnown } from './curated.js';
 
@@ -155,7 +155,7 @@ function lobby(root, ctx) {
           <summary>盲评规则${icon('next')}</summary>
           <dl>
             <div><dt>匿名</dt><dd>两件作品来自同一道题、不同的模型配置。左右位置随机，作品地址也不透露身份，投票后才揭晓。揭晓过的作品会尽量在你再评 6 组或过 15 分钟后才再次出现。</dd></div>
-            <div><dt>体验</dt><dd>分别打开、操作两件作品，再选「A 更好」「B 更好」或「不分伯仲」。两件作品都载入后，5 秒后才能投票，3 秒后才能跳过。认出作品或页面异常时，请跳过这一组；跳过不揭晓。</dd></div>
+            <div><dt>体验</dt><dd>分别打开、操作两件作品，再选「A 更好」「B 更好」或「不分伯仲」。两件作品都载入后，访客和普通成员等待 5 秒可投票、3 秒可跳过。管理员无需等待。认出作品或页面异常时，请跳过这一组；跳过不揭晓。</dd></div>
             <div><dt>计入</dt><dd>所有选择都计入大众榜，包括未登录和未绑定邮箱的访客，每对作品每人计一次。Lv1 及以上成员在精选题上的选择同时计入精选榜。只有已验证作品参与；普通用户会回避本人投稿，普通管理员和高级管理员可以评本人投稿。</dd></div>
             <div><dt>快捷键</dt><dd><kbd>A</kbd> A 更好，<kbd>S</kbd> 不分伯仲，<kbd>D</kbd> B 更好，揭晓后 <kbd>N</kbd> 下一组。</dd></div>
           </dl>
@@ -204,7 +204,8 @@ function match(root, ctx, first, scope) {
   const hold = createHold(() => tickGate());
   let shownStatus = '', shownAsk = null;
   let activeDraw = null, drawGeneration = 0;
-  let owner = accountVersion(), policyController = null, placeController = null;
+  let owner = accountVersion(), policyController = null, placeController = null, readyController = null, voteController = null;
+  let readyRequest = null;
   const owns = (current, version) => alive && version === accountVersion() && state.match === current;
   const later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); };
 
@@ -302,23 +303,35 @@ function match(root, ctx, first, scope) {
   const live = (text) => { const node = $('[data-live]', el); if (node) node.textContent = text; };
 
   const stopGate = () => hold.stop();
-  const resetGate = () => { hold.reset(); shownStatus = ''; };
-  // The server's clock decides at the earliest; the local count never opens sooner than 5 seconds of attention.
-  function startGate() {
+  const resetGate = () => { readyController?.abort(); hold.reset(); shownStatus = ''; };
+  // The local countdown measures visible time, and the server may hold the gate longer.
+  function startGate(side) {
     const current = state.match, version = accountVersion();
     resetGate();
-    hold.begin();
-    if (document.hidden) hold.stop();
-    live(`${seconds(viewMs())} 秒后可以投票`);
-    api(`arena/matches/${current.id}/ready`, { method: 'POST', body: {} }).then((ready) => {
-      if (!owns(current, version) || state.result) return;
-      const after = (iso) => performance.now() + Date.parse(iso) - Date.parse(ready.serverNow);
+    if (!document.hidden && (viewMs() > 0 || skipMs() > 0)) hold.begin();
+    if (viewMs() > 0) live(`${seconds(viewMs())} 秒后可以投票`);
+    else if (canVote() && !state.busy) live('现在可以投票');
+    const controller = new AbortController();
+    readyController = controller;
+    readyRequest = writeWithDeadline((signal) => api(`arena/matches/${current.id}/ready`, { method: 'POST', body: {}, signal }), { controller }).then((ready) => {
+      if (!owns(current, version) || state.result || controller.signal.aborted) return;
+      const serverNow = Date.parse(ready.serverNow);
+      const after = (iso) => {
+        const remaining = Date.parse(iso) - serverNow;
+        return remaining > 0 ? performance.now() + remaining : 0;
+      };
       hold.mark('vote', after(ready.voteAllowedAt));
       hold.mark('skip', after(ready.skipAllowedAt));
       if (!document.hidden && (voteWait() > 0 || skipWait() > 0)) hold.resume();
       syncGate();
-    }).catch(() => { /* a vote sent too early is answered with match_not_ready and asks again */ });
-    update();
+    }).catch(() => { /* a vote sent too early is answered with match_not_ready and asks again */ })
+      .finally(() => {
+        if (readyController !== controller) return;
+        readyController = null;
+        readyRequest = null;
+      });
+    if (side) drawHeads([side]);
+    drawBar();
   }
   function tickGate() {
     if (!state.match || state.result || !bothReady()) return stopGate();
@@ -344,6 +357,7 @@ function match(root, ctx, first, scope) {
     if (!state.match) return '正在抽取一组作品…';
     if (state.held) return '你的选择已保留，确认后立即提交';
     if (state.needVerify) return '需要完成人机验证才能提交这一票';
+    if (state.busy) return '正在提交选择…';
     if (!bothReady()) {
       const parts = ['a', 'b'].map((side) => `${letter(side)} ${state.ready[side] ? '已就绪' : state.loadErrors?.[side] ? '载入超时' : '载入中'}`).join(' · ');
       return state.slow ? `载入较慢（${parts}）：可以继续等待，或跳过这一组` : `等待两件作品载入 · ${parts}`;
@@ -363,10 +377,11 @@ function match(root, ctx, first, scope) {
     const node = $('[data-status]', bar);
     if (node && shownStatus !== text) { shownStatus = text; node.textContent = text; }
     const disabled = !(canVote() && !state.busy);
-    $$('.vote-actions [data-vote]', bar).forEach((b) => { b.disabled = disabled; });
+    $$('.vote-actions [data-vote]', bar).forEach((b) => { if (b.disabled !== disabled) b.disabled = disabled; });
     const skip = $('.vote-skip', bar);
     const label = skipLabel();
-    if (skip.disabled !== !(canSkip())) skip.disabled = !canSkip();
+    const skipDisabled = !canSkip();
+    if (skip.disabled !== skipDisabled) skip.disabled = skipDisabled;
     if (skip.dataset.label !== label) { skip.dataset.label = label; skip.textContent = label; }
     const line = $('[data-gate]', bar);
     if (line && voteWait() <= 0) line.classList.add('is-done');
@@ -462,11 +477,11 @@ function match(root, ctx, first, scope) {
     $('.q-toggle', el)?.focus({ preventScroll: true });
   }
 
-  function drawHeads() {
+  function drawHeads(sides = ['a', 'b']) {
     // The strip comes off once, on the draw that first shows the names.
     const unseal = revealed() && !state.unsealed;
     if (revealed()) state.unsealed = true;
-    for (const side of ['a', 'b']) {
+    for (const side of sides) {
       $(`[data-head="${side}"]`, el).innerHTML = revealed() ? revealHead(side, unseal) : blindHead(side);
       $(`[data-side="${side}"].arena-pane`, el).classList.toggle('chosen', state.result?.choice === side);
       const dot = $(`[data-dot="${side}"]`, el);
@@ -480,6 +495,7 @@ function match(root, ctx, first, scope) {
   function drawSide() {
     el.dataset.side = state.side;
     $$('[data-a="side"]', el).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === state.side)));
+    drawMobileControls();
   }
 
   // Each pane head carries its own controls toggle (once that work reports controls) and the
@@ -489,22 +505,23 @@ function match(root, ctx, first, scope) {
     const shown = Boolean(state.controlsShown[side]);
     const full = layout() === side;
     const label = `${shown ? '收起' : '显示'}${name} 的控件`;
-    const controls = state.controls[side] > 0
+    const controls = state.controls[side]
       ? `<button class="pane-tool" data-a="controls" data-side="${side}" aria-pressed="${shown}" title="${label}" aria-label="${label}">${icon('menu')}<span>控件</span></button>`
       : '';
     const fit = full ? '恢复并排' : `只看${name}`;
     return `<span class="arena-tools" data-tools="${side}">${controls}<button class="pane-close arena-fit" data-layout="${full ? 'ab' : side}" title="${fit}" aria-label="${fit}">${icon(full ? 'split' : 'full')}</button></span>`;
   }
 
-  function drawControls() {
-    for (const side of ['a', 'b']) {
-      const tools = $(`[data-tools="${side}"]`, el);
-      if (tools) tools.outerHTML = paneTools(side);
-    }
+  function drawControls(side) {
+    const tools = $(`[data-tools="${side}"]`, el);
+    if (tools) tools.outerHTML = paneTools(side);
+  }
+
+  function drawMobileControls() {
     // Phones show one work at a time, so the switch row carries the toggle for the work on view.
     const phone = $('.arena-mcontrols', el);
     const label = `${state.controlsShown[state.side] ? '收起' : '显示'}作品 ${letter(state.side)} 的控件`;
-    phone.hidden = !(state.controls[state.side] > 0);
+    phone.hidden = !state.controls[state.side];
     phone.setAttribute('aria-pressed', String(Boolean(state.controlsShown[state.side])));
     phone.setAttribute('aria-label', label);
     phone.title = label;
@@ -520,19 +537,24 @@ function match(root, ctx, first, scope) {
   // collapsed frame keeps a full-size viewport out of sight, so the work neither reloads nor sees a sliver.
   const SNAP = 0.1;
   const layout = () => state.split === 1 ? 'a' : state.split === 0 ? 'b' : 'ab';
+  let shownLayout;
   function drawSplit() {
     const bar = $('.split-bar', el);
     if (!bar) return;
     const stage = $('.arena-stage', el);
     const percent = Math.round(state.split * 100);
-    stage.style.setProperty('--split', state.split);
     stage.style.setProperty('--stage-w', `${stage.clientWidth}px`);
+    stage.style.setProperty('--split', state.split);
     $('[data-side="a"].arena-pane', el).classList.toggle('is-collapsed', state.split === 0);
     $('[data-side="b"].arena-pane', el).classList.toggle('is-collapsed', state.split === 1);
     bar.setAttribute('aria-valuenow', String(percent));
     $('.split-read', bar).textContent = `A ${percent} · B ${100 - percent}`;
     $$('.arena-layout [data-layout]', el).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.layout === layout() && (layout() !== 'ab' || state.split === 0.5))));
-    drawControls();
+    if (layout() !== shownLayout) {
+      shownLayout = layout();
+      drawControls('a');
+      drawControls('b');
+    }
   }
   function remember() {
     if (state.split > 0 && state.split < 1) state.lastSplit = state.split;
@@ -547,7 +569,9 @@ function match(root, ctx, first, scope) {
     drawSplit();
   }
   function setSplit(value) {
-    state.split = value < SNAP ? 0 : value > 1 - SNAP ? 1 : Math.abs(value - 0.5) < 0.02 ? 0.5 : Math.round(value * 1000) / 1000;
+    const split = value < SNAP ? 0 : value > 1 - SNAP ? 1 : Math.abs(value - 0.5) < 0.02 ? 0.5 : Math.round(value * 1000) / 1000;
+    if (split === state.split) return;
+    state.split = split;
     drawSplit();
   }
 
@@ -556,15 +580,19 @@ function match(root, ctx, first, scope) {
     for (const side of ['a', 'b']) {
       const frame = currentFrame(side);
       if (!frame || event.source !== frame.contentWindow || event.origin !== new URL(frame.src).origin) continue;
-      state.controls[side] = event.data.count;
-      drawControls();
+      if (!state.controls[side]) {
+        state.controls[side] = true;
+        drawControls(side);
+        if (state.side === side) drawMobileControls();
+      }
+      // A work can navigate inside its frame. Its replacement document still needs the fold state.
       syncControls(side);
       break;
     }
   };
   addEventListener('message', onFold);
 
-  const update = () => { drawHeads(); drawBar(); drawSide(); drawControls(); };
+  const update = () => { drawHeads(); drawBar(); drawSide(); };
 
   function layer(src, side) {
     const node = document.createElement('div');
@@ -579,15 +607,15 @@ function match(root, ctx, first, scope) {
         delete state.loadErrors[side];
         syncControls(side);
         later(() => $('.loader', node)?.classList.add('gone'), 300);
-        if (bothReady()) startGate();
-        else update();
+        if (bothReady()) startGate(side);
+        else { drawHeads([side]); syncGate(); }
       },
       onSlow() {
         if (!alive || !node.isConnected || currentFrame(side) !== iframe) return;
         state.loadErrors[side] = true;
         state.slow = true;
         $('.loader', node).innerHTML = `<span>作品 ${letter(side)} 尚未完成载入</span><span>可以重新载入这一侧，或继续等待。</span><button class="btn" data-a="reload" data-side="${side}">重新载入作品 ${letter(side)}</button>`;
-        update();
+        syncGate();
       },
     }));
     return node;
@@ -604,15 +632,24 @@ function match(root, ctx, first, scope) {
   }
 
   // The page follows the task on view: heading, prompt drawer, leaderboard link.
+  let promptDrawn = false;
+  function drawPrompt() {
+    if (promptDrawn) return;
+    $('[data-prompt-body]', el).innerHTML = `${referenceSheet(task.references, { key: task.id, credit: task.referenceCredit })}
+        <pre class="arena-prompt-text">${linkReferences(task.prompt, task.references, task.id)}</pre>`;
+    promptDrawn = true;
+    $('.guide', el).scrollTop = 0;
+  }
+
   function setTask(t) {
     task = t;
     setPageTitle(['盲评', { text: t.title, original: true }]);
     $('[data-title]', el).textContent = t.title;
     $('[data-prompt-title]', el).textContent = t.title;
     $('[data-board]', el).href = `#/leaderboard/${t.id}`;
-    $('[data-prompt-body]', el).innerHTML = `${referenceSheet(t.references, { key: t.id, credit: t.referenceCredit })}
-        <pre class="arena-prompt-text">${linkReferences(t.prompt, t.references, t.id)}</pre>`;
-    $('.guide', el).scrollTop = 0;
+    if (promptDrawn && !state.prompt) $('[data-prompt-body]', el).replaceChildren();
+    promptDrawn = false;
+    if (state.prompt) drawPrompt();
   }
 
   function drawMode() {
@@ -836,18 +873,21 @@ function match(root, ctx, first, scope) {
     const previous = state.match?.id;
     const earlier = task;
     const ahead = state.prefetch;
+    const prefetched = Boolean(ahead?.match);
     state.prefetch = null;
     $('.arena-switched', el)?.remove();
     // Every pair starts side by side at an even split, so the last pair's layout favours neither.
     Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, loadErrors: {}, seen: { a: true }, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', slow: false, held: null, needVerify: null, step: 'overall', aspectPick: null });
-    drawSplit();
-    for (const body of $$('[data-body]', el)) {
-      body.innerHTML = `<div class="arena-layer">${loader(body.dataset.body, '正在抽取一组作品')}</div>`;
+    if (!prefetched) {
+      drawSplit();
+      for (const body of $$('[data-body]', el)) {
+        body.innerHTML = `<div class="arena-layer">${loader(body.dataset.body, '正在抽取一组作品')}</div>`;
+      }
+      update();
     }
-    update();
     try {
       let challenge = null;
-      if (ahead) {
+      if (ahead && !prefetched) {
         const settled = ahead.settled;
         activeDraw = ahead;
         await ahead.promise;
@@ -889,7 +929,7 @@ function match(root, ctx, first, scope) {
       frame('a');
       frame('b');
       const current = state.match;
-      later(() => { if (state.match === current && !bothReady()) { state.slow = true; update(); } }, 25000);
+      later(() => { if (state.match === current && !bothReady()) { state.slow = true; syncGate(); } }, 25000);
     } catch (error) {
       if (!alive || generation !== drawGeneration || error.name === 'AbortError') return;
       state.busy = false;
@@ -898,6 +938,7 @@ function match(root, ctx, first, scope) {
       if (generation === drawGeneration) activeDraw = null;
     }
     state.busy = false;
+    if (prefetched) drawSplit();
     update();
   }
 
@@ -924,14 +965,42 @@ function match(root, ctx, first, scope) {
   }
   // A pick is a, b, good, bad or skip: 都很好 and 都不好 are ties that say which kind. The aspect answer rides along.
   const tieOf = (pick) => (pick === 'good' || pick === 'bad' ? { choice: 'tie', tieKind: pick } : { choice: pick });
-  const postVote = (match, pick, turnstileToken) => api(`arena/matches/${match.id}/vote`, { method: 'POST', body: { ...tieOf(pick),
-    ...(match.aspect && state.aspectPick && pick !== 'skip' ? { aspect: { id: match.aspect.id, ...tieOf(state.aspectPick) } } : {}),
-    ...(turnstileToken ? { turnstileToken } : {}) } });
+  function postVote(match, pick, turnstileToken) {
+    const version = accountVersion();
+    voteController?.abort();
+    const controller = new AbortController();
+    voteController = controller;
+    const body = { ...tieOf(pick),
+      ...(match.aspect && state.aspectPick && pick !== 'skip' ? { aspect: { id: match.aspect.id, ...tieOf(state.aspectPick) } } : {}),
+      ...(turnstileToken ? { turnstileToken } : {}) };
+    // An immediate vote can be picked before the ready write returns. Send it after
+    // that write, using the same deadline for both the wait and vote confirmation.
+    const pendingReady = pick !== 'skip' && match.minViewSeconds === 0 ? readyRequest : null;
+    return writeWithDeadline(async (signal) => {
+      if (pendingReady) await pendingReady;
+      signal.throwIfAborted();
+      if (!owns(match, version)) throw new DOMException('Vote cancelled', 'AbortError');
+      return api(`arena/matches/${match.id}/vote`, { method: 'POST', body, signal });
+    }, { controller }).finally(() => { if (voteController === controller) voteController = null; });
+  }
 
   function finishVote() {
     state.busy = false;
-    update();
-    if (state.result) prefetch();
+    if (state.result) {
+      update();
+      prefetch();
+    } else drawBar();
+  }
+
+  function failedVote(error) {
+    if (error.code === 'match_decided') {
+      toast('这一组已提交，正在载入下一组。');
+      state.busy = false;
+      return next();
+    }
+    toast(error.name === 'TimeoutError' ? '提交结果未确认，请重试或跳过。已提交的选择不会更改。' : error.message);
+    if (error.status === 404) { state.busy = false; return next(); }
+    finishVote();
   }
 
   // The server asks for a check on this vote. The pick is kept and sent again once the person is confirmed.
@@ -949,11 +1018,8 @@ function match(root, ctx, first, scope) {
     humanSheet = null;
     state.held = null;
     if (answer?.value) { accept(answer.value, tieOf(choice).choice); return finishVote(); }
-    if (answer?.error) {
-      toast(answer.error.message);
-      if (answer.error.status === 404) { state.busy = false; return next(); }
-      return finishVote();
-    }
+    if (answer?.error) return failedVote(answer.error);
+    voteController?.abort();
     state.needVerify = { choice, challenge };
     finishVote();
   }
@@ -961,9 +1027,11 @@ function match(root, ctx, first, scope) {
   async function vote(choice) {
     if (!alive || state.busy || state.result || !state.match || (choice === 'skip' ? !canSkip() : !canVote())) return;
     const current = state.match, version = accountVersion();
+    const neededVerification = state.needVerify;
     state.busy = true;
     state.needVerify = null;
-    drawBar();
+    if (neededVerification) drawBar();
+    else syncGate();
     try {
       const result = await postVote(current, choice);
       if (!owns(current, version)) return;
@@ -972,7 +1040,7 @@ function match(root, ctx, first, scope) {
       if (!owns(current, version)) return;
       if (error.code === 'turnstile_required') return verifyVote(choice, error.data?.challenge);
       if (error.code === 'match_not_ready') {
-        // The server never saw this pair become ready: tell it again and count the five seconds anew.
+        // The server never saw this pair become ready: tell it again and restart any hold.
         state.busy = false;
         if (bothReady()) startGate();
         else update();
@@ -988,14 +1056,14 @@ function match(root, ctx, first, scope) {
         toast('请再多看一会儿再投票');
         return;
       }
-      toast(error.message);
-      if (error.status === 404) { state.busy = false; return next(); }
+      return failedVote(error);
     }
     finishVote();
   }
 
   function togglePrompt(force) {
     state.prompt = force ?? !state.prompt;
+    if (state.prompt) drawPrompt();
     el.classList.toggle('guide-open', state.prompt);
     $$('[data-a="prompt"]', el).forEach((b) => b.setAttribute('aria-pressed', String(state.prompt)));
   }
@@ -1029,16 +1097,23 @@ function match(root, ctx, first, scope) {
       const side = action.dataset.side ?? state.side;
       state.controlsShown[side] = !state.controlsShown[side];
       syncControls(side);
-      drawControls();
+      drawControls(side);
+      if (state.side === side) drawMobileControls();
     }
     else if (kind === 'reload' && state.match && !revealed()) {
-      frame(action.dataset.side ?? state.side);
-      update();
+      const side = action.dataset.side ?? state.side;
+      frame(side);
+      drawHeads([side]);
+      drawBar();
+      if (state.side === side) drawMobileControls();
     }
     else if (kind === 'side') {
+      const couldVote = canVote();
       state.side = action.dataset.side;
       state.seen[state.side] = true;
-      update();
+      drawSide();
+      syncGate();
+      if (!couldVote && viewMs() === 0 && canVote() && !state.busy) live('现在可以投票');
     }
   });
   const onKey = (e) => {
@@ -1066,7 +1141,7 @@ function match(root, ctx, first, scope) {
   };
   document.addEventListener('keydown', onKey);
   const onResize = () => {
-    if (!state.result) drawBar();
+    syncGate();
     drawSplit();
   };
 
@@ -1201,10 +1276,11 @@ function match(root, ctx, first, scope) {
         activeDraw = null;
         policyController?.abort();
         placeController?.abort();
+        voteController?.abort();
         humanSheet?.close();
         notice?.close();
         dropPrefetch();
-        stopGate();
+        resetGate();
         frameLoads.forEach((stop) => stop());
         frameLoads.clear();
         state.match = state.result = state.held = state.needVerify = null;
@@ -1226,7 +1302,8 @@ function match(root, ctx, first, scope) {
       alive = false;
       policyController?.abort();
       placeController?.abort();
-      stopGate();
+      voteController?.abort();
+      resetGate();
       document.removeEventListener('visibilitychange', onVisibility);
       humanSheet?.close();
       drawGeneration++;
