@@ -26,7 +26,7 @@ test('sample visibility respects the five-work boundary without changing scores,
   }
 });
 
-test('full and embedded boards reveal small provisional entries locally and retain original callback data', async () => {
+test('single-question boards show small provisional entries by default and aggregate boards keep the toggle', async () => {
   const original = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener,
     fetch: globalThis.fetch, SAME_PROMPT_CONFIG: globalThis.SAME_PROMPT_CONFIG, localStorage: globalThis.localStorage };
   globalThis.document = Object.assign(new EventTarget(), { baseURI: 'https://gallery.test/', activeElement: null });
@@ -40,21 +40,31 @@ test('full and embedded boards reveal small provisional entries locally and reta
     calls++;
     const by = new URL(url).searchParams.get('by');
     return Response.json({ by, rows: [{ key: 'small', modelName: 'Small sample sentinel', model: 'small',
-      rank: 1, works: 4, score: 1300, interval: 100, games: 21, wins: 13, draws: 0, losses: 8, winRate: 13 / 21, provisional: true }],
+      rank: 1, works: 1, score: 1300, interval: 100, games: 21, wins: 13, draws: 0, losses: 8, winRate: 13 / 21, provisional: true }],
     unranked: [], totals: { votes: 21, voters: 3 }, provisionalGames: 30 });
   };
   try {
     const { mountBoard } = await import('../site/leaderboard.js');
-    for (const embedded of [false, true]) for (const by of ['config', 'model']) {
-      settings.set('board-unit', by); settings.delete('board-show-small-samples');
+    for (const scope of ['aggregate', 'question', 'embedded']) for (const by of ['config', 'model']) {
+      const task = scope === 'aggregate' ? undefined : { id: `visibility-${scope}-${by}` };
+      settings.set('board-unit', by); settings.set('board-show-small-samples', 'false');
       const container = Object.assign(new EventTarget(), { innerHTML: '', setAttribute() {}, removeAttribute() {},
         querySelector() { return null; }, querySelectorAll() { return []; } });
       let delivered, visibleRows;
-      const board = mountBoard(container, { embedded, task: { id: `visibility-${embedded}-${by}` },
+      const board = mountBoard(container, { embedded: scope === 'embedded', task,
         modelOf: row => ({ name: row.modelName, vendor: 'Test' }),
         onData(data, visibility) { delivered = data; visibleRows = visibility.visibleRows; } });
       try {
         await board.ready;
+        assert.equal(delivered.by, by);
+        if (task) {
+          assert.match(container.innerHTML, /Small sample sentinel/);
+          assert.match(container.innerHTML, /class="badge provisional"[^>]*>暂定/);
+          assert.doesNotMatch(container.innerHTML, /data-board-small|5 件/);
+          assert.equal(visibleRows, 1);
+          assert.equal(settings.get('board-show-small-samples'), 'false');
+          continue;
+        }
         assert.match(container.innerHTML, /当前没有作品数达到 5 件的条目/);
         assert.doesNotMatch(container.innerHTML, /Small sample sentinel/);
         assert.equal(visibleRows, 0); assert.equal(delivered.rows.length, 1);

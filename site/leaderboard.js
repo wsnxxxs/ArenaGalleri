@@ -53,7 +53,7 @@ export function boardTaskOptions(tasks, selected, activityReady, arena) {
   }).join('')}`;
 }
 // curated: { since, threshold } when the page shows a curated board, else null.
-export const boardNotes = (open = false, curated = null) => `<details class="board-notes"${open ? ' open' : ''}>
+export const boardNotes = (open = false, curated = null, limitWorks = true) => `<details class="board-notes"${open ? ' open' : ''}>
   <summary>计分方法${icon('next')}</summary>
   <dl>
     <div><dt>比较</dt><dd>盲评每次展示同一道题的两件作品，左右随机、身份隐藏，投票之后才揭晓模型。</dd></div>
@@ -66,7 +66,7 @@ export const boardNotes = (open = false, curated = null) => `<details class="boa
     <div><dt>领域</dt><dd>选择领域时只统计属于该领域的题目，可以和类型叠加；一道题属于两个领域时，它的比较在两边都完整计入。领域内少于 ${THIN.tasks} 道题有比较、或有效比较少于 ${THIN.votes} 次时标为「样本不足」，名次仅供参考。</dd></div>
     <div><dt>计入</dt><dd>统计全部计票的选择，包括 Lv0 成员、未绑定邮箱的账号和未登录的访客（访客按浏览器区分）；同一用户对同一对作品只计一次，跳过不计。同一配置（按模型时为同一模型）的两件作品之间的比较不参与计分，也不计入有效比较数。作品被标记存疑或删除后，相关投票自动移出，恢复后重新计入。</dd></div>`}
     <div><dt>单位</dt><dd>「按配置」把同一模型的不同推理档位分开计分；「按模型」把它们合并。</dd></div>
-    <div><dt>显示</dt><dd>每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。比较少于 30 场仍标为「暂定」。</dd></div>
+    <div><dt>显示</dt><dd>每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。${limitWorks ? '默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。' : ''}比较少于 30 场仍标为「暂定」。</dd></div>
     <div><dt>来源筛选</dt><dd>按 Harness 或服务商筛选时，只统计两件作品在投票当时都满足条件的比较；计分单位不变。服务商分为官方、非官方，未填写的为「未注明」；只填了「其他」的 Harness 和未记录来源的较早投票按「未注明」统计。</dd></div>
     <div><dt>不计分</dt><dd>表情互动与浏览次数都不影响榜单。</dd></div>
     <div><dt>更新</dt><dd>每 10 分钟计算一次，新投票将在下一次更新时计入。</dd></div>
@@ -78,6 +78,7 @@ export const boardNotes = (open = false, curated = null) => `<details class="boa
 const tone = (at) => `color-mix(in srgb, var(--ink) ${Math.round(at)}%, var(--line-2))`;
 
 export function mountBoard(container, ctx) {
+  const limitWorks = !ctx.task;
   let unit = store.get('board-unit') === 'model' ? 'model' : 'config';
   let showSmallSamples = store.get('board-show-small-samples') === 'true';
   let currentData = null;
@@ -124,10 +125,9 @@ export function mountBoard(container, ctx) {
       : `<div class="board-empty"><p class="board-empty-title">精选榜等待比较</p><p>${explanation}模型或配置在本榜至少有 ${data.minimumGames ?? 21} 场有效比较后上榜，在那之前不给出没有依据的名次。</p><p class="board-meta">${counts}</p><div class="board-empty-actions">${go}</div></div>`;
   }
 
-  function table(data) {
-    const { rows, unranked } = visibleBoardEntries(data, showSmallSamples);
+  function table(data, { rows, unranked }) {
     const { totals } = data;
-    const hiddenCount = data.rows.length + data.unranked.length - rows.length - unranked.length;
+    const hiddenCount = limitWorks && !showSmallSamples ? visibleBoardEntries(data, true).rows.length - rows.length : 0;
     const unsupported = (filterActive() && !data.filters) || (ctx.category && data.category === undefined) || (ctx.domain && data.domain === undefined);
     const thin = ctx.domain && data.domain !== undefined && rows.length && ((totals.tasks ?? 0) < THIN.tasks || totals.votes < THIN.votes);
     const meta = `${totals.votes} 次有效比较 · ${totals.voters} 位参与者 · ${rows.length} 个${unit === 'model' ? '模型' : '配置'}有评分${data.filters ? ' · 仅统计两件作品来源都符合筛选的比较' : ''}`;
@@ -138,13 +138,13 @@ export function mountBoard(container, ctx) {
       ? `<div class="collection-toolbar">${search}<div class="toolbar-actions">${typeof ctx.toolbar === 'function' ? ctx.toolbar() : ctx.toolbar ?? ''}${filterSelect('harness', 'Harness', ctx.HARNESSES)}${filterSelect('provider', '服务商', ctx.PROVIDERS)}${unitControl}</div></div>${data.filters ? '<p class="muted">仅统计两件作品来源都符合筛选的比较。</p>' : ''}`
       : `<div class="board-head"><p class="board-meta">${meta}</p>${unitControl}</div>`)
       + `<p class="board-meta"><span>每 10 分钟更新一次</span>${data.updatedAt ? ` · <span>最近计算</span> <time datetime="${esc(data.updatedAt)}" data-i18n-time="${esc(data.updatedAt)}">${esc(formatTime(data.updatedAt))}</time>` : ''}</p>`
-      + `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>`
+      + (limitWorks ? `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>` : '')
       + '<p class="muted">当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。</p>'
       + (ctx.curated && unit === 'config' ? '<p class="muted">入榜同时要求模型与当前配置各有至少 21 场有效比较。</p>' : '')
       + (ctx.curated && rows.length && totals.votes < 50 ? `<p class="muted">精选榜刚开始计票：目前 ${totals.votes} 次有效比较，名次可能随新票大幅变动。</p>` : '')
       + (unsupported ? '<p class="muted">后端暂不支持这项筛选，下面是未筛选的榜单。</p>' : '')
       + (thin ? `<p class="muted">样本不足：「${esc(ctx.domain)}」目前只有 ${totals.tasks ?? 0} 道题、${totals.votes} 次有效比较参与计分，名次可能随新票大幅变动，仅供参考。</p>` : '');
-    if (!rows.length && data.rows.length) {
+    if (!rows.length && hiddenCount) {
       return `${head}<div class="board-empty"><p class="board-empty-title">当前没有作品数达到 5 件的条目</p><p>勾选「显示作品少于 5 件的条目」可查看已有评分，暂定标记仍保留。</p></div>`;
     }
     if (!rows.length && data.filters) {
@@ -204,12 +204,13 @@ export function mountBoard(container, ctx) {
     // A fresh board can land while the reader types; the search keeps its focus.
     const typing = document.activeElement?.matches('[data-board-search]');
     const togglingSamples = document.activeElement?.matches('[data-board-small]');
-    container.innerHTML = table(data) + (ctx.embedded ? boardNotes() : '');
+    const visible = visibleBoardEntries(data, !limitWorks || showSmallSamples);
+    container.innerHTML = table(data, visible) + (ctx.embedded ? boardNotes(false, null, limitWorks) : '');
     if (typing) $('[data-board-search]', container)?.focus();
     if (togglingSamples) $('[data-board-small]', container)?.focus();
     applyQuery();
     currentData = data;
-    ctx.onData?.(data, { visibleRows: visibleBoardEntries(data, showSmallSamples).rows.length });
+    ctx.onData?.(data, { visibleRows: visible.rows.length });
     drawn = true;
   }
   // A board seen before draws at once from memory; the fresh one replaces it only if it differs.
@@ -271,7 +272,7 @@ export function mountBoard(container, ctx) {
     load();
   };
   const onChange = (e) => {
-    if (e.target.matches('[data-board-small]')) {
+    if (limitWorks && e.target.matches('[data-board-small]')) {
       showSmallSamples = e.target.checked;
       store.set('board-show-small-samples', String(showSmallSamples));
       if (currentData) draw(currentData);
@@ -394,7 +395,7 @@ export function mount(root, ctx) {
     </div>` })}
     <section class="block wrap">
       <div data-board><p class="muted">正在载入榜单…</p></div>
-      ${boardNotes(false, curated ? { since, threshold: 30 } : null)}
+      ${boardNotes(false, curated ? { since, threshold: 30 } : null, !task)}
     </section>
   ${ctx.pageEnd()}`;
     drawn = info;

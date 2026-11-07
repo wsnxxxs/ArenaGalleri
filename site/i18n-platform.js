@@ -7,6 +7,7 @@ const phrases = Object.fromEntries(`
 当前没有作品数达到 5 件的条目|No entries currently have at least 5 works
 勾选「显示作品少于 5 件的条目」可查看已有评分，暂定标记仍保留。|Select “Show entries with fewer than 5 works” to view existing ratings. Provisional labels are retained.
 每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。比较少于 30 场仍标为「暂定」。|Each model or configuration needs at least 21 valid comparisons within the current board to appear. Entries with fewer than 5 works are additionally hidden by default; the display option cannot bypass the comparison threshold. Entries with fewer than 30 comparisons remain provisional.
+每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。比较少于 30 场仍标为「暂定」。|Each model or configuration needs at least 21 valid comparisons within the current board to appear. Entries with fewer than 30 comparisons remain provisional.
 当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。|At least 21 valid comparisons in the current scope are required to appear; 21–29 comparisons are marked provisional.
 更新|Updates
 每 10 分钟计算一次，新投票将在下一次更新时计入。|Rankings are calculated every 10 minutes. New votes appear in the next update.
