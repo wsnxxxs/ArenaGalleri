@@ -2,7 +2,7 @@
 // match (#/arena/random) where every pair may come from a different task.
 // The server picks every pair and hands out opaque frame addresses; nothing on this page
 // knows which work is which until the vote comes back with the reveal.
-import { $, $$, brandMark, esc, icon, pad, store, themeButton } from './ui.js';
+import { $, $$, brandMark, esc, icon, pad, reducedMotion, store, themeButton } from './ui.js';
 import { accountVersion, api, arenaScope, isSenior, isStaff, levelOf, openAuth, openDialog, platform, reactionBar, requireUser, toast } from './platform.js';
 import { aigcLabel } from './legal.js';
 import { domainsOf, matchesQuery, tracksOf, votedTask } from './categories.js';
@@ -1312,23 +1312,42 @@ function match(root, ctx, first, scope) {
   });
   addEventListener('resize', onResize);
 
-  // Frames keep their own pointer events, so the peek listens on the stage that holds them. Folding waits a
-  // moment, so a pointer crossing the works on its way to the card does not fold it.
+  // Frames keep their own pointer events, so the peek listens on the stage that holds them. Both ways wait a
+  // little, folding a bit longer: a pointer that only crosses the works or the folded line changes nothing.
+  const PEEK_FOLD_MS = 150, PEEK_OPEN_MS = 50;
   let peekTimer = 0;
+  const queuePeek = (peek, ms) => {
+    clearTimeout(peekTimer);
+    peekTimer = setTimeout(() => setPeek(peek), ms);
+  };
   const setPeek = (peek) => {
     clearTimeout(peekTimer);
     if (state.peek === peek) return;
     state.peek = peek;
-    $('.vote-in.vote-q', el)?.classList.toggle('is-peek', peeking());
+    applyPeek();
   };
+  // Puts the card in the shape the peek asks for. It grows or shrinks from its bottom edge (the bar keeps its
+  // content at the bottom) while its new face fades in, so the status line stays put and the answers rise above
+  // it. A change caught mid-way starts from the height on screen. Reduced motion switches at once.
+  function applyPeek() {
+    const bar = $('[data-bar]', el), card = $('.vote-in.vote-q', bar);
+    if (!card || card.classList.contains('is-peek') === peeking()) return;
+    const running = bar.getAnimations().filter((animation) => animation.id === 'peek');
+    const from = bar.getBoundingClientRect().height;
+    running.forEach((animation) => animation.cancel());
+    card.classList.toggle('is-peek', peeking());
+    if (reducedMotion()) return;
+    const to = bar.getBoundingClientRect().height;
+    const easing = getComputedStyle(el).getPropertyValue('--ease').trim() || 'ease-out';
+    if (Math.abs(from - to) >= 1) bar.animate([{ height: `${from}px` }, { height: `${to}px` }], { id: 'peek', duration: 200, easing });
+    card.animate([{ opacity: 0 }, { opacity: 1 }], { id: 'peek', duration: 160, easing: 'ease-out' });
+  }
   const stage = $('.arena-stage', el);
   if (guided) {
-    stage.addEventListener('pointerenter', (e) => {
-      if (e.pointerType !== 'mouse') return;
-      clearTimeout(peekTimer);
-      peekTimer = setTimeout(() => setPeek(true), 400);
-    });
-    stage.addEventListener('pointerleave', () => setPeek(false));
+    stage.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') queuePeek(true, PEEK_FOLD_MS); });
+    stage.addEventListener('pointerleave', () => queuePeek(false, PEEK_OPEN_MS));
+    // A key that brings focus into a folded card opens it.
+    $('[data-bar]', el).addEventListener('focusin', applyPeek);
   }
 
   // Someone not signed in is counted too, in the public rankings. Say so once a session, before the first

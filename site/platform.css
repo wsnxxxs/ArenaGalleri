@@ -1285,6 +1285,8 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
     width: min(580px, calc(100% - 40px)); margin-inline: auto; overflow: hidden;
     border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--raised); box-shadow: var(--shadow-lg);
     animation: q-float-in 0.45s var(--ease) both;
+    /* The card's content sits at its bottom edge, so a peek grows and shrinks it upwards (arena.js applyPeek). */
+    display: flex; flex-direction: column; justify-content: flex-end;
   }
   .arena.q-float.guide-open .vote-bar { right: 344px; width: min(580px, calc(100% - 384px)); }
   .q-float .vote-gate { top: 0; }

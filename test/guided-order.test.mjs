@@ -184,3 +184,29 @@ test('leaving the page during the thanks stops every skip-reason observer and ti
   }
   assert.ok(cleared.length >= 3, 'their countdowns are cleared too');
 });
+
+test('the peek waits a little each way, animates from the height on screen and switches at once with reduced motion', () => {
+  for (const reduced of [false, true]) {
+    const timers = [], animations = [];
+    let height = 187;
+    const card = { classList: { on: false, contains() { return this.on; }, toggle(name, on) { this.on = on; height = on ? 42 : 187; } },
+      animate: (frames, options) => animations.push({ who: 'card', frames, options }) };
+    const bar = { getAnimations: () => [], getBoundingClientRect: () => ({ height }), animate: (frames, options) => animations.push({ who: 'bar', frames, options }) };
+    const e = { state: { peek: false }, el: {}, peeking: () => e.state.peek, reducedMotion: () => reduced,
+      getComputedStyle: () => ({ getPropertyValue: () => ' cubic-bezier(0.2, 0.7, 0.2, 1)' }),
+      $: (selector) => (selector === '[data-bar]' ? bar : card),
+      setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout() {} };
+    vm.runInNewContext(chunk('  const PEEK_FOLD_MS', '\n  const stage = ') + '\nglobalThis.t = { queuePeek, setPeek, PEEK_FOLD_MS, PEEK_OPEN_MS };', e);
+    assert.ok(e.t.PEEK_FOLD_MS <= 200 && e.t.PEEK_OPEN_MS < e.t.PEEK_FOLD_MS, 'folding waits briefly, opening even less');
+    e.t.queuePeek(true, e.t.PEEK_FOLD_MS);
+    assert.equal(card.classList.on, false, 'nothing changes before the wait is over');
+    timers.at(-1).fn();
+    assert.equal(card.classList.on, true);
+    if (reduced) { assert.equal(animations.length, 0); continue; }
+    const grow = animations.find((a) => a.who === 'bar');
+    assert.deepEqual(JSON.parse(JSON.stringify(grow.frames)), [{ height: '187px' }, { height: '42px' }]);
+    assert.equal(grow.options.id, 'peek');
+    assert.equal(grow.options.easing, 'cubic-bezier(0.2, 0.7, 0.2, 1)');
+    assert.ok(animations.some((a) => a.who === 'card' && a.frames[0].opacity === 0), 'the new face fades in');
+  }
+});
