@@ -204,6 +204,8 @@ function match(root, ctx, first, scope) {
   const state = { random: Boolean(scope), scope: scope ?? ctx.DATA.tasks.filter(isOpen), pin: pinned(), tally: { win: 0, tie: 0, loss: 0 }, place: '', done: new Set(), unavailable: false, prefetch: null, match: null, result: null, ready: {}, seen: {}, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', round: 0, counted: 0, busy: false, prompt: false, slow: false, error: null, held: null, needVerify: null, step: 'overall', aspectPick: null, overallPick: null, compact: store.get(COMPACT) === '1', peek: false, hint: false };
   const mobile = () => matchMedia('(max-width: 860px)').matches;
   const timers = new Set(), frameLoads = new Map();
+  // The peek's running height and fade animations (applyPeek); anything that redraws the card stops them.
+  const peekMotion = new Set();
   // Two holds start when both works have loaded: 5 seconds before a vote, 3 before a skip.
   const hold = createHold(() => tickGate());
   let shownStatus = '', shownAsk = null;
@@ -414,6 +416,8 @@ function match(root, ctx, first, scope) {
 
   function drawBar() {
     const bar = $('[data-bar]', el);
+    // A new card takes its own natural height at once: a fold or unfold still under way would clip it.
+    stopPeekMotion();
     if (state.error) {
       bar.innerHTML = '';
       return;
@@ -1270,6 +1274,7 @@ function match(root, ctx, first, scope) {
   };
   document.addEventListener('keydown', onKey);
   const onResize = () => {
+    stopPeekMotion();
     syncGate();
     drawSplit();
   };
@@ -1332,22 +1337,34 @@ function match(root, ctx, first, scope) {
   function applyPeek() {
     const bar = $('[data-bar]', el), card = $('.vote-in.vote-q', bar);
     if (!card || card.classList.contains('is-peek') === peeking()) return;
-    const running = bar.getAnimations().filter((animation) => animation.id === 'peek');
     const from = bar.getBoundingClientRect().height;
-    running.forEach((animation) => animation.cancel());
+    stopPeekMotion();
     card.classList.toggle('is-peek', peeking());
     if (reducedMotion()) return;
     const to = bar.getBoundingClientRect().height;
     const easing = getComputedStyle(el).getPropertyValue('--ease').trim() || 'ease-out';
-    if (Math.abs(from - to) >= 1) bar.animate([{ height: `${from}px` }, { height: `${to}px` }], { id: 'peek', duration: 200, easing });
-    card.animate([{ opacity: 0 }, { opacity: 1 }], { id: 'peek', duration: 160, easing: 'ease-out' });
+    if (Math.abs(from - to) >= 1) track(bar.animate([{ height: `${from}px` }, { height: `${to}px` }], { id: 'peek', duration: 200, easing }));
+    track(card.animate([{ opacity: 0 }, { opacity: 1 }], { id: 'peek', duration: 160, easing: 'ease-out' }));
+  }
+  // Each animation is held until it ends, so it can be stopped even after its card has been replaced.
+  function track(animation) {
+    peekMotion.add(animation);
+    animation.finished.then(() => peekMotion.delete(animation), () => peekMotion.delete(animation));
+  }
+  function stopPeekMotion() {
+    peekMotion.forEach((animation) => animation.cancel());
+    peekMotion.clear();
+  }
+  // Focus that a key brings into a folded card opens it. A mouse focusing a button on its way to a click
+  // changes nothing, so the click lands where it was aimed (for instance on 收起).
+  function openOnKeyFocus(event) {
+    if (event.target.matches?.(':focus-visible') && $('.vote-in.is-peek', el)) applyPeek();
   }
   const stage = $('.arena-stage', el);
   if (guided) {
     stage.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') queuePeek(true, PEEK_FOLD_MS); });
     stage.addEventListener('pointerleave', () => queuePeek(false, PEEK_OPEN_MS));
-    // A key that brings focus into a folded card opens it.
-    $('[data-bar]', el).addEventListener('focusin', applyPeek);
+    $('[data-bar]', el).addEventListener('focusin', openOnKeyFocus);
   }
 
   // Someone not signed in is counted too, in the public rankings. Say so once a session, before the first
@@ -1482,6 +1499,7 @@ function match(root, ctx, first, scope) {
       notice?.close();
       timers.forEach(clearTimeout);
       clearTimeout(peekTimer);
+      stopPeekMotion();
       clearSkipReasons();
       document.body.classList.remove('is-viewer');
     },

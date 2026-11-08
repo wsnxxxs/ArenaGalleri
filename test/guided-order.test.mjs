@@ -187,20 +187,11 @@ test('leaving the page during the thanks stops every skip-reason observer and ti
 
 test('the peek waits a little each way, animates from the height on screen and switches at once with reduced motion', () => {
   for (const reduced of [false, true]) {
-    const timers = [], animations = [];
-    let height = 187;
-    const card = { classList: { on: false, contains() { return this.on; }, toggle(name, on) { this.on = on; height = on ? 42 : 187; } },
-      animate: (frames, options) => animations.push({ who: 'card', frames, options }) };
-    const bar = { getAnimations: () => [], getBoundingClientRect: () => ({ height }), animate: (frames, options) => animations.push({ who: 'bar', frames, options }) };
-    const e = { state: { peek: false }, el: {}, peeking: () => e.state.peek, reducedMotion: () => reduced,
-      getComputedStyle: () => ({ getPropertyValue: () => ' cubic-bezier(0.2, 0.7, 0.2, 1)' }),
-      $: (selector) => (selector === '[data-bar]' ? bar : card),
-      setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout() {} };
-    vm.runInNewContext(chunk('  const PEEK_FOLD_MS', '\n  const stage = ') + '\nglobalThis.t = { queuePeek, setPeek, PEEK_FOLD_MS, PEEK_OPEN_MS };', e);
+    const { e, card, animations } = peekPage({ reduced });
     assert.ok(e.t.PEEK_FOLD_MS <= 200 && e.t.PEEK_OPEN_MS < e.t.PEEK_FOLD_MS, 'folding waits briefly, opening even less');
     e.t.queuePeek(true, e.t.PEEK_FOLD_MS);
     assert.equal(card.classList.on, false, 'nothing changes before the wait is over');
-    timers.at(-1).fn();
+    e.timers.at(-1).fn();
     assert.equal(card.classList.on, true);
     if (reduced) { assert.equal(animations.length, 0); continue; }
     const grow = animations.find((a) => a.who === 'bar');
@@ -209,4 +200,56 @@ test('the peek waits a little each way, animates from the height on screen and s
     assert.equal(grow.options.easing, 'cubic-bezier(0.2, 0.7, 0.2, 1)');
     assert.ok(animations.some((a) => a.who === 'card' && a.frames[0].opacity === 0), 'the new face fades in');
   }
+});
+
+// The peek code against a fake card: animations are recorded, and can be cancelled or left running.
+function peekPage({ reduced = false, focusVisible = false } = {}) {
+  const timers = [], animations = [];
+  let height = 187;
+  const animation = (who, frames, options) => { const a = { who, frames, options, cancelled: false, cancel() { this.cancelled = true; }, finished: new Promise(() => {}) }; animations.push(a); return a; };
+  const card = { classList: { on: false, contains() { return this.on; }, toggle(name, on) { this.on = on; height = on ? 42 : 187; } },
+    animate: (frames, options) => animation('card', frames, options) };
+  const bar = { getBoundingClientRect: () => ({ height }), animate: (frames, options) => animation('bar', frames, options) };
+  const e = { state: { peek: false }, el: {}, peekMotion: new Set(), reducedMotion: () => reduced, timers,
+    peeking: () => e.state.peek && !focusVisible,
+    getComputedStyle: () => ({ getPropertyValue: () => ' cubic-bezier(0.2, 0.7, 0.2, 1)' }),
+    $: (selector) => (selector === '[data-bar]' ? bar : selector === '.vote-in.is-peek' ? (card.classList.on ? card : null) : card),
+    setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout() {} };
+  vm.runInNewContext(chunk('  const PEEK_FOLD_MS', '\n  const stage = ') + '\nglobalThis.t = { queuePeek, setPeek, applyPeek, stopPeekMotion, openOnKeyFocus, PEEK_FOLD_MS, PEEK_OPEN_MS };', e);
+  return { e, card, animations, setFocusVisible: (value) => { focusVisible = value; } };
+}
+
+test('every running peek animation, the old card\'s fade included, stops when the card is redrawn or the page closes', () => {
+  const { e, card, animations } = peekPage();
+  e.t.setPeek(true);
+  assert.equal(animations.length, 2);
+  // Turning back mid-way stops both the height and the fade of the first change.
+  e.t.setPeek(false);
+  assert.deepEqual(animations.slice(0, 2).map((a) => a.cancelled), [true, true]);
+  assert.equal(card.classList.on, false);
+  // drawBar (reveal, check, next pair) and destroy call stopPeekMotion: nothing is left running.
+  e.t.stopPeekMotion();
+  assert.ok(animations.every((a) => a.cancelled));
+  assert.equal(e.peekMotion.size, 0);
+  const source = readFileSync(new URL('../site/arena.js', import.meta.url), 'utf8');
+  const body = (name) => source.slice(source.indexOf(name), source.indexOf('\n  }', source.indexOf(name)));
+  assert.match(body('  function drawBar() {'), /stopPeekMotion\(\)/, 'a redraw of the card stops the motion first');
+  assert.match(source.slice(source.indexOf('    destroy() {')), /stopPeekMotion\(\)/, 'leaving the page stops it');
+});
+
+test('only keyboard focus opens a folded card; a mouse focusing 收起 on the way to a click leaves it alone', () => {
+  const page = peekPage();
+  page.e.t.setPeek(true);
+  assert.equal(page.card.classList.on, true);
+  page.e.t.openOnKeyFocus({ target: { matches: () => false } });
+  assert.equal(page.card.classList.on, true, 'mouse focus does not refold or unfold anything');
+  page.setFocusVisible(true);
+  page.e.t.openOnKeyFocus({ target: { matches: (selector) => selector === ':focus-visible' } });
+  assert.equal(page.card.classList.on, false, 'a key that brings focus in opens the card');
+  // An open card is never folded by focus, whatever the pointer is doing.
+  const open = peekPage();
+  open.e.state.peek = true;
+  open.e.t.openOnKeyFocus({ target: { matches: () => false } });
+  open.e.t.openOnKeyFocus({ target: { matches: () => true } });
+  assert.equal(open.card.classList.on, false);
 });
