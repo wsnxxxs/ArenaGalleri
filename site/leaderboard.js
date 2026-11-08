@@ -5,7 +5,7 @@ import { routeParts } from './route-path.js';
 import { $, brandMark, esc, formatDate, formatTime, icon, pad, store, vendorLine } from './ui.js';
 import { apiRemembered, arenaScope, levelOf, platform, recall } from './platform.js';
 import { curatedInfo, curatedKnown } from './curated.js';
-import { domainsIn, domainList, domainsOf, tracksOf, votedTask } from './categories.js';
+import { categoryLabel, domainsIn, domainList, domainsOf, tracksOf, votedTask } from './categories.js';
 import { textMatches } from './match.js';
 
 const UNITS = { config: '按配置', model: '按模型' };
@@ -52,21 +52,37 @@ export function boardTaskOptions(tasks, selected, activityReady, arena) {
     return `<option data-i18n-ignore data-i18n-option-original="${esc(t.title)}" data-i18n-option-suffix="${esc(note)}" value="${esc(t.id)}"${t.id === selected ? ' selected' : ''}${!activityReady || ready || t.id === selected ? '' : ' disabled'}>${esc(t.title)}${note}</option>`;
   }).join('')}`;
 }
-// curated: { since, threshold } when the page shows a curated board, else null.
-export const boardNotes = (open = false, curated = null, limitWorks = true) => `<details class="board-notes"${open ? ' open' : ''}>
+// v3 notes take every threshold from the board's own scoring block, so a configuration change needs no new copy.
+const percent = (value) => Math.round(value * 100);
+function v3Notes(s) {
+  const level = typeof s.rankRange === 'object' ? s.rankRange?.level : s.rankRange;
+  const weights = Object.entries(s.composite ?? {});
+  const equal = weights.every(([, weight]) => weight === weights[0][1]);
+  const labels = weights.map(([name]) => categoryLabel(name)).join('、');
+  // A single-question board has no question threshold and no question-to-question spread (both 0).
+  const single = !s.minimumTasks;
+  return `<div><dt>区间</dt><dd>名次下的小字是 ${percent(level ?? 0.95)}% 的名次范围，只有一个可能名次时不写。${single ? '分数后的 ± 是投票随机性的范围，单题榜不加换题的波动。' : `分数后的 ± 同时算了投票的随机性和换题的波动（换题按 ${s.taskSpread} 分估计），悬停分数可看两部分各有多大。`}横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits.provisionalGames ?? 30} 次的标为「暂定」。</dd></div>
+    <div><dt>达标</dt><dd>${single ? `至少 ${s.minimumGames} 场、有效投票者至少 ${s.minimumEffectiveVoters} 人才排名，单题榜不看题数。` : `分类榜和领域榜上，至少 ${s.minimumGames} 场、${s.minimumTasks} 道题，比较最多的一道题不超过 ${percent(s.maxTaskShare)}%，有效投票者至少 ${s.minimumEffectiveVoters} 人才排名；单题榜不看题数。`}满 ${s.minimumGames} 场但没有达标的列入「观察区」，并写明原因。</dd></div>
+    ${weights.length && !single ? `<div><dt>综合</dt><dd>综合榜把${labels}${['', '一', '两', '三', '四', '五'][weights.length] ?? weights.length}张分类榜的分数${equal ? '等权平均' : `按 ${weights.map(([, weight]) => weight).join(' / ')} 加权平均`}。各类都达标的才排名，其余列在下方并显示各类名次。</dd></div>` : ''}
+    ${s.weighted ? '<div><dt>权重</dt><dd>每票按投票时的身份取基础权重，同一投票者对同一模型超过 20 场后递减。胜平负和实际胜率是原始票数。</dd></div>' : ''}`;
+}
+// curated: { since, threshold } when the page shows a curated board, else null. scoring: the board's
+// scoring block; version 3 replaces the interval, scope and display notes.
+export const boardNotes = (open = false, curated = null, limitWorks = true, scoring = null) => `<details class="board-notes"${open ? ' open' : ''}>
   <summary>计分方法${icon('next')}</summary>
   <dl>
     <div><dt>比较</dt><dd>盲评每次展示同一道题的两件作品，左右随机、身份隐藏，投票之后才揭晓模型。</dd></div>
     <div><dt>计分</dt><dd>Bradley–Terry 模型根据全部有效比较，估计每个配置被偏好的强度，「不分伯仲」计为双方各得半场。分数折算到 Elo 刻度：1000 为平均水平，高出 400 分约等于被偏好的机会高十倍。结果与投票先后顺序无关。</dd></div>
-    <div><dt>区间</dt><dd>分数后的 ± 与横条表示约 95% 的不确定范围，横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits.provisionalGames ?? 30} 次的配置标为「暂定」。</dd></div>
+    ${!curated && scoring?.version >= 3 ? v3Notes(scoring) : `<div><dt>区间</dt><dd>分数后的 ± 与横条表示约 95% 的不确定范围，横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits.provisionalGames ?? 30} 次的配置标为「暂定」。</dd></div>`}
     ${curated ? `<div><dt>范围</dt><dd>精选总榜合并全部精选题，各分区只合并本分区的题，各自重新计算，不截取总榜。只计同题比较，不平均各题分数。题目加入、移出或换分区后，下一次计算（10 分钟内）生效。</dd></div>
     <div><dt>计入</dt><dd>${curated.since ? `只统计 ${formatDate(curated.since)} 之后、投票当时为 Lv1 及以上的成员的选择` : '只统计投票当时为 Lv1 及以上的成员的选择'}；Lv0 和访客的选择只进大众榜。同一用户对同一对作品只计一次，跳过不计。同一配置（按模型时为同一模型）的两件作品之间的比较不参与计分，也不计入有效比较数。作品被标记存疑或删除后，相关投票自动移出，恢复后重新计入。</dd></div>
     <div><dt>入榜</dt><dd>模型在本榜范围内有效比较至少 21 场才入榜（总榜和每个分区分别判断，不借用大众榜的比较数）；按配置还要求该配置至少 21 场。</dd></div>
-    <div><dt>与大众榜</dt><dd>两张榜用的是同一批盲评，计票范围不同。Lv1+ 在精选题上的一票同时计入两张榜。</dd></div>` : `<div><dt>范围</dt><dd>「综合」合并全部题目的比较；各类型（文本 / 设计 / 三维）只统计该类题目，选择具体题目时只统计这道题。比较本身始终发生在同一道题之内。票数多的类型对综合影响更大，所以综合榜在厂商之后列出各类型名次。</dd></div>
+    <div><dt>与大众榜</dt><dd>两张榜用的是同一批盲评，计票范围不同。Lv1+ 在精选题上的一票同时计入两张榜。</dd></div>` : `${scoring?.version >= 3 ? '<div><dt>范围</dt><dd>各类型（写作 / 设计 / 三维）只统计该类题目，选择具体题目时只统计这道题。比较本身始终发生在同一道题之内。</dd></div>'
+    : '<div><dt>范围</dt><dd>「综合」合并全部题目的比较；各类型（文本 / 设计 / 三维）只统计该类题目，选择具体题目时只统计这道题。比较本身始终发生在同一道题之内。票数多的类型对综合影响更大，所以综合榜在厂商之后列出各类型名次。</dd></div>'}
     <div><dt>领域</dt><dd>选择领域时只统计属于该领域的题目，可以和类型叠加；一道题属于两个领域时，它的比较在两边都完整计入。领域内少于 ${THIN.tasks} 道题有比较、或有效比较少于 ${THIN.votes} 次时标为「样本不足」，名次仅供参考。</dd></div>
     <div><dt>计入</dt><dd>统计全部计票的选择，包括 Lv0 成员、未绑定邮箱的账号和未登录的访客（访客按浏览器区分）；同一用户对同一对作品只计一次，跳过不计。同一配置（按模型时为同一模型）的两件作品之间的比较不参与计分，也不计入有效比较数。作品被标记存疑或删除后，相关投票自动移出，恢复后重新计入。</dd></div>`}
     <div><dt>单位</dt><dd>「按配置」把同一模型的不同推理档位分开计分；「按模型」把它们合并。</dd></div>
-    <div><dt>显示</dt><dd>每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。${limitWorks ? '默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。' : ''}比较少于 30 场仍标为「暂定」。</dd></div>
+    ${!curated && scoring?.version >= 3 ? '' : `<div><dt>显示</dt><dd>每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。${limitWorks ? '默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。' : ''}比较少于 30 场仍标为「暂定」。</dd></div>`}
     <div><dt>来源筛选</dt><dd>按 Harness 或服务商筛选时，只统计两件作品在投票当时都满足条件的比较；计分单位不变。服务商分为官方、非官方，未填写的为「未注明」；只填了「其他」的 Harness 和未记录来源的较早投票按「未注明」统计。</dd></div>
     <div><dt>不计分</dt><dd>表情互动与浏览次数都不影响榜单。</dd></div>
     <div><dt>更新</dt><dd>每 10 分钟计算一次，新投票将在下一次更新时计入。</dd></div>
@@ -77,10 +93,26 @@ export const boardNotes = (open = false, curated = null, limitWorks = true) => `
 // for the top three places.
 const tone = (at) => `color-mix(in srgb, var(--ink) ${Math.round(at)}%, var(--line-2))`;
 
+// v3 places an entry in one of three groups; partial only exists on the overall (composite) board.
+const GROUPS = { ranked: '已排名', partial: '未覆盖全部大类', watch: '观察区' };
+const isV3 = (data) => data?.scoring?.version >= 3;
+
 export function mountBoard(container, ctx) {
   const limitWorks = !ctx.task;
-  const weightedTrial = globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true && !ctx.curated;
-  let unit = store.get('board-unit') === 'model' ? 'model' : 'config';
+  // The guided trial build previews the next scoring; curated boards keep the current one.
+  const nextBoard = globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true && !ctx.curated;
+  // Only the board without task, category or domain is the composite (contract: contracts/leaderboard-v3.md).
+  const overall = !ctx.task && !ctx.category && !ctx.domain && !ctx.curated;
+  // v3 defaults to models on the overall board and configurations elsewhere, each remembered on its own.
+  // A board once seen as v3 starts that way next time, so the switch day costs one extra read at most.
+  let v3 = !ctx.curated && (nextBoard || store.get('board-scoring') === '3');
+  const unitKey = () => v3 ? `board-unit-${overall ? 'overall' : 'scoped'}` : 'board-unit';
+  const pickUnit = () => {
+    const saved = store.get(unitKey());
+    return saved === 'model' || saved === 'config' ? saved : v3 && overall ? 'model' : 'config';
+  };
+  let unit = pickUnit();
+  const openGroups = new Set();
   let showSmallSamples = store.get('board-show-small-samples') === 'true';
   let currentData = null;
   let request = null;
@@ -126,89 +158,200 @@ export function mountBoard(container, ctx) {
       : `<div class="board-empty"><p class="board-empty-title">精选榜等待比较</p><p>${explanation}模型或配置在本榜至少有 ${data.minimumGames ?? 21} 场有效比较后上榜，在那之前不给出没有依据的名次。</p><p class="board-meta">${counts}</p><div class="board-empty-actions">${go}</div></div>`;
   }
 
-  function table(data, { rows, unranked }) {
+  // Toolbar, update time and the notes above the table; v2 keeps its work-count switch, v3 reads its thresholds.
+  function head(data, count, hiddenCount = 0) {
     const { totals } = data;
-    const hiddenCount = limitWorks && !showSmallSamples ? visibleBoardEntries(data, true).rows.length - rows.length : 0;
+    const v3Board = isV3(data);
     const unsupported = (filterActive() && !data.filters) || (ctx.category && data.category === undefined) || (ctx.domain && data.domain === undefined);
-    const thin = ctx.domain && data.domain !== undefined && rows.length && ((totals.tasks ?? 0) < THIN.tasks || totals.votes < THIN.votes);
-    const meta = `${totals.votes} 次有效比较 · ${totals.voters} 位参与者 · ${rows.length} 个${unit === 'model' ? '模型' : '配置'}有评分${data.filters ? ' · 仅统计两件作品来源都符合筛选的比较' : ''}`;
+    const thin = ctx.domain && data.domain !== undefined && count && ((totals.tasks ?? 0) < THIN.tasks || totals.votes < THIN.votes);
+    const meta = `${totals.votes} 次有效比较 · ${totals.voters} 位参与者 · ${count} 个${unit === 'model' ? '模型' : '配置'}${v3Board ? '排名' : '有评分'}${data.filters ? ' · 仅统计两件作品来源都符合筛选的比较' : ''}`;
     // On the full page the sidebar already counts comparisons and voters, so search leads the toolbar.
     const search = `<label class="collection-search">${icon('search')}<input type="search" data-board-search aria-label="搜索模型" placeholder="搜索模型" value="${esc(text)}"></label>`;
     const unitControl = `<div class="seg" role="group" aria-label="计分单位">${Object.entries(UNITS).map(([value, text]) => `<button data-board-unit="${value}" aria-pressed="${value === unit}">${text}</button>`).join('')}</div>`;
-    const head = (filterable
+    const s = data.scoring;
+    return (filterable
       ? `<div class="collection-toolbar">${search}<div class="toolbar-actions">${typeof ctx.toolbar === 'function' ? ctx.toolbar() : ctx.toolbar ?? ''}${filterSelect('harness', 'Harness', ctx.HARNESSES)}${filterSelect('provider', '服务商', ctx.PROVIDERS)}${unitControl}</div></div>${data.filters ? '<p class="muted">仅统计两件作品来源都符合筛选的比较。</p>' : ''}`
       : `<div class="board-head"><p class="board-meta">${meta}</p>${unitControl}</div>`)
       + `<p class="board-meta"><span>每 10 分钟更新一次</span>${data.updatedAt ? ` · <span>最近计算</span> <time datetime="${esc(data.updatedAt)}" data-i18n-time="${esc(data.updatedAt)}">${esc(formatTime(data.updatedAt))}</time>` : ''}</p>`
-      + (limitWorks ? `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>` : '')
-      + '<p class="muted">当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。</p>'
-      + (weightedTrial ? '<p class="muted">测试计分：按投票时身份取基础权重，同一投票者对同一模型超过 20 场后递减。</p>' : '')
+      + (limitWorks && !v3Board ? `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>` : '')
+      + (v3Board ? `<p class="muted">当前范围内至少有 ${s.minimumGames} 场有效比较才显示；${s.minimumGames}–${(data.provisionalGames ?? 30) - 1} 场标为暂定。</p>` : '<p class="muted">当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。</p>')
+      + (nextBoard ? '<p class="muted">测试计分：这里预览新的 v3 计分，正式榜单仍按现行方法计算。</p>' : '')
       + (ctx.curated && unit === 'config' ? '<p class="muted">入榜同时要求模型与当前配置各有至少 21 场有效比较。</p>' : '')
-      + (ctx.curated && rows.length && totals.votes < 50 ? `<p class="muted">精选榜刚开始计票：目前 ${totals.votes} 次有效比较，名次可能随新票大幅变动。</p>` : '')
+      + (ctx.curated && count && totals.votes < 50 ? `<p class="muted">精选榜刚开始计票：目前 ${totals.votes} 次有效比较，名次可能随新票大幅变动。</p>` : '')
       + (unsupported ? '<p class="muted">后端暂不支持这项筛选，下面是未筛选的榜单。</p>' : '')
       + (thin ? `<p class="muted">样本不足：「${esc(ctx.domain)}」目前只有 ${totals.tasks ?? 0} 道题、${totals.votes} 次有效比较参与计分，名次可能随新票大幅变动，仅供参考。</p>` : '');
-    if (!rows.length && hiddenCount) {
-      return `${head}<div class="board-empty"><p class="board-empty-title">当前没有作品数达到 5 件的条目</p><p>勾选「显示作品少于 5 件的条目」可查看已有评分，暂定标记仍保留。</p></div>`;
-    }
-    if (!rows.length && data.filters) {
-      return `${head}<div class="board-empty">
+  }
+
+  // Nothing to list: say why, by filter, curated state or the first votes.
+  function empty(data, top, unranked) {
+    if (data.filters) {
+      return `${top}<div class="board-empty">
         <p class="board-empty-title">这个筛选下还没有可计分的比较</p>
         <p>只有两件作品在投票时来源都符合筛选的比较才计入。${unranked.length ? `符合条件的${unit === 'model' ? '模型' : '配置'}有 ${unranked.length} 个。` : ''}</p>
       </div>`;
     }
-    if (!rows.length && ctx.curated) return `${head}${curatedEmpty(data)}`;
-    if (!rows.length) {
-      return `${head}<div class="board-empty">
+    if (ctx.curated) return `${top}${curatedEmpty(data)}`;
+    return `${top}<div class="board-empty">
         <p class="board-empty-title">${esc(ctx.emptyTitle ?? '榜单还在等第一批盲评')}</p>
         <p>票数积累之前，这里不给出没有依据的名次。${unranked.length ? `目前有 ${unranked.length} 个${unit === 'model' ? '模型' : '配置'}的已验证作品在等待比较。` : ''}</p>
         <a class="btn primary sm" href="#/arena${ctx.task ? `/${esc(ctx.task.id)}` : ''}">${icon('blind')}去盲评</a>
       </div>`;
-    }
+  }
+
+  const unrankedList = (unranked) => unranked.length ? `<details class="board-unranked"><summary>还没有比较数据的${unit === 'model' ? '模型' : '配置'} · ${unranked.length}${icon('next')}</summary><p data-i18n-ignore>${unranked.map((row) => `${esc(row.modelName)}${row.effort ? ` · ${esc(row.effort)}` : ''}`).join('、')}</p></details>` : '';
+  const searchText = (row, m) => esc([row.modelName, row.effort, m.vendor].join(' ').toLowerCase());
+  const nameParts = (data, row) => `<b data-i18n-ignore>${esc(row.modelName)}</b>${row.effort ? `<span class="badge" data-i18n-ignore>${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}`;
+  const recordCells = (row) => row.games == null ? '<td class="c-games">—</td><td class="c-record">—</td><td class="c-rate">—</td>'
+    : `<td class="c-games"><span data-i18n-number="${row.games}">${row.games}</span></td>
+      <td class="c-record"><span data-i18n-number="${row.wins}">${row.wins}</span><span>·</span><span data-i18n-number="${row.draws}">${row.draws}</span><span>·</span><span data-i18n-number="${row.losses}">${row.losses}</span></td>
+      <td class="c-rate">${Math.round(row.winRate * 100)}%</td>`;
+  const rangeBar = (row, at) => {
+    const from = at(row.score - row.interval), to = at(row.score + row.interval);
+    return `<span class="range"><s style="left:${at(1000)}%"></s><i style="left:${from}%;width:${(to - from).toFixed(2)}%;background:linear-gradient(90deg, ${tone(from)}, ${tone(to)})"></i><em style="left:${at(row.score)}%"></em></span>`;
+  };
+  const axis = (rows) => {
     const low = Math.min(1000, ...rows.map((row) => row.score - row.interval));
     const high = Math.max(1000, ...rows.map((row) => row.score + row.interval));
-    const at = (value) => (((value - low) / Math.max(high - low, 1)) * 100).toFixed(2);
+    return (value) => (((value - low) / Math.max(high - low, 1)) * 100).toFixed(2);
+  };
+
+  function table(data, { rows, unranked }) {
+    if (isV3(data)) return tableV3(data, unranked);
+    const hiddenCount = limitWorks && !showSmallSamples ? visibleBoardEntries(data, true).rows.length - rows.length : 0;
+    const top = head(data, rows.length, hiddenCount);
+    if (!rows.length && hiddenCount) {
+      return `${top}<div class="board-empty"><p class="board-empty-title">当前没有作品数达到 5 件的条目</p><p>勾选「显示作品少于 5 件的条目」可查看已有评分，暂定标记仍保留。</p></div>`;
+    }
+    if (!rows.length) return empty(data, top, unranked);
+    const at = axis(rows);
     const body = rows.map((row, index) => {
       const rank = index + 1;
-      const from = at(row.score - row.interval), to = at(row.score + row.interval);
       const m = modelOf(row);
-      return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${esc([row.modelName, row.effort, m.vendor].join(' ').toLowerCase())}">
+      return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${searchText(row, m)}">
       <td class="c-rank${rank <= 3 ? ' is-top' : ''}">${pad(rank)}</td>
-      <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b data-i18n-ignore>${esc(row.modelName)}</b>${row.effort ? `<span class="badge" data-i18n-ignore>${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
+      <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name">${nameParts(data, row)}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
       <td class="c-score"><b><span data-i18n-number="${row.score}">${row.score}</span></b><small>±<span data-i18n-number="${row.interval}">${row.interval}</span></small></td>
-      <td class="c-range" aria-hidden="true"><span class="range"><s style="left:${at(1000)}%"></s><i style="left:${from}%;width:${(to - from).toFixed(2)}%;background:linear-gradient(90deg, ${tone(from)}, ${tone(to)})"></i><em style="left:${at(row.score)}%"></em></span></td>
-      <td class="c-games"><span data-i18n-number="${row.games}">${row.games}</span></td>
-      <td class="c-record"><span data-i18n-number="${row.wins}">${row.wins}</span><span>·</span><span data-i18n-number="${row.draws}">${row.draws}</span><span>·</span><span data-i18n-number="${row.losses}">${row.losses}</span></td>
-      <td class="c-rate">${Math.round(row.winRate * 100)}%</td>
+      <td class="c-range" aria-hidden="true">${rangeBar(row, at)}</td>
+      ${recordCells(row)}
       <td class="c-works"><span data-i18n-number="${row.works}">${row.works}</span></td>
     </tr>`;
     }).join('');
-    return `${head}<div class="board-wrap"><table class="board">
+    return `${top}<div class="board-wrap"><table class="board">
       <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th><th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">胜率</th><th class="c-works" scope="col">作品</th></tr></thead>
       <tbody>${body}</tbody>
     </table></div>
     <p class="muted filter-empty" data-board-none hidden>没有匹配的模型，请换个关键词。</p>
-    ${unranked.length ? `<details class="board-unranked"><summary>还没有比较数据的${unit === 'model' ? '模型' : '配置'} · ${unranked.length}${icon('next')}</summary><p data-i18n-ignore>${unranked.map((row) => `${esc(row.modelName)}${row.effort ? ` · ${esc(row.effort)}` : ''}`).join('、')}</p></details>` : ''}`;
+    ${unrankedList(unranked)}`;
   }
 
+  // v3 (plan 03): the server ranks and groups; the page adds rank ranges, the composite's category
+  // columns, and the two folded groups below the ranking.
+  function tableV3(data, unranked) {
+    const s = data.scoring;
+    const rows = data.rows, partial = data.partial ?? [], watch = data.watch ?? [];
+    const top = head(data, rows.length);
+    if (!rows.length && !partial.length && !watch.length) return empty(data, top, unranked);
+    // The composite lists its categories as columns on wide screens and as a line under the name on narrow ones.
+    const cats = overall ? Object.keys(s.composite ?? {}) : [];
+    const composite = cats.length > 0;
+    const columns = composite ? 7 + cats.length : 8;
+    const at = axis(rows);
+    const reasonText = (row) => (row.reasons ?? []).map((reason) => `<span>${reason === 'coverage' ? '没有哪一类达标'
+      : reason === 'tasks' ? `${row.tasks} 道题，不足 ${s.minimumTasks} 道`
+        : reason === 'task-share' ? (row.taskShare == null ? `单题占比超过 ${percent(s.maxTaskShare)}%` : `单题占 ${Math.ceil(row.taskShare * 100)}%，超过 ${percent(s.maxTaskShare)}%`)
+          : reason === 'voters' ? (row.effectiveVoters == null ? `有效投票者不足 ${s.minimumEffectiveVoters} 人` : `有效投票者 ${Math.floor(row.effectiveVoters)} 人，不足 ${s.minimumEffectiveVoters} 人`)
+            : esc(reason)}</span>`).join('<span> · </span>');
+    const partLabel = (part) => part?.rank ? `第 ${part.rank}` : '未达标';
+    const partsLine = (row) => composite ? `<small class="board-parts">${cats.map((c) => `<span class="board-part${row.parts?.[c]?.rank ? '' : ' is-missing'}"><span>${esc(categoryLabel(c))}</span> <span>${partLabel(row.parts?.[c])}</span></span>`).join('<span> · </span>')}</small>` : '';
+    // The server keeps full precision; the composite's intervalVotes is a pooled diagnostic, not a part of its interval.
+    const scoreCell = (row) => {
+      if (row.score == null) return '<td class="c-score">—</td>';
+      const votes = Math.round(row.intervalVotes), tasks = Math.round(Math.sqrt(Math.max(0, row.interval ** 2 - row.intervalVotes ** 2)));
+      const spread = composite ? '三类区间合成，已含投票和换题的波动' : row.intervalVotes == null ? '' : tasks ? `投票 ±${votes}，换题 ±${tasks}` : `投票 ±${votes}`;
+      return `<td class="c-score"${spread ? ` title="${spread}"` : ''}><b><span data-i18n-number="${Math.round(row.score)}">${Math.round(row.score)}</span></b><small>±<span data-i18n-number="${Math.round(row.interval)}">${Math.round(row.interval)}</span></small></td>`;
+    };
+    const line = (row, m, extra = '') => `<td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name">${nameParts(data, row)}<small>${[vendorLine(m), ...(ctx.task || row.tasks == null ? [] : [`<span>${row.tasks} 道题</span>`])].join(' · ')}</small>${extra}</span></span></td>`;
+    const tail = (row) => `${recordCells(row)}${composite ? '' : `<td class="c-works">${row.works == null ? '—' : `<span data-i18n-number="${row.works}">${row.works}</span>`}</td>`}`;
+    const render = (group) => (row) => {
+      const m = modelOf(row);
+      const rank = group === 'ranked' ? `<td class="c-rank${row.rank <= 3 ? ' is-top' : ''}">${pad(row.rank)}${row.rankLow != null && row.rankHigh != null && row.rankLow !== row.rankHigh ? `<small class="rank-range">${row.rankLow}–${row.rankHigh}</small>` : ''}</td>` : '<td class="c-rank">—</td>';
+      const reasons = group === 'watch' ? `<small class="board-reasons">${reasonText(row)}</small>` : '';
+      const middle = group === 'watch' ? (composite ? `<td class="c-reason" colspan="${cats.length}">${reasonText(row)}</td>` : '')
+        : cats.map((c) => {
+          const part = row.parts?.[c];
+          return `<td class="c-part${part?.rank ? '' : ' is-missing'}">${part?.aligned != null ? `<span data-i18n-number="${Math.round(part.aligned)}">${Math.round(part.aligned)}</span>` : ''}<small>${partLabel(part)}</small></td>`;
+        }).join('');
+      return `<tr class="${[`is-${group}`, row.provisional ? 'is-provisional' : ''].filter(Boolean).join(' ')}" data-board-row="${searchText(row, m)}" data-board-in="${group}">
+      ${rank}
+      ${line(row, m, group === 'watch' ? reasons : partsLine(row))}
+      ${scoreCell(row)}
+      <td class="c-range" aria-hidden="true">${group === 'ranked' ? rangeBar(row, at) : ''}</td>
+      ${middle}
+      ${tail(row)}
+    </tr>`;
+    };
+    const fold = (group, note, list) => {
+      if (!list.length) return '';
+      const open = openGroups.has(group);
+      return `<tbody class="board-group${open ? ' is-open' : ''}" data-board-group="${group}">
+      <tr class="board-group-head"><th colspan="${columns}" scope="rowgroup"><button type="button" data-board-group-toggle="${group}" aria-expanded="${open}">${icon('next')}<b>${GROUPS[group]}</b><span class="board-group-count" data-i18n-number="${list.length}">${list.length}</span><span class="board-group-note">${note}</span></button></th></tr>
+      ${list.map(render(group)).join('')}
+    </tbody>`;
+    };
+    const noun = unit === 'model' ? '模型' : '配置';
+    return `${top}<p class="board-meta board-found" data-board-found hidden></p><div class="board-wrap"><table class="board is-v3${composite ? ' is-composite' : ''}">
+      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cats.map((c) => `<th class="c-part" scope="col">${esc(categoryLabel(c))}</th>`).join('')}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">实际胜率</th>${composite ? '' : '<th class="c-works" scope="col">作品</th>'}</tr></thead>
+      <tbody data-board-group="ranked">${rows.length ? rows.map(render('ranked')).join('') : `<tr class="board-group-empty"><td colspan="${columns}">还没有达标的${noun}，已有成绩的列在下方。</td></tr>`}</tbody>
+      ${fold('partial', '有各类名次，缺类的不进综合排名', partial)}
+      ${fold('watch', '有分数，暂不排名', watch)}
+    </table></div>
+    <p class="muted filter-empty" data-board-none hidden>没有匹配的模型，请换个关键词。</p>
+    ${unrankedList(unranked)}`;
+  }
+
+  // Search covers every group: a folded group with matches opens, and a line says where the matches are.
   function applyQuery() {
     const rows = [...container.querySelectorAll('[data-board-row]')];
-    let shown = 0;
+    const found = {};
     for (const row of rows) {
       row.hidden = !textMatches(query, row.dataset.boardRow);
-      if (!row.hidden) shown++;
+      if (!row.hidden) found[row.dataset.boardIn ?? ''] = (found[row.dataset.boardIn ?? ''] ?? 0) + 1;
     }
+    const shown = Object.values(found).reduce((sum, n) => sum + n, 0);
     const none = $('[data-board-none]', container);
     if (none) none.hidden = shown > 0 || !rows.length;
+    for (const group of container.querySelectorAll('tbody[data-board-group]')) {
+      const name = group.dataset.boardGroup;
+      const open = name === 'ranked' || openGroups.has(name) || Boolean(query && found[name]);
+      group.classList.toggle('is-open', open);
+      $('[data-board-group-toggle]', group)?.setAttribute('aria-expanded', String(open));
+    }
+    const where = $('[data-board-found]', container);
+    if (where) {
+      where.hidden = !query || !shown;
+      where.innerHTML = ['<span>搜索结果</span>', ...Object.keys(GROUPS).filter((name) => found[name]).map((name) => `<span>${GROUPS[name]}</span> <span data-i18n-number="${found[name]}">${found[name]}</span>`)].join(' · ');
+    }
   }
 
   let drawn = false;
   function draw(data) {
     if (ctx.curated && data.audience !== 'curated') throw new Error('后端尚未支持精选榜，请更新后端后重试');
     if (!Array.isArray(data.rows) || !Array.isArray(data.unranked) || !data.totals) throw new Error('服务暂时不可用，请稍后重试。');
+    // The scoring version decides the default unit; a board that changed version reloads in its own default.
+    if (!ctx.curated && isV3(data) !== v3) {
+      v3 = isV3(data);
+      store.set('board-scoring', v3 ? '3' : '2');
+      if (pickUnit() !== unit) {
+        unit = pickUnit();
+        load();
+        return;
+      }
+    }
     // A fresh board can land while the reader types; the search keeps its focus.
     const typing = document.activeElement?.matches('[data-board-search]');
     const togglingSamples = document.activeElement?.matches('[data-board-small]');
-    const visible = visibleBoardEntries(data, !limitWorks || showSmallSamples);
-    container.innerHTML = table(data, visible) + (ctx.embedded ? boardNotes(false, null, limitWorks) : '');
+    const visible = v3 ? { rows: data.rows, unranked: [] } : visibleBoardEntries(data, !limitWorks || showSmallSamples);
+    container.innerHTML = table(data, visible) + (ctx.embedded ? boardNotes(false, null, limitWorks, data.scoring) : '');
     if (typing) $('[data-board-search]', container)?.focus();
     if (togglingSamples) $('[data-board-small]', container)?.focus();
     applyQuery();
@@ -221,7 +364,7 @@ export function mountBoard(container, ctx) {
     if (destroyed) return Promise.resolve();
     const params = new URLSearchParams({ by: unit, ...(ctx.curated ? { audience: 'curated', ...(ctx.sectionId ? { sectionId: ctx.sectionId } : {}) } : ctx.task ? { task: ctx.task.id } : { ...(ctx.category ? { category: ctx.category } : {}), ...(ctx.domain ? { domain: ctx.domain } : {}) }) });
     if (filterable) for (const [field, value] of Object.entries(filters)) if (value) params.set(field, value);
-    const path = `leaderboard${weightedTrial ? '/weighted-trial' : ''}?${params}`;
+    const path = `leaderboard${nextBoard ? '/next' : ''}?${params}`;
     if (request?.path === path) return request.promise;
     request?.controller.abort();
     const controller = new AbortController();
@@ -263,6 +406,12 @@ export function mountBoard(container, ctx) {
 
   const onClick = (e) => {
     if (e.target.closest('[data-board-retry]')) return void load();
+    const fold = e.target.closest('[data-board-group-toggle]');
+    if (fold) {
+      const name = fold.dataset.boardGroupToggle;
+      if (!openGroups.delete(name)) openGroups.add(name);
+      return void applyQuery();
+    }
     if (e.target.closest('[data-curated-arena]')) {
       arenaScope.set(currentData?.scope?.taskIds ?? []);
       location.hash = '#/arena/random';
@@ -271,7 +420,7 @@ export function mountBoard(container, ctx) {
     const button = e.target.closest('[data-board-unit]');
     if (!button || button.dataset.boardUnit === unit) return;
     unit = button.dataset.boardUnit;
-    store.set('board-unit', unit);
+    store.set(unitKey(), unit);
     load();
   };
   const onChange = (e) => {
@@ -351,7 +500,7 @@ export function mount(root, ctx) {
   };
   const stat = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
 
-  let board = null, live = null, destroyed = false, drawn = null;
+  let board = null, live = null, destroyed = false, drawn = null, notesScoring = 'null';
   const onChange = (e) => {
     const select = e.target.closest('[data-board-task]');
     if (select) location.hash = select.value ? `#/leaderboard/${encodeURIComponent(select.value)}` : domain ? `${base}/${encodeURIComponent(domain)}` : base;
@@ -365,6 +514,7 @@ export function mount(root, ctx) {
   // Draw the page. A curated view needs the structure first (names, counts, since-date); the others only
   // refresh the curated group of the side nav once it arrives.
   function render(info) {
+    notesScoring = 'null';
     live?.destroy();
     board?.destroy();
     const section = sectionId ? info?.sections.find((x) => x.id === sectionId) ?? null : null;
@@ -416,6 +566,12 @@ export function mount(root, ctx) {
       emptyTitle: domain ? `${domain}榜单还在等第一批盲评` : track && !task ? `${track.label}榜单还在等第一批盲评` : undefined,
       onLoad: (data) => live?.update(data),
       onData: (data, { visibleRows }) => {
+        // v3 notes are written from the board's own thresholds.
+        const notes = $('.board-notes', root);
+        if (notes && JSON.stringify(data.scoring ?? null) !== notesScoring) {
+          notesScoring = JSON.stringify(data.scoring ?? null);
+          notes.outerHTML = boardNotes(notes.open, curated ? { since: info?.countingStartedAt, threshold: 30 } : null, !task, data.scoring);
+        }
         const stats = $('[data-stats]', root);
         if (stats) stats.innerHTML = stat('有效比较', pad(data.totals.votes)) + stat('参与者', pad(data.totals.voters)) + stat(data.by === 'model' ? '上榜模型' : '上榜配置', pad(visibleRows));
       },

@@ -481,6 +481,33 @@ table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-va
 .board tbody tr:hover .range em { box-shadow: 0 0 0 2px var(--surface); }
 .is-provisional .range em { background: var(--bg); box-shadow: 0 0 0 2px var(--bg), inset 0 0 0 1.5px var(--ink-2); }
 .board td.c-record span { margin: 0 4px; color: var(--line-2); }
+/* v3: rank ranges, the composite's category columns, the folded groups and the watch reasons. */
+.board td.c-rank .rank-range { display: block; margin-top: 3px; color: var(--muted); font: 400 11px var(--mono); letter-spacing: 0; }
+.board td.c-part { color: var(--ink-2); font: 400 14px var(--mono); }
+.board td.c-part small { margin-left: 5px; color: var(--muted); font: 11.5px var(--mono); }
+.board td.c-part.is-missing small { margin: 0; font-family: var(--sans); }
+.board td.c-score:not(:has(b)) { color: var(--muted); }
+.board tr.is-watch td.c-score b { color: var(--ink-2); }
+.board td.c-reason { color: var(--muted); font-size: 12.5px; text-align: left; white-space: normal; }
+.board-name .board-parts, .board-name .board-reasons { color: var(--muted); }
+.board-part { white-space: nowrap; }
+.board-parts .is-missing { opacity: 0.6; }
+.board.is-composite .board-parts, .board.is-composite .board-reasons, .board.is-composite .c-record { display: none; }
+.board-group-head th { padding: 0; border-bottom: 1px solid var(--line); text-align: left; }
+.board tbody tr.board-group-head:hover { background: none; }
+.board-group-head button { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; width: 100%; padding: 26px 10px 12px; border: 0; background: none; color: var(--ink); font: 500 13.5px var(--sans); text-align: left; cursor: pointer; }
+.board-group-head button .i { width: 14px; height: 14px; align-self: center; margin-right: -4px; color: var(--muted); transform: rotate(90deg); transition: transform 0.25s var(--ease); }
+.board-group.is-open .board-group-head button .i { transform: rotate(-90deg); }
+.board-group-head button b { font-weight: 600; letter-spacing: 0.03em; }
+.board-group-count { color: var(--muted); font: 400 12px var(--mono); }
+.board-group-note { color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.board-group:not(.is-open) > tr[data-board-row] { display: none; }
+.board-group-empty td { padding: 28px 10px; color: var(--muted); text-align: left; white-space: normal; }
+.board-found { margin: 0 0 10px; }
+@media (max-width: 1180px) {
+  .board.is-composite .c-part, .board.is-composite .c-reason, .board.is-composite .c-range { display: none; }
+  .board.is-composite .board-parts, .board.is-composite .board-reasons { display: block; }
+}
 .board-unranked { margin: 16px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.8; }
 .board-unranked summary { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); cursor: pointer; list-style: none; }
 .board-unranked summary::-webkit-details-marker { display: none; }
@@ -1131,6 +1158,7 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .board .c-range, .board .c-record, .board .c-works { display: none; }
   .board td.c-score b { font-size: 17px; }
   .board-model .brand-mark { display: none; }
+  .board.is-v3 .c-games, .board.is-v3 .c-works { display: none; }
   .step-head p, .step-placeholder { padding-left: 0; }
   .trial-note { display: none; }
   .trial-bar .seg button { padding: 0 10px; }

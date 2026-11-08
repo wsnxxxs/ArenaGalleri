@@ -8,7 +8,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const data = (tag = 'fresh') => ({ by: 'config', rows: [], unranked: [], totals: { votes: 3, voters: 2 }, tag });
 
-function environment(cached = null) {
+function environment(cached = null, config = undefined, ctx = {}) {
   const reads = [], rendered = [], attributes = new Map(), timers = new Map();
   let timerId = 0, memory = cached;
   const container = Object.assign(new EventTarget(), {
@@ -16,7 +16,7 @@ function environment(cached = null) {
     setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key),
     insertAdjacentHTML(_, value) { this.innerHTML = value + this.innerHTML; },
   });
-  const state = { AbortController, DOMException, URLSearchParams, EventTarget,
+  const state = { AbortController, DOMException, URLSearchParams, EventTarget, SAME_PROMPT_CONFIG: config,
     setTimeout(fn, ms) { const id = ++timerId; timers.set(id, { fn, ms }); return id; }, clearTimeout: id => timers.delete(id),
     document: { activeElement: null }, store: { get: () => null, set() {} },
     $: () => null, esc: s => String(s), icon: () => '', platform: {},
@@ -26,7 +26,7 @@ function environment(cached = null) {
     }, recall: () => memory,
   };
   vm.runInNewContext(source.replace(/^import .*$/gm, '').replace(/^export /gm, '') + '\nglobalThis.mountBoardForTest = mountBoard;', state);
-  const board = state.mountBoardForTest(container, { embedded: false, onData: value => rendered.push(value) });
+  const board = state.mountBoardForTest(container, { embedded: false, onData: value => rendered.push(value), ...ctx });
   const click = selector => {
     const event = new Event('click');
     Object.defineProperty(event, 'target', { value: { closest: query => query === selector ? { dataset: { boardUnit: 'model' } } : null } });
@@ -81,4 +81,17 @@ test('a malformed remembered board cannot poison retries, and a valid stale boar
   assert.match(e.container.innerHTML, /每 10 分钟更新一次/);
   assert.match(e.container.innerHTML, /offline[\s\S]*data-board-retry/);
   e.board.destroy();
+});
+
+test('the guided trial build reads the next scoring for public boards and the current one for curated boards', async () => {
+  const trial = { guidedVoting: true };
+  const overall = environment(null, trial);
+  assert.equal(overall.reads[0].path, 'leaderboard/next?by=model');
+  const scoped = environment(null, trial, { category: '建模' });
+  assert.equal(scoped.reads[0].path, 'leaderboard/next?by=config&category=%E5%BB%BA%E6%A8%A1');
+  const curated = environment(null, trial, { curated: true });
+  assert.equal(curated.reads[0].path, 'leaderboard?by=config&audience=curated');
+  const formal = environment();
+  assert.equal(formal.reads[0].path, 'leaderboard?by=config', 'the formal build keeps the current endpoint and unit');
+  for (const e of [overall, scoped, curated, formal]) e.board.destroy();
 });

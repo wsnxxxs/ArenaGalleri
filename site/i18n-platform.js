@@ -9,7 +9,24 @@ const phrases = Object.fromEntries(`
 每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。默认再隐藏作品少于 5 件的条目，可勾选显示，不能绕过场次门槛。比较少于 30 场仍标为「暂定」。|Each model or configuration needs at least 21 valid comparisons within the current board to appear. Entries with fewer than 5 works are additionally hidden by default; the display option cannot bypass the comparison threshold. Entries with fewer than 30 comparisons remain provisional.
 每个模型或配置在当前榜单范围内至少有 21 场有效比较才显示。比较少于 30 场仍标为「暂定」。|Each model or configuration needs at least 21 valid comparisons within the current board to appear. Entries with fewer than 30 comparisons remain provisional.
 当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。|At least 21 valid comparisons in the current scope are required to appear; 21–29 comparisons are marked provisional.
-测试计分：按投票时身份取基础权重，同一投票者对同一模型超过 20 场后递减。|Trial scoring: base weights use voter status at the time of voting and taper when a voter has more than 20 comparisons for the same model.
+测试计分：这里预览新的 v3 计分，正式榜单仍按现行方法计算。|Trial scoring: this previews the new v3 scoring. The official leaderboard still uses the current method.
+已排名|Ranked
+搜索结果|Search results
+未覆盖全部大类|Not in every category
+观察区|Watch list
+有各类名次，缺类的不进综合排名|Ranked within categories; entries missing a category are not ranked overall
+有分数，暂不排名|Scored, not yet ranked
+实际胜率|Actual win rate
+未达标|Not qualified
+没有哪一类达标|No category qualifies
+三类区间合成，已含投票和换题的波动|Combined from the category intervals, including vote and question variation
+还没有达标的模型，已有成绩的列在下方。|No models qualify yet. Entries with results are listed below.
+还没有达标的配置，已有成绩的列在下方。|No configurations qualify yet. Entries with results are listed below.
+达标|Eligibility
+权重|Weights
+每票按投票时的身份取基础权重，同一投票者对同一模型超过 20 场后递减。胜平负和实际胜率是原始票数。|Each vote takes a base weight from the voter's status at the time of voting, tapering after 20 comparisons by the same voter for the same model. Wins, ties, losses and the actual win rate are raw vote counts.
+各类型（写作 / 设计 / 三维）只统计该类题目，选择具体题目时只统计这道题。比较本身始终发生在同一道题之内。|Each category (Writing / Design / 3D) counts only its own questions; a selected question counts only itself. Every comparison takes place within one question.
+综合榜把三维、设计、写作三张分类榜的分数等权平均。各类都达标的才排名，其余列在下方并显示各类名次。|The overall board averages the 3D, Design and Writing category scores with equal weights. Only entries qualified in every category are ranked; the rest are listed below with their category ranks.
 更新|Updates
 每 10 分钟计算一次，新投票将在下一次更新时计入。|Rankings are calculated every 10 minutes. New votes appear in the next update.
 列表分页|List pagination
@@ -625,6 +642,25 @@ const legal = Object.fromEntries(`
 `.trim().split('\n').map((line) => line.split('|')));
 
 const dynamic = Object.fromEntries(`
+{value} 道题|{value} questions
+第 {count}|#{count}
+{count} 道题，不足 {n} 道|{count} questions, fewer than {n}
+单题占比超过 {percent}%|One question has more than {percent}% of comparisons
+单题占 {percent}%，超过 {n}%|One question has {percent}% of comparisons, above {n}%
+有效投票者不足 {n} 人|Fewer than {n} effective voters
+有效投票者 {count} 人，不足 {n} 人|{count} effective voters, fewer than {n}
+投票 ±{value}，换题 ±{value2}|Votes ±{value}, question variation ±{value2}
+投票 ±{value}|Votes ±{value}
+当前范围内至少有 {value} 场有效比较才显示；{value2}–{value3} 场标为暂定。|At least {value} valid comparisons in the current scope are required to appear; {value2}–{value3} comparisons are marked provisional.
+{value} 次有效比较 · {value2} 位参与者 · {value3} 个模型排名|{value} valid comparisons · {value2} participants · {value3} ranked models
+{value} 次有效比较 · {value2} 位参与者 · {value3} 个配置排名|{value} valid comparisons · {value2} participants · {value3} ranked configurations
+{value} 次有效比较 · {value2} 位参与者 · {value3} 个模型排名 · 仅统计两件作品来源都符合筛选的比较|{value} valid comparisons · {value2} participants · {value3} ranked models · Only comparisons where both works match the source filters are included
+{value} 次有效比较 · {value2} 位参与者 · {value3} 个配置排名 · 仅统计两件作品来源都符合筛选的比较|{value} valid comparisons · {value2} participants · {value3} ranked configurations · Only comparisons where both works match the source filters are included
+名次下的小字是 {value}% 的名次范围，只有一个可能名次时不写。分数后的 ± 同时算了投票的随机性和换题的波动（换题按 {value2} 分估计），悬停分数可看两部分各有多大。横条颜色越接近朱红，在本榜的位置越高；比较少于 {value3} 次的标为「暂定」。|The small figures under a rank are its {value}% rank range, omitted when only one rank is possible. The ± after a score covers both vote randomness and question-to-question variation (estimated at {value2} points); hover over a score to see each part. The closer a bar is to vermilion, the higher it sits on this board. Entries with fewer than {value3} comparisons are provisional.
+名次下的小字是 {value}% 的名次范围，只有一个可能名次时不写。分数后的 ± 是投票随机性的范围，单题榜不加换题的波动。横条颜色越接近朱红，在本榜的位置越高；比较少于 {value2} 次的标为「暂定」。|The small figures under a rank are its {value}% rank range, omitted when only one rank is possible. The ± after a score covers vote randomness; single-question boards add no question-to-question variation. The closer a bar is to vermilion, the higher it sits on this board. Entries with fewer than {value2} comparisons are provisional.
+分类榜和领域榜上，至少 {value} 场、{value2} 道题，比较最多的一道题不超过 {value3}%，有效投票者至少 {value4} 人才排名；单题榜不看题数。满 {value5} 场但没有达标的列入「观察区」，并写明原因。|On category and domain boards, an entry is ranked with at least {value} comparisons over {value2} questions, no single question above {value3}% of its comparisons, and at least {value4} effective voters; single-question boards ignore the question count. Entries with {value5} comparisons that do not qualify go to the watch list with the reason.
+至少 {value} 场、有效投票者至少 {value2} 人才排名，单题榜不看题数。满 {value3} 场但没有达标的列入「观察区」，并写明原因。|An entry is ranked with at least {value} comparisons and {value2} effective voters; single-question boards ignore the question count. Entries with {value3} comparisons that do not qualify go to the watch list with the reason.
+综合榜把三维、设计、写作三张分类榜的分数按 {value} 加权平均。各类都达标的才排名，其余列在下方并显示各类名次。|The overall board averages the 3D, Design and Writing category scores with weights {value}. Only entries qualified in every category are ranked; the rest are listed below with their category ranks.
 第 {value} / {value2} 页 · 共 {value3} 项|Page {value} / {value2} · {value3} items
 全选当前页（{value} 件）|Select this page ({value} works)
 全选当前页（{value} 道）|Select this page ({value} questions)
