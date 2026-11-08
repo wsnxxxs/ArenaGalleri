@@ -3,14 +3,19 @@
 // question's median as a dashed line once three works count. Amounts (¥/$) appear only when the
 // server's switch is on (usage.costShown); until then the view compares tokens, requests, time and
 // artifact size. Rows can be grouped by model, configuration, Harness or model + Harness.
-import { $, esc, icon, store } from './ui.js';
+import { $, brandMark, esc, icon, store } from './ui.js';
+import { standard } from './featured.js';
+import { variantsOf } from './prompt-variants.js';
 import { locale } from './i18n.js';
 import { pricingInfo } from './platform.js';
 import { EXCLUSIONS, PAID_BASIS, PARTS, SOURCES, SYMBOL, artifactOf, convert, costOf, costShown, exclusion, formatDuration, formatMoney, formatTokens,
   median, priceFor, taskMedian, valueOf } from './usage.js';
 
-const PART_LABELS = { total: '总量', input: '输入', cacheRead: '缓存读取', cacheWrite: '缓存写入', output: '输出', reasoning: '其中推理' };
+// The words this view uses (see the terminology table in the handoff): every kind of token gets a short
+// plain explanation where the numbers are broken down.
+const PART_LABELS = { total: '全部', input: '输入', cacheRead: '缓存读取', cacheWrite: '缓存写入', output: '输出', reasoning: '其中推理' };
 const COMPOSITION = { cacheRead: '缓存读取', input: '输入', cacheWrite: '缓存写入', output: '输出（含推理）' };
+const MEANING = { cacheRead: '每次请求重复读入的上下文', input: '新读入的提示和文件', cacheWrite: '存进缓存、供之后读取的上下文', output: '模型写出的内容', reasoning: '模型的思考过程' };
 const GROUPS = { work: '逐件', model: '按模型', config: '按配置', harness: '按 Harness', pair: '按模型 + Harness' };
 // One ink ramp: darker parts cost more per token (cache reads are cheapest, output dearest).
 const SHADE = { cacheRead: 30, input: 52, cacheWrite: 74, output: 100 };
@@ -36,14 +41,14 @@ export function mountTaskUsage(container, ctx) {
     model: (r) => ctx.modelOf(r).name, config: (r) => ctx.label(r), harness: (r) => harnessName(r),
     pair: (r) => `${ctx.modelOf(r).name} · ${harnessName(r)}`,
   };
-  const metrics = () => [...(shown ? [['cost', '花费']] : []), ['tokens', 'token'], ['requests', '请求'], ['duration', '耗时'], ['artifact', '产物']];
+  const metrics = () => [...(shown ? [['cost', '花费']] : []), ['tokens', 'token'], ['requests', '请求次数'], ['duration', '生成耗时'], ['artifact', '作品体量']];
   const value = (r) => valueOf(r, state.metric, pricing, modelId(r), state.part);
   const why = (r) => exclusion(r, state.metric, pricing, modelId(r), state.part);
   const money = (cny) => formatMoney(cny, state.currency, pricing?.fx);
   const unit = () => recorded.map((r) => artifactOf(r.artifact)?.unit).find(Boolean) ?? 'tokens';
   const display = (v, metric = state.metric) => v == null ? '—'
-    : metric === 'cost' ? money(v) : metric === 'tokens' ? `${formatTokens(v)} tok` : metric === 'requests' ? count(v, '次')
-      : metric === 'duration' ? formatDuration(v) : unit() === 'chars' ? count(v.toLocaleString('en'), '字') : `${formatTokens(v)} tok`;
+    : metric === 'cost' ? money(v) : metric === 'tokens' ? `${formatTokens(v)} token` : metric === 'requests' ? count(v, '次')
+      : metric === 'duration' ? formatDuration(v) : unit() === 'chars' ? count(v.toLocaleString('en'), '字') : `${formatTokens(v)} token`;
 
   // A work's composition: the four kinds of token, in cost when amounts are on and the metric is cost.
   const composition = (r) => {
@@ -96,29 +101,38 @@ export function mountTaskUsage(container, ctx) {
     return { at: (v) => v / end * 100, ticks };
   }
 
-  const sourceOf = (r) => [ctx.harnessOf(r)?.name ? `<span data-i18n-ignore>${esc(ctx.harnessOf(r).name)}</span>` : '', SOURCES[r.usage.source] ? `<span>${SOURCES[r.usage.source]}</span>` : '']
-    .filter(Boolean).join(' · ');
+  // Who made a work: Harness, service provider, prompt version and how it was generated. Rows show the
+  // first two; the single-record card shows all of them.
+  const whereOf = (r, full = false) => {
+    const variant = full && r.promptVariant ? variantsOf(t).find((v) => v.id === r.promptVariant)?.label : '';
+    return [ctx.harnessOf(r)?.name ? `<span data-i18n-ignore>${esc(ctx.harnessOf(r).name)}</span>` : '<span>未注明 Harness</span>',
+      ctx.providerOf?.(r)?.name ? `<span>${esc(ctx.providerOf(r).name)}</span>` : '',
+      variant ? `<span>提示词</span> <span data-i18n-ignore>${esc(variant)}</span>` : '',
+      full ? `<span>${standard(r) ? '单轮生成' : r.generationMode === 'multi-turn' ? '多轮生成' : '有人工介入'}</span>` : '']
+      .filter(Boolean).join(' · ');
+  };
   // The full record of one work, for the hover/focus tip and the single-record card.
-  function details(r) {
+  function details(r, explain = false) {
     const cost = shown ? costOf(r.usage, priceFor(pricing, modelId(r)), pricing?.fx) : null;
-    const lines = PARTS.filter((part) => r.usage[part] != null).map((part) => `<tr><th scope="row"><i style="background:${shade(part)}"></i>${COMPOSITION[part]}</th><td>${formatTokens(r.usage[part])}</td>${cost ? `<td>${money(cost.parts[part])}</td>` : ''}</tr>`);
-    if (r.usage.reasoning != null) lines.push(`<tr class="is-sub"><th scope="row">其中推理</th><td>${formatTokens(r.usage.reasoning)}</td>${cost ? '<td></td>' : ''}</tr>`);
+    const why = (part) => explain ? `<small class="usage-part-why">${MEANING[part]}</small>` : '';
+    const lines = PARTS.filter((part) => r.usage[part] != null).map((part) => `<tr><th scope="row"><i style="background:${shade(part)}"></i>${COMPOSITION[part]}${why(part)}</th><td>${formatTokens(r.usage[part])}</td>${cost ? `<td>${money(cost.parts[part])}</td>` : ''}</tr>`);
+    if (r.usage.reasoning != null) lines.push(`<tr class="is-sub"><th scope="row">其中推理${why('reasoning')}</th><td>${formatTokens(r.usage.reasoning)}</td>${cost ? '<td></td>' : ''}</tr>`);
     const total = valueOf(r, 'tokens');
     return `<table class="usage-parts"><tbody>${lines.join('')}${total != null ? `<tr class="is-total"><th scope="row">合计</th><td>${formatTokens(total)}</td>${cost ? `<td>${money(cost.total)}</td>` : ''}</tr>` : ''}</tbody></table>`;
   }
   const facts = (r) => {
     const art = artifactOf(r.artifact);
     return [r.usage.requests != null ? `<span>${count(r.usage.requests, '次请求')}</span>` : '', r.usage.durationSec != null ? `<span>${formatDuration(r.usage.durationSec)}</span>` : '',
-      art ? `<span>${art.unit === 'chars' ? count(art.value.toLocaleString('en'), '字') : `${formatTokens(art.value)} tok`}</span>` : ''].filter(Boolean).join(' · ');
+      art ? `<span>${art.unit === 'chars' ? count(art.value.toLocaleString('en'), '字') : `${formatTokens(art.value)} token`}</span>` : ''].filter(Boolean).join(' · ');
   };
 
   // The line under a value: what the other metrics say about the same work.
   function secondaryOf(r) {
     const tok = valueOf(r, 'tokens'), art = r.artifact;
-    const bits = state.metric === 'cost' ? [tok != null ? `${formatTokens(tok)} tok` : '', r.usage.durationSec != null ? formatDuration(r.usage.durationSec) : '']
+    const bits = state.metric === 'cost' ? [tok != null ? `${formatTokens(tok)} token` : '', r.usage.durationSec != null ? formatDuration(r.usage.durationSec) : '']
       : state.metric === 'tokens' ? [r.usage.requests != null ? count(r.usage.requests, '次请求') : '', r.usage.durationSec != null ? formatDuration(r.usage.durationSec) : '']
         : state.metric === 'artifact' ? [art?.lines != null ? count(art.lines.toLocaleString('en'), '行') : '', art?.files != null ? count(art.files, '个文件') : '']
-          : [tok != null ? `${formatTokens(tok)} tok` : ''];
+          : [tok != null ? `${formatTokens(tok)} token` : ''];
     return bits.filter(Boolean).map((bit) => `<span>${bit}</span>`).join(' · ');
   }
   function bar(row, at, median) {
@@ -137,7 +151,7 @@ export function mountTaskUsage(container, ctx) {
     const r = row.r;
     const secondary = r ? secondaryOf(r) : `<span>${count(row.works.length, '件')}</span>`;
     const value = row.why === 'unpriced' ? '<span>未定价</span>' : `<span>${display(row.value)}</span>`;
-    const name = r ? `<b data-i18n-ignore>${esc(ctx.modelOf(r).name)}</b>${r.effort ? `<span class="badge" data-i18n-ignore>${esc(r.effort)}</span>` : ''}${row.why && row.why !== 'missing' ? `<span class="badge usage-why">${EXCLUSIONS[row.why]}</span>` : ''}<small>${sourceOf(r)}</small>`
+    const name = r ? `<b data-i18n-ignore>${esc(ctx.modelOf(r).name)}</b>${r.effort ? `<span class="badge" data-i18n-ignore>${esc(r.effort)}</span>` : ''}${row.why && row.why !== 'missing' ? `<span class="badge usage-why">${EXCLUSIONS[row.why]}</span>` : ''}<small>${whereOf(r)}</small>`
       : `<b data-i18n-ignore>${esc(row.name)}</b>`;
     const body = `<span class="usage-name">${name}</span>${bar(row, at, mid)}<span class="usage-value"><b>${value}</b><small>${secondary}</small></span>`;
     if (!r) return `<li class="usage-row is-group" data-usage-row="${esc(String(row.name).toLowerCase())}">${body}</li>`;
@@ -148,60 +162,81 @@ export function mountTaskUsage(container, ctx) {
   }
 
   const stat = (label, value, note = '') => `<div><dt>${label}</dt><dd><b>${value}</b>${note ? `<small>${note}</small>` : ''}</dd></div>`;
+  const by = (w) => `<span data-i18n-ignore>${esc(ctx.label(w.r))}</span>`;
+  // Two or more counted works: the question's median (from three), the least and most, and their spread.
   function stats(counted, mid) {
     const sorted = [...counted].sort((a, b) => a.value - b.value);
-    if (sorted.length >= 2) {
-      const at = sorted.length % 2 ? sorted[sorted.length >> 1] : null;
-      const [low, high] = [sorted[0], sorted.at(-1)];
-      return (mid != null ? stat('本题中位', display(mid), at ? `<span data-i18n-ignore>${esc(ctx.label(at.r))}</span>` : count(sorted.length, '件计入'))
-        : stat('计入', count(sorted.length, '件'), '不足 3 件，暂无中位'))
-        + stat(state.metric === 'cost' ? '最省' : '最少', display(low.value), `<span data-i18n-ignore>${esc(ctx.label(low.r))}</span>`)
-        + stat(state.metric === 'cost' ? '最贵' : '最多', display(high.value), `<span data-i18n-ignore>${esc(ctx.label(high.r))}</span>`)
-        + stat(state.metric === 'cost' ? '最贵 ÷ 最省' : '最多 ÷ 最少', low.value > 0 ? `${Math.round(high.value / low.value * 10) / 10}×` : '—', '同一道题，相差的倍数');
-    }
-    // One or two records: the stat row describes them rather than a median that does not exist yet.
-    const r = sorted[0]?.r ?? recorded[0];
-    const art = artifactOf(r.artifact);
-    return (shown ? stat('花费', display(valueOf(r, 'cost', pricing, modelId(r)), 'cost'), '按官方标价折算') : '')
-      + stat('token', display(valueOf(r, 'tokens'), 'tokens'), r.usage.reasoning != null ? `其中推理 ${formatTokens(r.usage.reasoning)}` : '')
-      + stat('请求', display(r.usage.requests ?? null, 'requests'), r.usage.durationSec != null ? formatDuration(r.usage.durationSec) : '')
-      + (shown ? '' : stat('产物', art ? display(art.value, 'artifact') : '—', r.artifact?.lines != null ? count(r.artifact.lines.toLocaleString('en'), '行') : ''));
+    const middle = sorted.length % 2 ? sorted[sorted.length >> 1] : null;
+    const [low, high] = [sorted[0], sorted.at(-1)];
+    return (mid != null ? stat('本题中位数', display(mid), middle ? by(middle) : count(sorted.length, '件参与比较'))
+      : stat('参与比较', count(sorted.length, '件'), '不足 3 件，还没有中位数'))
+      + stat(state.metric === 'cost' ? '最省' : '最少', display(low.value), by(low))
+      + stat(state.metric === 'cost' ? '最贵' : '最多', display(high.value), by(high))
+      + stat('相差', low.value > 0 ? `${Math.round(high.value / low.value * 10) / 10}×` : '—', state.metric === 'cost' ? '同一道题里，最贵是最省的几倍' : '同一道题里，最多是最少的几倍');
   }
 
-  // Where this work's artifact sits among every work of the question (all works are counted by the
-  // server, measured or not): a log-scale strip with the median, drawn once three have a length.
-  function artifactStrip(r) {
+  // How long the delivered work is next to every work of the question (the server counts all works,
+  // measured or not), in one sentence, with a small strip for those who want to see it.
+  function sizeLine(r) {
+    const own = artifactOf(r.artifact);
+    if (!own) return '';
     const lengths = t.results.map((w) => artifactOf(w.artifact)?.value).filter((v) => v > 0);
-    const own = artifactOf(r.artifact)?.value;
-    if (lengths.length < 3 || !(own > 0)) return '';
+    const what = own.unit === 'chars' ? `交付文字 ${own.value.toLocaleString('en')} 字`
+      : `交付代码 ${r.artifact.lines != null ? `${r.artifact.lines.toLocaleString('en')} 行、` : ''}${formatTokens(own.value)} token`;
+    if (lengths.length < 3 || !(own.value > 0)) return `<div class="usage-size"><p><span>${what}。</span></p></div>`;
+    const shorter = lengths.filter((v) => v < own.value).length, longer = lengths.filter((v) => v > own.value).length;
+    const place = shorter >= longer ? `，比本题 ${Math.round(shorter / lengths.length * 100)}% 的作品长。` : `，比本题 ${Math.round(longer / lengths.length * 100)}% 的作品短。`;
     const lo = Math.min(...lengths), hi = Math.max(...lengths), span = Math.log(hi / lo) || 1;
     const at = (v) => (Math.log(v / lo) / span * 100).toFixed(2);
     const mid = median(lengths);
-    return `<div class="usage-strip"><p class="usage-label">产物体量在本题 ${lengths.length} 件作品中的位置</p>
-      <div class="usage-dots" aria-hidden="true">${lengths.map((v) => `<i style="left:${at(v)}%"></i>`).join('')}<s style="left:${at(mid)}%"></s><b style="left:${at(own)}%"></b></div>
-      <p class="usage-scale"><span>${display(lo, 'artifact')}</span><span>中位 ${display(mid, 'artifact')}</span><span>${display(hi, 'artifact')}</span></p>
-      <p class="fine">这一件是中位的 ${Math.round(own / mid * 10) / 10} 倍。产物用同一把尺子统计，可以跨模型比较。</p></div>`;
+    return `<div class="usage-size"><p><span>${what}</span><span>${place}</span></p>
+      <div class="usage-dots" aria-hidden="true">${lengths.map((v) => `<i style="left:${at(v)}%"></i>`).join('')}<s style="left:${at(mid)}%"></s><b style="left:${at(own.value)}%"></b></div>
+      <p class="usage-scale" aria-hidden="true"><span>${display(lo, 'artifact')}</span><span>中位数 ${display(mid, 'artifact')}</span><span>${display(hi, 'artifact')}</span></p></div>`;
   }
 
+  // The plain reading of a record: how much was re-read context, and how much the model wrote.
+  function plain(r) {
+    const total = valueOf(r, 'tokens'), u = r.usage;
+    const share = total > 0 && u.cacheRead > 0 ? Math.round(u.cacheRead / total * 100) : null;
+    return [share ? `<span>其中 ${share}% 是缓存读取，也就是每次请求重复读入的上下文。</span>` : '',
+      u.output != null ? `<span>${u.reasoning != null ? `模型写出 ${formatTokens(u.output)} token，其中推理 ${formatTokens(u.reasoning)}。` : `模型写出 ${formatTokens(u.output)} token。`}</span>` : '']
+      .filter(Boolean).join('');
+  }
+
+  // A question with one record: that work is the subject. Who made it, three numbers, one bar and a
+  // sentence; the breakdown and the source wait behind 构成明细.
   function card(r) {
+    const m = ctx.modelOf(r);
     const paid = r.usage.paid?.basis ? PAID_BASIS[r.usage.paid.basis] : '';
-    const parts = state.metric === 'cost' ? composition(r) : Object.fromEntries(PARTS.map((part) => [part, r.usage[part] ?? 0]));
-    const total = PARTS.reduce((sum, part) => sum + (parts?.[part] ?? 0), 0);
-    return `<section class="usage-card" aria-label="这件作品的用量">
-      <div class="usage-card-head"><p class="usage-label">本题目前只有这一件有用量记录</p>
-        <span class="usage-card-tools">${shown ? seg('currency', [['CNY', '¥'], ['USD', '$']], state.currency) : ''}<a class="text-link" href="${ctx.viewHref(t, r.id)}">在线预览${icon('right')}</a></span></div>
+    // The bar shows tokens, as the sentence under it does; what each kind cost is in the breakdown.
+    const parts = Object.fromEntries(PARTS.map((part) => [part, r.usage[part] ?? 0]));
+    const total = PARTS.reduce((sum, part) => sum + parts[part], 0);
+    const key = (label, value) => value == null ? '' : `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+    const tokens = valueOf(r, 'tokens');
+    return `<article class="usage-work" aria-label="这件作品的用量">
+      <header class="usage-who">
+        <a class="usage-who-link" href="${ctx.viewHref(t, r.id)}">${brandMark(m, 'brand-mark')}<span class="usage-who-text">
+          <span class="usage-who-name"><b data-i18n-ignore>${esc(m.name)}</b>${r.effort ? `<span class="badge" data-i18n-ignore>${esc(r.effort)}</span>` : ''}</span>
+          <small>${whereOf(r, true)}</small></span></a>
+        <span class="usage-who-tools">${shown ? seg('currency', [['CNY', '¥'], ['USD', '$']], state.currency) : ''}<a class="text-link" href="${ctx.viewHref(t, r.id)}">在线预览${icon('right')}</a></span>
+      </header>
+      <dl class="usage-keys">
+        ${shown ? key('花费', display(valueOf(r, 'cost', pricing, modelId(r)), 'cost')) : ''}
+        ${key('总 token', tokens == null ? null : formatTokens(tokens))}
+        ${key('生成耗时', r.usage.durationSec == null ? null : formatDuration(r.usage.durationSec))}
+        ${key('请求次数', r.usage.requests == null ? null : count(r.usage.requests, '次'))}
+      </dl>
       ${total > 0 ? `<span class="usage-stack" aria-hidden="true">${PARTS.filter((part) => parts[part] > 0).map((part) => `<i style="flex-grow:${parts[part] / total};background:${shade(part)}"></i>`).join('')}</span>` : ''}
-      <div class="usage-card-body">${details(r)}
+      <p class="usage-plain">${plain(r)}</p>
+      <details class="usage-more"><summary>构成明细${icon('next')}</summary>
+        ${details(r, true)}
         <dl class="usage-facts">
-          ${r.usage.requests != null ? `<div><dt>请求</dt><dd>${count(r.usage.requests, '次')}</dd></div>` : ''}
-          ${r.usage.durationSec != null ? `<div><dt>耗时</dt><dd>${formatDuration(r.usage.durationSec)}</dd></div>` : ''}
-          ${SOURCES[r.usage.source] ? `<div><dt>数字来自</dt><dd>${SOURCES[r.usage.source]}</dd></div>` : ''}
+          ${SOURCES[r.usage.source] ? `<div><dt>来源</dt><dd>${SOURCES[r.usage.source]}</dd></div>` : ''}
           ${paid ? `<div><dt>实付</dt><dd>${paid}</dd></div>` : ''}
-          ${r.artifact ? `<div><dt>产物</dt><dd>${[r.artifact.lines != null ? count(r.artifact.lines.toLocaleString('en'), '行') : '', r.artifact.files != null ? count(r.artifact.files, '个文件') : '', artifactOf(r.artifact) ? display(artifactOf(r.artifact).value, 'artifact') : ''].filter(Boolean).map((bit) => `<span>${bit}</span>`).join(' · ')}</dd></div>` : ''}
-        </dl></div>
-      ${artifactStrip(r)}
-      <p class="fine">再有两件作品记录用量后，这里就能排序比较，并画出本题中位线。</p>
-    </section>`;
+        </dl></details>
+      ${sizeLine(r)}
+    </article>
+    <p class="fine usage-later">目前只有这一件有用量记录。有 3 件以上时，这里会按用量排序，并画出本题的中位数。</p>`;
   }
 
   const seg = (name, options, current) => `<div class="seg" role="group" aria-label="${NAMES[name]}">${options.map(([value, text]) => `<button type="button" data-usage-set="${name}" data-value="${value}" aria-pressed="${value === current}">${text}</button>`).join('')}</div>`;
@@ -227,10 +262,10 @@ export function mountTaskUsage(container, ctx) {
       ${shown && state.metric === 'cost' ? seg('currency', [['CNY', '¥'], ['USD', '$']], state.currency) : ''}`;
     // A question with one record shows that record whole; sorting and a median need more.
     const single = recorded.length === 1 && counted.length === 1;
-    container.innerHTML = `<div class="usage-head"><h2>${shown ? '花费对比' : '用量对比'}</h2>
-        <p class="usage-meta">${count(counted.length, '件计入')} · 共 ${t.results.length} 件作品，${count(recorded.length, '件有记录')}</p>
-        <p class="usage-basis">${shown && pricing?.asOf ? `按官方标价折算 · 价格表 <span data-i18n-date="${esc(pricing.asOf)}">${esc(pricing.asOf)}</span>` : '数字由管理员实测录入'}</p></div>
-      <dl class="usage-stats">${counted.length ? stats(counted, mid) : stat('有记录', count(recorded.length, '件'), '都不计入对比')}</dl>
+    container.innerHTML = `<div class="usage-head"><h2>${shown ? '花费' : '用量'}</h2>
+        <p class="usage-lede"><span>${shown ? '这道题的作品生成时用了多少 token、花了多少钱、用了多久。' : '这道题的作品生成时用了多少 token、用了多久。'}</span><span>${single ? '数字由管理员从生成记录实测录入，目前 1 件有记录。' : `数字由管理员从生成记录实测录入，目前 ${recorded.length} 件有记录，${counted.length} 件参与比较。`}</span></p>
+        ${shown && pricing?.asOf ? `<p class="usage-basis">按官方标价折算 · 价格表 <span data-i18n-date="${esc(pricing.asOf)}">${esc(pricing.asOf)}</span></p>` : ''}</div>
+      ${single ? '' : `<dl class="usage-stats">${counted.length >= 2 ? stats(counted, mid) : stat('有记录', count(recorded.length, '件'), counted.length ? '参与比较的不足 2 件' : '都不参与比较')}</dl>`}
       ${single ? card(counted[0].r) : `<div class="usage-toolbar">
         ${recorded.length > 5 ? `<label class="collection-search">${icon('search')}<input type="search" data-usage-search aria-label="搜索模型" placeholder="搜索模型" value="${esc(query)}"></label>` : ''}
         <label class="result-sort">分组<select data-usage-group aria-label="分组">${Object.entries(GROUPS).map(([v, text]) => `<option value="${v}"${v === state.group ? ' selected' : ''}>${text}</option>`).join('')}</select></label>
@@ -239,16 +274,17 @@ export function mountTaskUsage(container, ctx) {
       </div>
       ${legend}
       ${sorted.length ? `<ol class="usage-rows${state.scale === 'log' ? ' is-log' : ''}">${sorted.map((row) => rowHtml(row, at, mid)).join('')}</ol>
-      <div class="usage-axis" aria-hidden="true"><span></span><span class="usage-ticks">${ticks.map((v) => `<i style="left:${tickAt(v).toFixed(2)}%">${tick(v)}</i>`).join('')}${mid != null ? `<em style="left:${at(mid).toFixed(2)}%">中位 ${display(mid)}</em>` : ''}</span><span></span></div>`
+      <div class="usage-axis" aria-hidden="true"><span></span><span class="usage-ticks">${ticks.map((v) => `<i style="left:${tickAt(v).toFixed(2)}%">${tick(v)}</i>`).join('')}${mid != null ? `<em style="left:${at(mid).toFixed(2)}%">中位数 ${display(mid)}</em>` : ''}</span><span></span></div>`
         : '<p class="muted">没有可比较的记录。</p>'}
-      ${counted.length && counted.length < 3 && state.group === 'work' ? '<p class="fine usage-note">本题计入的记录不足 3 件，暂不画中位线。</p>' : ''}`}
-      <div class="usage-foot">${state.group === 'work' && excluded ? `<label class="board-sample-toggle"><input type="checkbox" data-usage-excluded${state.showExcluded ? ' checked' : ''}><span>显示不计入的作品（${excluded}）</span></label>` : ''}
-        <p class="fine">只列管理员实测过的作品；其余作品没有用量记录。</p></div>
+      ${counted.length && counted.length < 3 && state.group === 'work' ? '<p class="fine usage-note">参与比较的作品不足 3 件，还没有中位数。</p>' : ''}`}
+      ${single ? '' : `<div class="usage-foot">${state.group === 'work' && excluded ? `<label class="board-sample-toggle"><input type="checkbox" data-usage-excluded${state.showExcluded ? ' checked' : ''}><span>显示不参与比较的作品（${excluded}）</span></label>` : ''}
+        <p class="fine">只列管理员实测过的作品；其余作品没有用量记录。</p></div>`}
       <details class="board-notes usage-notes"><summary>${shown ? '花费怎么算' : '用量怎么记'}${icon('next')}</summary><dl>
         ${shown ? '<div><dt>花费</dt><dd>花费 = 各类 token × 该模型当前官方标价，再按价格表汇率换算；实付不参与比较。</dd></div>' : ''}
-        <div><dt>来源</dt><dd>用量由管理员实测录入：API 回执、工具统计、账单或会话日志。中位线只算计入的作品：单轮且无人工介入${shown ? '、模型已定价' : ''}。</dd></div>
-        <div><dt>token</dt><dd>token 由各家分词器计数，跨模型只作参考；缓存读取是重复读入的上下文，推理包含在输出里。</dd></div>
-        <div><dt>产物</dt><dd>产物体量由程序从作品文件统计，所有作品用同一把尺子，可以直接比较。</dd></div>
+        <div><dt>来源</dt><dd>管理员从 API 回执、工具统计、账单或会话日志录入，普通投稿没有用量。</dd></div>
+        <div><dt>参与比较</dt><dd>只比较单轮生成、没有人工介入的作品${shown ? '，花费还要求模型已定价' : ''}；中位数要有 3 件以上。</dd></div>
+        <div><dt>token</dt><dd>由各家分词器计数，跨模型只作参考。缓存读取是每次请求重复读入的上下文，输入是新读入的提示和文件，输出是模型写出的内容，推理包含在输出里。</dd></div>
+        <div><dt>作品体量</dt><dd>交付代码的行数和长度（写作题为字数），由程序按同一规则统计全部作品，可以直接比较。</dd></div>
       </dl></details>`;
     applyQuery();
   }

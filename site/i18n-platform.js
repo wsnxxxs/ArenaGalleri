@@ -11,6 +11,39 @@ const phrases = Object.fromEntries(`
 当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。|At least 21 valid comparisons in the current scope are required to appear; 21–29 comparisons are marked provisional.
 测试计分：这里预览新的 v3 计分，正式榜单仍按现行方法计算。|Trial scoring: this previews the new v3 scoring. The official leaderboard still uses the current method.
 已排名|Ranked
+总 token|Total tokens
+生成耗时|Generation time
+请求次数|Requests
+作品体量|Work size
+构成明细|Breakdown
+全部|All
+每次请求重复读入的上下文|context read again on each request
+新读入的提示和文件|prompt and files read in fresh
+存进缓存、供之后读取的上下文|context stored for later reads
+模型写出的内容|what the model wrote
+模型的思考过程|the model's thinking
+本题中位数|Question median
+参与比较|Compared
+不足 3 件，还没有中位数|Under 3, no median yet
+相差|Spread
+同一道题里，最多是最少的几倍|Most as a multiple of least on this question
+同一道题里，最贵是最省的几倍|Dearest as a multiple of cheapest on this question
+单轮生成|Single-turn
+多轮生成|Multi-turn
+有人工介入|With human help
+提示词|Prompt
+目前只有这一件有用量记录。有 3 件以上时，这里会按用量排序，并画出本题的中位数。|This is the only work with a usage record so far. With 3 or more, this page sorts them and marks the question median.
+这道题的作品生成时用了多少 token、用了多久。|How many tokens this question's works used when they were generated, and how long they took.
+这道题的作品生成时用了多少 token、花了多少钱、用了多久。|How many tokens this question's works used when they were generated, what they cost and how long they took.
+数字由管理员从生成记录实测录入，目前 1 件有记录。| Administrators measured the numbers from generation records; 1 work has a record so far.
+参与比较的作品不足 3 件，还没有中位数。|Fewer than 3 works are compared, so there is no median yet.
+参与比较的不足 2 件|Fewer than 2 compared
+都不参与比较|None compared
+管理员从 API 回执、工具统计、账单或会话日志录入，普通投稿没有用量。|Entered by administrators from API receipts, tool summaries, bills or session logs. Ordinary submissions have no usage.
+只比较单轮生成、没有人工介入的作品；中位数要有 3 件以上。|Only single-turn works without human help are compared; a median needs 3 or more.
+只比较单轮生成、没有人工介入的作品，花费还要求模型已定价；中位数要有 3 件以上。|Only single-turn works without human help are compared, and cost also needs a priced model; a median needs 3 or more.
+由各家分词器计数，跨模型只作参考。缓存读取是每次请求重复读入的上下文，输入是新读入的提示和文件，输出是模型写出的内容，推理包含在输出里。|Counted by each vendor's tokenizer, so cross-model comparisons are indicative. Cache reads are context read again on each request, input is the prompt and files read in fresh, output is what the model wrote, and reasoning is part of output.
+交付代码的行数和长度（写作题为字数），由程序按同一规则统计全部作品，可以直接比较。|Lines and length of the delivered code (characters for writing), counted by one rule for every work, so it compares directly.
 用量|Usage
 花费|Cost
 用量对比|Usage comparison
@@ -748,6 +781,21 @@ const legal = Object.fromEntries(`
 `.trim().split('\n').map((line) => line.split('|')));
 
 const dynamic = Object.fromEntries(`
+数字由管理员从生成记录实测录入，目前 {count} 件有记录，{n} 件参与比较。| Administrators measured the numbers from generation records; {count} works have a record and {n} are compared.
+{count} 件参与比较|{count} compared
+其中 {percent}% 是缓存读取，也就是每次请求重复读入的上下文。|{percent}% of it is cache reads, the context read again on each request. 
+模型写出 {value} token，其中推理 {value2}。|The model wrote {value} tokens, {value2} of them reasoning.
+模型写出 {value} token。|The model wrote {value} tokens.
+交付代码 {count} 行、{value} token。|Delivered code: {count} lines, {value} tokens.
+交付代码 {count} 行、{value} token|Delivered code: {count} lines, {value} tokens
+交付代码 {value} token。|Delivered code: {value} tokens.
+交付代码 {value} token|Delivered code: {value} tokens
+交付文字 {count} 字。|Delivered text: {count} characters.
+交付文字 {count} 字|Delivered text: {count} characters
+，比本题 {percent}% 的作品长。|, longer than {percent}% of this question's works.
+，比本题 {percent}% 的作品短。|, shorter than {percent}% of this question's works.
+中位数 {value}|Median {value}
+显示不参与比较的作品（{count}）|Show works not compared ({count})
 {count} 件计入 · 共 {total} 件作品，{n} 件有记录|{count} counted · {total} works in all, {n} recorded
 {count} 件计入|{count} counted
 {count} 件|{count} works

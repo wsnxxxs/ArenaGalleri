@@ -1692,6 +1692,44 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .usage-dots s { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--ink-2); }
 .usage-scale { display: flex; justify-content: space-between; margin: 0; color: var(--muted); font: 11px var(--mono); }
 .usage-notes { margin-top: 24px; }
+/* The page says what it answers before any number. */
+.usage-head { flex-direction: column; align-items: flex-start; gap: 6px; }
+.usage-lede { max-width: 46em; margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.7; }
+.usage-head .usage-basis { margin: 0; }
+/* One measured work: who made it first, then three numbers, one bar and a sentence. */
+.usage-work { margin-top: 4px; padding: 18px 20px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.usage-who { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.usage-who-link { display: flex; align-items: center; gap: 12px; min-width: 0; color: inherit; text-decoration: none; }
+.usage-who-link:hover b, .usage-who-link:focus-visible b { text-decoration: underline; text-underline-offset: 3px; }
+.usage-who-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.usage-who-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.usage-who-name b { color: var(--ink); font-size: 17px; font-weight: 600; }
+.usage-who-name .badge { margin: 0; }
+.usage-who small { color: var(--muted); font-size: 12.5px; }
+.usage-who-tools { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.usage-keys { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 12px; margin: 16px 0 14px; }
+.usage-keys dt { color: var(--muted); font-size: 12px; }
+.usage-keys dd { margin: 3px 0 0; color: var(--ink); font: 600 24px var(--mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.usage-work .usage-stack { margin-bottom: 10px; }
+.usage-plain { margin: 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.7; }
+.usage-more { margin-top: 10px; }
+.usage-more summary { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); font-size: 13px; cursor: pointer; list-style: none; }
+.usage-more summary::-webkit-details-marker { display: none; }
+.usage-more summary .i { width: 14px; height: 14px; transform: rotate(90deg); transition: transform 0.2s var(--ease); }
+.usage-more[open] summary .i { transform: rotate(-90deg); }
+.usage-more .usage-parts { max-width: 34rem; margin-top: 8px; }
+.usage-more .usage-facts { margin-top: 10px; }
+.usage-part-why { display: block; margin: 1px 0 4px 14px; color: var(--muted); font-size: 11.5px; white-space: normal; }
+.usage-size { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.usage-size p:first-child { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+.usage-size .usage-dots { height: 18px; margin: 10px 6px 2px; }
+.usage-later { margin: 12px 0 0; }
+@media (max-width: 640px) {
+  .usage-work { padding: 14px 14px 12px; }
+  .usage-keys { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  .usage-keys dd { font-size: 19px; }
+}
+@media (prefers-reduced-motion: reduce) { .usage-more summary .i { transition: none; } }
 @media (max-width: 640px) {
   .usage-basis { margin-left: 0; }
   .usage-stats { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }

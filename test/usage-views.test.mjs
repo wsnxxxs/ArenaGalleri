@@ -39,11 +39,14 @@ test('with amounts off the task view compares tokens only; on, it adds cost in t
     const off = box();
     const hidden = mountTaskUsage(off, viewCtx(task, OFF));
     await hidden.ready;
-    assert.match(off.innerHTML, /<h2>用量对比<\/h2>/);
+    assert.match(off.innerHTML, /<h2>用量<\/h2>/);
+    assert.match(off.innerHTML, /<p class="usage-lede"><span>这道题的作品生成时用了多少 token、用了多久。<\/span>/, 'the page says what it answers');
     assert.doesNotMatch(off.innerHTML, /[¥$]|花费|data-value="cost"|data-value="CNY"/, 'no amounts, cost metric or currency while the switch is off');
     assert.match(off.innerHTML, /data-value="tokens" aria-pressed="true"/);
-    assert.match(off.innerHTML, /3 件计入 · 共 5 件作品，4 件有记录/, 'the multi-turn record is shown only on request');
-    assert.match(off.innerHTML, /<dt>本题中位<\/dt>/);
+    assert.match(off.innerHTML, /目前 4 件有记录，3 件参与比较。/, 'the multi-turn record is shown only on request');
+    assert.match(off.innerHTML, /<dt>本题中位数<\/dt>/);
+    // Each row names who made the work first: model and level, then Harness.
+    assert.match(off.innerHTML, /<span class="usage-name"><b data-i18n-ignore>M1<\/b><span class="badge" data-i18n-ignore>High<\/span><small><span data-i18n-ignore>cli<\/span><\/small>/);
     assert.equal((off.innerHTML.match(/class="usage-row"/g) ?? []).length, 3);
     assert.match(off.innerHTML, /<s style="left:/, 'three counted works draw the median');
     assert.match(off.innerHTML, /aria-describedby="usage-tip-1"/);
@@ -55,11 +58,11 @@ test('with amounts off the task view compares tokens only; on, it adds cost in t
     const shown = mountTaskUsage(on, viewCtx(task, PRICING));
     await shown.ready;
     assert.equal(shown.shown(), true);
-    assert.match(on.innerHTML, /<h2>花费对比<\/h2>/);
+    assert.match(on.innerHTML, /<h2>花费<\/h2>/);
     assert.match(on.innerHTML, /data-value="cost" aria-pressed="true"/);
     assert.match(on.innerHTML, /data-value="CNY"/);
     assert.match(on.innerHTML, /<span>\$0\.\d+<\/span>/, 'English locale defaults to dollars');
-    assert.match(on.innerHTML, /<dt>计入<\/dt><dd><b>2 件<\/b><small>不足 3 件，暂无中位<\/small>/, 'the unpriced model leaves two works on cost');
+    assert.match(on.innerHTML, /<dt>参与比较<\/dt><dd><b>2 件<\/b><small>不足 3 件，还没有中位数<\/small>/, 'the unpriced model leaves two works on cost');
     hidden.destroy(); shown.destroy();
   } finally { restore(); }
 });
@@ -73,18 +76,25 @@ test('a question with one record shows that record whole instead of a lone bar',
     const container = box();
     const view = mountTaskUsage(container, viewCtx(task, OFF));
     await view.ready;
-    assert.match(container.innerHTML, /本题目前只有这一件有用量记录/);
+    // The work is the subject: who made it, linked to its preview, before any number.
+    assert.match(container.innerHTML, /<a class="usage-who-link" href="#\/q2\/only">[^]*<b data-i18n-ignore>M1<\/b><span class="badge" data-i18n-ignore>Max<\/span>[^]*<span data-i18n-ignore>cli<\/span> · <span>单轮生成<\/span>/);
+    assert.match(container.innerHTML, /<dt>总 token<\/dt><dd>98k<\/dd>[^]*<dt>生成耗时<\/dt><dd>10 分<\/dd>[^]*<dt>请求次数<\/dt><dd>12 次<\/dd>/);
+    assert.match(container.innerHTML, /<span>其中 51% 是缓存读取，也就是每次请求重复读入的上下文。<\/span><span>模型写出 47k token，其中推理 12k。<\/span>/);
+    assert.match(container.innerHTML, /<details class="usage-more"><summary>构成明细/, 'the breakdown waits behind a disclosure');
+    assert.match(container.innerHTML, /<small class="usage-part-why">每次请求重复读入的上下文<\/small>/);
+    assert.match(container.innerHTML, /目前只有这一件有用量记录。有 3 件以上时/);
+    assert.doesNotMatch(container.innerHTML, /usage-stats/, 'no second set of the same numbers');
     assert.doesNotMatch(container.innerHTML, /usage-rows|usage-toolbar/, 'no sorting controls or rows for a single record');
     assert.match(container.innerHTML, /其中推理/);
-    assert.match(container.innerHTML, /产物体量在本题 5 件作品中的位置/);
+    assert.match(container.innerHTML, /<span>交付代码 800 行、20k token<\/span><span>，比本题 60% 的作品长。<\/span>/);
     assert.doesNotMatch(container.innerHTML, /[¥$]/);
     view.destroy();
     // Amounts on: the card keeps its currency switch.
     const priced = box();
     const shown = mountTaskUsage(priced, viewCtx(task, PRICING));
     await shown.ready;
-    assert.match(priced.innerHTML, /usage-card-tools"><div class="seg" role="group" aria-label="币种"><button type="button" data-usage-set="currency" data-value="CNY"/);
-    assert.match(priced.innerHTML, /<span>2 lines<\/span>|<span>100 行<\/span>|<span>800 行<\/span>/, 'each artifact fact is its own text node');
+    assert.match(priced.innerHTML, /usage-who-tools"><div class="seg" role="group" aria-label="币种"><button type="button" data-usage-set="currency" data-value="CNY"/);
+    assert.match(priced.innerHTML, /<dt>花费<\/dt><dd>/);
     shown.destroy();
   } finally { restore(); }
 });
