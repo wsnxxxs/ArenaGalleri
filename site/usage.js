@@ -168,4 +168,6 @@ export function formatDuration(sec) {
   return m % 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m / 60} 小时`;
 }
 export const SOURCES = { api: 'API 回执', harness: '工具统计', bill: '账单', log: '会话日志' };
+// How the work was actually paid for; a note beside the official price, never compared.
+export const PAID_BASIS = { api: 'API 按量', subscription: '订阅额度', credits: '赠送额度', reseller: '中转 / 云厂商' };
 export const EXCLUSIONS = { 'multi-turn': '多轮', intervention: '人工介入', unpriced: '未定价', missing: '缺少数字' };

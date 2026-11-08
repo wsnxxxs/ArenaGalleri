@@ -6,7 +6,7 @@
 import { $, esc, icon, store } from './ui.js';
 import { locale } from './i18n.js';
 import { pricingInfo } from './platform.js';
-import { EXCLUSIONS, PARTS, SOURCES, SYMBOL, artifactOf, convert, costOf, costShown, exclusion, formatDuration, formatMoney, formatTokens,
+import { EXCLUSIONS, PAID_BASIS, PARTS, SOURCES, SYMBOL, artifactOf, convert, costOf, costShown, exclusion, formatDuration, formatMoney, formatTokens,
   median, priceFor, taskMedian, valueOf } from './usage.js';
 
 const PART_LABELS = { total: '总量', input: '输入', cacheRead: '缓存读取', cacheWrite: '缓存写入', output: '输出', reasoning: '其中推理' };
@@ -184,7 +184,7 @@ export function mountTaskUsage(container, ctx) {
   }
 
   function card(r) {
-    const paid = r.usage.paid?.basis ? { api: 'API 按量', subscription: '订阅额度', credits: '赠送额度', reseller: '中转 / 云厂商' }[r.usage.paid.basis] : '';
+    const paid = r.usage.paid?.basis ? PAID_BASIS[r.usage.paid.basis] : '';
     const parts = state.metric === 'cost' ? composition(r) : Object.fromEntries(PARTS.map((part) => [part, r.usage[part] ?? 0]));
     const total = PARTS.reduce((sum, part) => sum + (parts?.[part] ?? 0), 0);
     return `<section class="usage-card" aria-label="这件作品的用量">

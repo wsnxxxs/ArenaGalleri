@@ -50,7 +50,7 @@ function modelOptions(ctx, use) {
 }
 
 // A name that matches no registered model is a custom model and carries its own vendor.
-const registeredModel = (form, name) => [...$('datalist[data-models]', form).options].find((o) => o.value === name)?.dataset.modelId;
+export const registeredModel = (form, name) => [...$('datalist[data-models]', form).options].find((o) => o.value === name)?.dataset.modelId;
 // An unregistered name written like a registered model asks whether that model was meant, so
 // one model does not end up as two leaderboard rows.
 const guessHtml = (name, models) => {

@@ -2,7 +2,9 @@
 import { $, $$, brandMark, esc, formatTime, icon, img } from './ui.js';
 import { accountVersion, api, byStaff, canDecide, isSenior, moderationBadge, openDialog, refreshPlatform, ROLE_LABELS, setFaces, statusBadge, toast, updateRememberedReviewWork } from './platform.js';
 import { templatesOf } from './categories.js';
-import { workFieldsHtml } from './work-fields.js';
+import { registeredModel, workFieldsHtml } from './work-fields.js';
+import { bindUsageEntry, loadInto, saveUsage, usageEntryHtml } from './usage-entry.js';
+import { loadPricing } from './usage-view.js';
 
 const held = (w) => ['pending', 'review', 'rejected'].includes(w.moderation?.status);
 const flagsOf = (w) => ({
@@ -74,6 +76,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
           <h3 class="mini-heading">作品信息</h3>
           <label class="field"><span class="field-label">所属题目</span><select class="input" name="task"${movable ? '' : ' disabled'}>${[...homes].map(([id, title]) => `<option data-i18n-ignore value="${esc(id)}"${id === w.task ? ' selected' : ''}>${esc(title)}</option>`).join('')}</select><span class="field-hint">${homeHint}</span></label>
           ${workFieldsHtml(ctx, task, w, { expanded: true })}
+          ${usageEntryHtml()}
           <div class="work-display-settings"><h3 class="mini-heading">展示设置</h3>
             <label class="work-display-setting"><span><b>展览馆公开展示</b><small data-gallery-hint></small></span><input type="checkbox" role="switch" name="show_gallery" aria-label="展览馆公开展示"${initial.show_gallery ? ' checked' : ''}></label>
             <label class="work-display-setting"><span><b>参加盲评</b><small data-arena-hint></small></span><input type="checkbox" role="switch" name="show_arena" aria-label="参加盲评"${initial.show_arena ? ' checked' : ''}></label>
@@ -90,6 +93,16 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
   });
   const form = $('form', sheet.el);
   const editor = createEditor(form, task, w);
+  // Usage is saved with the same button, after the work's information; the model for its conversion is
+  // whatever the information fields say now.
+  void loadPricing();
+  const usage = bindUsageEntry($('[data-usage-entry]', form), { modelOf: () => {
+    const name = form.elements.modelName?.value.trim() || w.modelName;
+    return { id: registeredModel(form, name) ?? (name === w.modelName ? w.model : null), name };
+  } });
+  form.addEventListener('input', (event) => { if (event.target.name === 'modelName') usage.refresh(); });
+  let usageReady = false;
+  void loadInto(usage, w.task, w.id).then((ok) => { usageReady = ok; });
   const error = $('.form-error:not(.field-error)', form);
   let busy = false;
   // Text questions retain the backend's earlier blind-pool rules.
@@ -126,6 +139,10 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
     error.textContent = '';
     let meta;
     try { meta = editor.collect(); } catch (err) { error.textContent = err.message; return; }
+    // An unreadable number stops the save before anything is sent; a record that could not be loaded
+    // is never overwritten.
+    const measured = usageReady ? usage.read() : { changed: false };
+    if (measured.error) { error.textContent = measured.error; return; }
     if (movable && form.elements.task.value !== w.task) meta.task = form.elements.task.value;
     const faces = {};
     if (canDecide(w) && !blockedReason) {
@@ -135,7 +152,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
       }
     }
     setBusy(true);
-    let metadataSaved = false;
+    let metadataSaved = false, facesSaved = false, usageSaved = false;
     try {
       metadataSaved = await editor.save(meta);
       if (owner !== accountVersion()) { sheet.close(); return; }
@@ -146,12 +163,20 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
         Object.assign(w, work);
         updateRememberedReviewWork(w);
         onChanged?.(w);
+        facesSaved = true;
+      }
+      if (measured.changed) {
+        await saveUsage(meta.task ?? w.task, w.id, measured.usage);
+        usageSaved = true;
+        if (owner !== accountVersion()) { sheet.close(); return; }
       }
       sheet.close();
-      toast(metadataSaved || Object.keys(faces).length ? `已保存：${w.title}` : '信息与展示设置没有改动');
+      toast(metadataSaved || Object.keys(faces).length || usageSaved ? `已保存：${w.title}` : '信息、展示设置与用量没有改动');
       await refreshPlatform('review');
     } catch (err) {
-      error.textContent = metadataSaved ? `作品信息已保存，展示设置未保存：${err.message}。请重试保存。` : err.message;
+      const settingsDone = !Object.keys(faces).length || facesSaved;
+      error.textContent = metadataSaved && settingsDone && measured.changed ? `作品信息与展示设置已保存，用量没有保存：${err.message}。请重试保存。`
+        : metadataSaved ? `作品信息已保存，展示设置未保存：${err.message}。请重试保存。` : err.message;
       if (metadataSaved && owner === accountVersion()) await refreshPlatform('review');
     } finally { setBusy(false); }
   });

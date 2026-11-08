@@ -1764,3 +1764,98 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
   .board .c-cost, .cost-note { display: none; }
   .toolbar-actions:has([data-board-view]) .result-sort { flex: 1 1 30%; }
 }
+
+/* Recorded usage (token-cost design §05): one ink ramp, deeper for the dearer kinds of token; never vermilion,
+   since cheap and dear are not marks. Figures are monospaced. Amounts only appear while the server turns
+   them on (usage-view.js). */
+.usage-sep { color: var(--line-2); }
+.result-usage { margin: 6px 0 0; color: var(--muted); font: 12px/1.6 var(--mono); }
+.result-usage .usage-money, .arena-usage-line .usage-money, .pane-usage .usage-money { color: var(--ink); font-weight: 600; }
+.usage-artifact, .usage-mono { font-family: var(--mono); font-size: 12.5px; }
+.usage-artifact > span { white-space: nowrap; }
+.usage-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.usage-block-head h3 { margin: 0; }
+.usage-block-head .badge { margin-left: 0; }
+.usage-block-head .btn { margin-left: auto; }
+.usage-block.is-empty .usage-block-head .fine { margin: 0; }
+.usage-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 14px 0 0; }
+.usage-total b { color: var(--ink); font: 600 26px/1.15 var(--mono); letter-spacing: -0.02em; }
+.usage-total span { color: var(--ink-2); font-size: 12.5px; }
+.usage-aside { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.usage-mix { display: flex; gap: 2px; height: 6px; margin: 14px 0 6px; overflow: hidden; border-radius: 3px; }
+.usage-mix i, .usage-key { display: block; min-width: 2px; background: var(--ink); }
+.usage-mix .is-cacheRead, .usage-key.is-cacheRead { background: color-mix(in srgb, var(--ink) 28%, var(--line-2)); }
+.usage-mix .is-input, .usage-key.is-input { background: color-mix(in srgb, var(--ink) 48%, var(--line-2)); }
+.usage-mix .is-cacheWrite, .usage-key.is-cacheWrite { background: color-mix(in srgb, var(--ink) 70%, var(--line-2)); }
+.usage-key { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 2px; vertical-align: 0; }
+.usage-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.usage-table th, .usage-table td { padding: 6px 0; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.usage-table thead th { color: var(--muted); font-weight: 500; font-size: 11.5px; }
+.usage-table th[scope="row"], .usage-table thead th:first-child { color: var(--ink-2); font-weight: 400; text-align: left; }
+.usage-table td { color: var(--ink-2); font-family: var(--mono); }
+.usage-table td + td { padding-left: 12px; }
+.usage-table .usage-sub th[scope="row"] { padding-left: 15px; color: var(--muted); }
+.usage-table .usage-sub td { color: var(--muted); }
+.usage-table tfoot th, .usage-table tfoot td { border-bottom: 0; color: var(--ink); font-weight: 600; }
+.usage-position h4 { margin: 18px 0 2px; color: var(--ink); font-size: 13px; }
+.usage-position svg { display: block; width: 100%; height: auto; overflow: visible; }
+.usage-position .fine { margin-top: 2px; }
+.usage-pos-axis { stroke: var(--line-2); stroke-width: 1; }
+.usage-median { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
+.usage-tick { fill: var(--muted); font: 9.5px var(--mono); }
+.usage-dot { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.25; }
+.usage-dot.is-own { fill: var(--ink); stroke: var(--ink); }
+/* Side by side, each pane names its usage under the pane title. */
+.pane-usage { margin: 0; padding: 5px 12px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--muted); font: 12px/1.5 var(--mono); }
+.pane-usage[hidden] { display: none; }
+/* After a blind vote: a line under each name, and the two side by side in the result bar. */
+.arena-usage-line { padding: 5px 14px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font: 12px/1.5 var(--mono); }
+.arena-usage-line[hidden] { display: none; }
+.arena-compare { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, min(420px, 48%)); align-items: center; gap: 6px 20px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+.arena-compare p { display: grid; gap: 2px; margin: 0; }
+.arena-compare p b { color: var(--ink); font-size: 14px; font-weight: 600; }
+.arena-compare p small { color: var(--muted); font-size: 12px; }
+.arena-compare-bars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; font: 12px var(--mono); }
+.arena-compare-bars .ab { color: var(--ink-2); font: italic 600 13px var(--serif); }
+.arena-compare-bars b { color: var(--ink); font-weight: 600; text-align: right; }
+.usage-meter { position: relative; height: 6px; border-radius: 3px; background: var(--surface-2); }
+.usage-meter i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ink-2); }
+.q-float .vote-in.is-result.has-compare .arena-compare { width: 100%; text-align: left; }
+@media (max-width: 860px) {
+  .arena-compare { grid-template-columns: 1fr; }
+}
+/* The administrators' entry block (§5.6), in the upload form, the manage sheet and its own sheet. */
+.usage-entry { margin: 20px 0 0; padding: 14px 16px 12px; border: 1px dashed var(--line-2); border-radius: var(--radius); }
+.usage-entry .mini-heading { display: flex; align-items: center; gap: 8px; margin-top: 0; }
+.usage-entry .mini-heading .badge { margin: 0; }
+.usage-entry > .field-hint { margin: 4px 0 10px; }
+.usage-paste { width: 100%; min-height: 72px; font: 12.5px/1.6 var(--mono); resize: vertical; }
+.usage-recognize { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 0; }
+.usage-recognize .fine { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.usage-recognize .fine .i { width: 14px; height: 14px; }
+.usage-recognize .fine.is-issue { color: var(--accent); }
+.usage-model { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 14px 0 0; }
+.usage-model .field-label { margin: 0; }
+.usage-model b { color: var(--ink); font-weight: 600; font-size: 13.5px; }
+/* Label, box and warning rows line up across a row of fields, however the labels wrap (subgrid). */
+.usage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px 12px; margin-top: 10px; }
+.usage-grid .field { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 4px; margin: 0 0 8px; }
+.usage-grid .field > .field-label { align-self: end; margin: 0; }
+.usage-grid .input { font-family: var(--mono); }
+.usage-grid .usage-paid { grid-column: 1 / -1; }
+.usage-entry > .field { margin-top: 14px; }
+.usage-paid-row { display: flex; gap: 6px; }
+.usage-paid-row .input:first-child { flex: 0 1 10em; min-width: 6em; }
+.usage-paid-row select { flex: none; width: auto; }
+.usage-warn.is-issue { color: var(--accent); }
+.usage-source { display: inline-flex; flex-wrap: wrap; }
+.usage-source button[aria-checked="true"] { background: var(--raised); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-sm), 0 0 0 1px var(--line); }
+.usage-sum:not(:empty) { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.usage-sum p { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin: 0; font-size: 13px; }
+.usage-sum b { color: var(--ink); font: 600 20px var(--mono); }
+.usage-error:not(:empty) { margin-top: 8px; color: var(--accent); }
+dialog.sheet.usage-sheet { width: min(720px, calc(100% - 32px)); }
+@media (max-width: 640px) {
+  .usage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-paid-row { flex-wrap: wrap; }
+}

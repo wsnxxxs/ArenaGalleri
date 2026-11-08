@@ -11,6 +11,7 @@ import { languageButton, setPageTitle } from './i18n.js';
 import { createHold, loadPair, watchFrameLoad, writeWithDeadline } from './arena-loading.js';
 import { loadTurnstile, mountTurnstile } from './turnstile.js';
 import { curatedInfo, curatedKnown } from './curated.js';
+import { loadPricing, revealCompare, revealUsage } from './usage-view.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
 const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认为不分伯仲', good: '你认为两件都很好', bad: '你认为两件都不好', skip: '你跳过了这一组' };
@@ -254,6 +255,7 @@ function match(root, ctx, first, scope) {
       <div class="stage arena-stage">${['a', 'b'].map((side) => `<section class="pane arena-pane" data-side="${side}">
         <button class="arena-rail" data-layout="ab" title="展开作品 ${side.toUpperCase()}"><span class="pane-letter">${side.toUpperCase()}</span><span class="arena-dot" data-rail-dot="${side}"></span><span class="arena-rail-text">展开作品 ${side.toUpperCase()}</span>${icon(side === 'a' ? 'next' : 'prev')}</button>
         <div class="arena-head" data-head="${side}"></div>
+        <div class="arena-usage-line" data-usage-line="${side}" hidden></div>
         <div class="pane-body" data-body="${side}"></div>
       </section>${side === 'a' ? `<div class="split-bar" role="separator" tabindex="0" aria-orientation="vertical" aria-label="调整作品 A、B 的宽度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" title="拖动调整宽度，双击复位">
         <span class="split-read" aria-hidden="true"></span>
@@ -428,7 +430,9 @@ function match(root, ctx, first, scope) {
       const tally = state.pin && win + tie + loss ? `<span class="arena-tally"><span data-i18n-ignore>${esc(state.pin.name)}</span>：<span>${win + tie + loss} 组 · ${win} 胜 ${tie} 平 ${loss} 负</span>${state.place ? ` · <span>${state.place}</span>` : ''}</span>` : '';
       const verdict = counted ? (countedFor?.curated ? REASON.countedCurated : platform.user ? REASON.counted : REASON.anonymous) : REASON[reason] ?? '';
       const aspect = state.match?.aspect && choice !== 'skip' ? ` <span>· <span>${esc(state.match.aspect.keyword)}</span> · <span>${state.aspectPick ? PICKS[state.aspectPick] : '跳过了'}</span></span>` : '';
-      bar.innerHTML = `<div class="vote-in is-result">
+      const compare = revealed() ? revealCompare(revealedWork('a'), revealedWork('b'), choice) : '';
+      bar.innerHTML = `<div class="vote-in is-result${compare ? ' has-compare' : ''}">
+        ${compare}
         <p class="vote-verdict"><b>${VERDICT[choice === 'tie' && state.result.tieKind ? state.result.tieKind : choice]}</b>${tally}<span><span>${verdict}</span>${aspect}${state.counted ? ` <span>· 本次已计入 ${state.counted} 组</span>` : ''}${counted && !platform.user ? ' <button class="link" data-auth="login">登录</button>' : ''}${state.result.examHint ? ' <span>· 通过资格考试后也计入精选榜</span> <a class="link" href="#/exam">去考试</a>' : ''}</span></p>
         <div class="vote-actions"><a class="btn" href="#/leaderboard/${esc(task.id)}">${icon('rank')}查看榜单</a><button class="btn primary" data-a="next">下一组<kbd>N</kbd></button></div>
       </div>`;
@@ -529,12 +533,22 @@ function match(root, ctx, first, scope) {
     $('.q-toggle', el)?.focus({ preventScroll: true });
   }
 
+  // A revealed side's work in the public catalog, where its recorded usage lives (looked up by id).
+  const revealedWork = (side) => {
+    const id = state.result?.[side]?.id;
+    return id ? ctx.DATA.tasks.find((t) => t.id === task.id)?.results.find((r) => r.id === id) ?? null : null;
+  };
+
   function drawHeads(sides = ['a', 'b']) {
     // The strip comes off once, on the draw that first shows the names.
     const unseal = revealed() && !state.unsealed;
     if (revealed()) state.unsealed = true;
     for (const side of sides) {
       $(`[data-head="${side}"]`, el).innerHTML = revealed() ? revealHead(side, unseal) : blindHead(side);
+      // Usage only after the vote: before it the page does not even know which works these are.
+      const usage = $(`[data-usage-line="${side}"]`, el), line = revealed() ? revealUsage(revealedWork(side)) : '';
+      usage.innerHTML = line;
+      usage.hidden = !line;
       $(`[data-side="${side}"].arena-pane`, el).classList.toggle('chosen', state.result?.choice === side);
       const dot = $(`[data-dot="${side}"]`, el);
       if (dot) dot.className = state.ready[side] ? 'is-ready' : '';
@@ -1450,6 +1464,8 @@ function match(root, ctx, first, scope) {
   setTask(task);
   drawMode();
   start();
+  // Amounts in the reveal follow the server's switch; the table is read once per page load.
+  void loadPricing();
   return {
     fullscreen: true,
     onPlatformChange() {

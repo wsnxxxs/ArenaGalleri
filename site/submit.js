@@ -7,7 +7,9 @@ import { setPageTitle } from './i18n.js';
 import { accountVersion, api, can, isStaff, needsEmail, platform, refreshPlatform, toast } from './platform.js';
 import { levelGate } from './level-gate.js';
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
-import { onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
+import { onWorkFieldChange, readWorkFields, registeredModel, workFieldsHtml } from './work-fields.js';
+import { bindUsageEntry, saveUsage, usageEntryHtml } from './usage-entry.js';
+import { loadPricing } from './usage-view.js';
 import { TEMPLATE_LABELS, templatesOf } from './categories.js';
 import { MUSIC_LLM_NOTICE } from './question-fields.js';
 import { linkReferences, referenceSheet } from './references.js';
@@ -120,7 +122,10 @@ export function uploadFlow(root, ctx, options) {
     draftTemplate: null, confirmedPrompt: null, fields: null, notice: null,
     // text: what was pasted for a text result, kept while the author goes back to change it.
     text: '', textFormat: 'md',
+    // usage: an administrator's 「生成用量」 entry while the form redraws; members never get the block.
+    usage: {},
   };
+  let usageEntry = null;
   const isText = () => state.template === 'text';
   const isAudio = () => state.template === 'audio' || task.category === '音乐';
 
@@ -300,6 +305,7 @@ export function uploadFlow(root, ctx, options) {
       <p class="field-hint">PNG / JPEG / WebP，不超过 ${formatBytes(platform.site.limits.coverBytes)}。<span>${platform.site.capture ? '不上传时使用平台自动截图。' : '不上传时显示文字封面。'}</span></p></div>`;
     return `<form class="step-body submit-form" novalidate>
       ${workFieldsHtml(ctx, task, null, { extra: cover })}
+      ${isStaff() ? usageEntryHtml() : ''}
       <label class="confirm"><input type="checkbox" name="attest" required><span>作品由所选模型按本题提示词生成，人工介入如实填写；我有权提交，并同意 <a href="#/terms" target="_blank" rel="noopener">《使用条款》</a> 与 <a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></label>
       <p class="form-error" role="alert"></p>
       <div class="form-actions"><button class="btn primary" type="submit">${icon('upload')}<span data-submit-label>${options.submitLabel ?? '提交作品'}</span></button><span class="fine">${options.submitNote ?? '核验前可在个人中心修改信息。'}</span></div>
@@ -363,6 +369,7 @@ export function uploadFlow(root, ctx, options) {
     setPageTitle([page.title, task.title ? { text: task.title, original: true } : ctx.DATA.title]);
     fitTrial();
     restoreFields();
+    bindUsage();
   }
 
   // The info form is rebuilt whenever its step locks or the page redraws; keep what was typed.
@@ -383,6 +390,18 @@ export function uploadFlow(root, ctx, options) {
     }
     onWorkFieldChange(form, form.elements.modelName);
     if (form.elements.summary?.value || form.elements.note?.value) $('.more-fields', form)?.setAttribute('open', '');
+  }
+  // Administrators record the work's usage with the upload; it is saved once the work exists.
+  function bindUsage(form = $('.submit-form', root)) {
+    const block = form && $('[data-usage-entry]', form);
+    usageEntry = block ? bindUsageEntry(block, { draft: state.usage, modelOf: () => {
+      const name = form.elements.modelName?.value.trim() ?? '';
+      return name ? { id: registeredModel(form, name) ?? null, name } : null;
+    } }) : null;
+    if (usageEntry) {
+      void loadPricing().then(() => usageEntry?.refresh());
+      form.addEventListener('input', (event) => { if (event.target.name === 'modelName') usageEntry?.refresh(); });
+    }
   }
 
   // The trial frame renders at the real viewport size and is scaled to fit the column.
@@ -517,6 +536,7 @@ export function uploadFlow(root, ctx, options) {
     const three = $('[data-step="3"]', root);
     three.outerHTML = step(3, options.infoLabel ?? '作品信息', confirmed ? '核验时会对照这些信息' : '', stepThree(), { locked: !confirmed });
     restoreFields();
+    bindUsage();
     $('[data-step="2"]', root).classList.toggle('is-done', confirmed);
     const current = (confirmed ? 2 : 1) + offset;
     $$('.side-steps li', root).forEach((li, i) => {
@@ -595,6 +615,8 @@ export function uploadFlow(root, ctx, options) {
     const { body, error: problem } = readWorkFields(form, task);
     if (!body) return void (error.textContent = problem);
     if (!form.attest.checked) return void (error.textContent = '请勾选确认生成信息真实');
+    const measured = usageEntry?.read() ?? { usage: null };
+    if (measured.error) return void (error.textContent = measured.error);
     const button = $('[type="submit"]', form);
     const label = $('[data-submit-label]', form);
     const idle = label.textContent;
@@ -605,7 +627,12 @@ export function uploadFlow(root, ctx, options) {
       const payload = { ...body, draftId: state.draft.id, confirmed: true, cover: state.cover, trial: trialSummary() };
       const result = options.submit ? await options.submit(payload) : await api('works', { method: 'POST', body: payload });
       if (!active || owner !== accountVersion()) return;
-      Object.assign(state, { result, work: result.work, resultOwner: owner, polls: 0, fields: null });
+      if (measured.usage && result.work) {
+        try { await saveUsage(result.work.task ?? task.id, result.work.id, measured.usage); }
+        catch (err) { toast(`作品已提交，用量没有保存：${err.message}。可在「管理 · 全部作品」里补录。`); }
+        if (!active || owner !== accountVersion()) return;
+      }
+      Object.assign(state, { result, work: result.work, resultOwner: owner, polls: 0, fields: null, usage: {} });
       clearTimeout(state.timer);
       if (!options.submit) toast(['pending', 'review'].includes(result.work.moderation?.status) ? '作品已提交，正在内容审核' : '作品已提交');
       await refreshPlatform('upload');

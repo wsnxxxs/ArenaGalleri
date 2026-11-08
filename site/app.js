@@ -31,6 +31,9 @@ import { popularQuestions, recommendQuestions } from './question-recommendations
 import { createWorkControls, workFrameUrl } from './work-controls.js';
 import { hasModelPreview, screenshotOf } from './work-preview-media.js';
 import { watchViewerFrame } from './viewer-loading.js';
+import { costShown } from './usage.js';
+import { artifactRow, cardUsage, loadPricing, usageBlock, usageLine } from './usage-view.js';
+import { openUsageSheet } from './usage-entry.js';
 import { routeParts } from './route-path.js';
 import { createDeferredMedia } from './deferred-media.js';
 import { cascade, flip, scene, settleIn, slideIn, zoomFrom } from './motion.js';
@@ -855,6 +858,7 @@ function resultCard(t, r) {
       ${lead ? `<p class="lead-why">${t.cover === coverWork.id ? '管理员指定的本题封面' : platform.featured?.[t.id]?.cover === coverWork.id ? '盲评票选的代表作' : votedTask(t) ? '本题封面作品 · 盲评票数足够后改由票选决定' : '本题封面作品'}</p>` : ''}
       <h3><a href="${viewHref(t, r.id)}"><span data-i18n-ignore>${esc(r.title)}</span>${icon('arrow')}</a></h3>
       <p class="result-by"><span data-i18n-ignore>${esc(authorName(r))}</span> <span>发布</span>${sourceLine(r) || r.tool ? ` · ${sourceLine(r) ? sourceHtml(r) : `<span data-i18n-ignore>${esc(r.tool)}</span>`}` : ''}${r.addedAt ? ` · <span data-i18n-date="${esc(r.addedAt)}">${formatDate(r.addedAt)}</span>` : ''}</p>
+      ${cardUsage(r)}
       ${r.status === 'questioned' && r.reason ? `<p data-i18n-ignore class="result-reason">${icon('alert')}<span>${esc(r.reason)}</span></p>` : ''}
       <div class="result-foot">
         ${r.gallery.length ? `<button class="text-action" data-gallery="${esc(r.id)}">${icon('image')}截图 ${r.gallery.length}</button>` : ''}
@@ -1440,7 +1444,7 @@ function workFacts(t, r) {
     <dl class="facts">
       <div><dt>发布</dt><dd><span data-i18n-ignore>${esc(authorName(r))}</span>${r.addedAt ? ` · <span data-i18n-date="${esc(r.addedAt)}">${formatDate(r.addedAt)}</span>` : ''}</dd></div>
       ${sourceFacts(r)}
-      ${r.files ? `<div><dt>文件</dt><dd>${r.files} 个 · ${formatBytes(r.bytes)}</dd></div>` : ''}
+      ${r.artifact ? artifactRow(r, formatBytes) : r.files ? `<div><dt>文件</dt><dd>${r.files} 个 · ${formatBytes(r.bytes)}</dd></div>` : ''}
     </dl>
     ${r.note ? `<p data-i18n-ignore class="guide-note">${esc(r.note)}</p>` : ''}
   </div>`;
@@ -1530,6 +1534,7 @@ function createViewer(t) {
         <select data-pane-pick="${i}" aria-label="${i === 0 ? '左' : '右'}栏的作品">${options()}</select>
         <button class="pane-close" data-close="${i}" title="关闭这一栏" aria-label="关闭这一栏">${icon('close')}</button>
       </div>
+      <p class="pane-usage" data-pane-usage hidden></p>
       <div class="pane-variants"></div>
       <div class="pane-body"></div>
     </section>`;
@@ -1544,6 +1549,7 @@ function createViewer(t) {
     const previous = $('iframe', body);
     if (previous) controls.remove(previous);
     $('select', pane).value = r.id;
+    drawPaneUsage(pane, r);
     $('.pane-variants', pane).innerHTML = resultVariantButtons(t, r, i);
     $('.pane-variants', pane).hidden = !variantChoices(t, r).length;
     if (!r.scene) {
@@ -1569,6 +1575,14 @@ function createViewer(t) {
     }));
   }
 
+  // Side by side, each pane names its work's usage under the pane title (token-cost design §5.1).
+  function drawPaneUsage(pane, r) {
+    const line = $('[data-pane-usage]', pane);
+    if (!line) return;
+    line.innerHTML = state.panes.length > 1 && r?.usage ? usageLine(r) : '';
+    line.hidden = !line.innerHTML;
+  }
+
   function renderGuide() {
     const r = byId(state.panes[state.active]);
     const g = r.guide ?? {};
@@ -1580,6 +1594,7 @@ function createViewer(t) {
       </div>
       ${r.summary ? `<p class="guide-summary"><span data-i18n-ignore>${esc(r.summary)}</span></p>` : ''}
       ${workFacts(t, r)}
+      ${usageBlock(r, t)}
       ${platform.available ? `<div class="guide-block"><h3>表情</h3>${reactionBar(workKey(t, r), { locked: !interactive(r) }) || '<p class="fine">存疑作品不再接受互动。</p>'}</div>` : ''}
       ${g.presets?.length ? `<div class="guide-block"><h3>快速跳转</h3>
         <div class="presets">${g.presets.map((p) => `<button class="chip${state.queries[state.active] === p.query ? ' on' : ''}" data-preset="${esc(p.query)}"><span data-i18n-ignore>${esc(p.label)}</span></button>`).join('')}
@@ -1602,6 +1617,7 @@ function createViewer(t) {
     el.classList.toggle('split', split);
     el.classList.toggle('guide-open', state.guide);
     $$('.pane', stage).forEach((p, i) => p.classList.toggle('active', split && i === state.active));
+    $$('.pane', stage).forEach((p, i) => drawPaneUsage(p, byId(state.panes[i])));
     const current = byId(state.panes[state.active]);
     $('.vselect', el).value = current.id;
     const m = modelOf(current);
@@ -1704,6 +1720,11 @@ function createViewer(t) {
     if (v === 'full') return fullscreen();
     if (v === 'prev') return cycle(-1);
     if (v === 'next') return cycle(1);
+    if (e.target.closest('[data-usage-edit]')) {
+      const r = byId(state.panes[state.active]);
+      openUsageSheet({ ...r, task: t.id });
+      return;
+    }
     const face = e.target.closest('[data-face]');
     if (face) {
       const r = byId(state.panes[state.active]);
@@ -2225,6 +2246,13 @@ try {
   platformConnection.catch(() => {});
   addEventListener('hashchange', (event) => route({ from: event.oldURL }));
   await route({ from: '' });
+  // Amounts appear only once the server says so; then the gallery, preview or blind vote on screen is
+  // redrawn with them. Forms (upload, account, review) refresh their own usage blocks instead.
+  void loadPricing().then((pricing) => {
+    const where = location.hash.replace(/^#\/?/, '').split('/')[0];
+    if (!costShown(pricing) || ['new', 'submit', 'me', 'review'].includes(where)) return;
+    if (page?.onPlatformChange) page.onPlatformChange('pricing'); else route({ keepScroll: true });
+  });
   void startAnnouncements();
   // Enter the page frame while each work area loads its own data.
   const homeArrival = window.ArenaEntry?.ready(root, { prepareImages: deferredMedia.prepare });

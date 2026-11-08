@@ -16,7 +16,8 @@ test('a submission cannot draw the previous account after its catalog refresh se
     api: async () => ({ work: { task: 'task', id: 'work', moderation: { status: 'pending' } } }),
     refreshPlatform: () => { started.resolve(); return refresh.promise; }, toast() {},
     $: (selector) => selector === '[type="submit"]' ? button : selector === '[data-submit-label]' ? label : error,
-    draw: () => draws.push('draw'), follow: () => draws.push('follow'), scrollTo() {} };
+    draw: () => draws.push('draw'), follow: () => draws.push('follow'), scrollTo() {},
+    usageEntry: null, saveUsage: async () => {} };
   vm.runInNewContext(`${source.slice(begin, finish)}\nglobalThis.send = submit;`, context);
   const sending = context.send({ attest: { checked: true } });
   await started.promise;
