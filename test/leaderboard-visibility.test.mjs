@@ -26,7 +26,7 @@ test('sample visibility respects the five-work boundary without changing scores,
   }
 });
 
-test('single-question boards show small provisional entries by default and aggregate boards keep the toggle', async () => {
+test('single-question boards show small entries and aggregate boards renumber after the work filter', async () => {
   const original = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener,
     fetch: globalThis.fetch, SAME_PROMPT_CONFIG: globalThis.SAME_PROMPT_CONFIG, localStorage: globalThis.localStorage };
   globalThis.document = Object.assign(new EventTarget(), { baseURI: 'https://gallery.test/', activeElement: null });
@@ -38,9 +38,11 @@ test('single-question boards show small provisional entries by default and aggre
   let calls = 0;
   globalThis.fetch = async url => {
     calls++;
-    const by = new URL(url).searchParams.get('by');
-    return Response.json({ by, rows: [{ key: 'small', modelName: 'Small sample sentinel', model: 'small',
-      rank: 1, works: 1, score: 1300, interval: 100, games: 21, wins: 13, draws: 0, losses: 8, winRate: 13 / 21, provisional: true }],
+    const params = new URL(url).searchParams;
+    const small = { key: 'small', modelName: 'Small sample sentinel', model: 'small',
+      rank: 1, works: 1, score: 1300, interval: 100, games: 21, wins: 13, draws: 0, losses: 8, winRate: 13 / 21, provisional: true };
+    const large = { ...small, key: 'large', modelName: 'Large sample sentinel', model: 'large', rank: 2, works: 5, score: 1200 };
+    return Response.json({ by: params.get('by'), rows: params.has('task') ? [small] : [small, large],
     unranked: [], totals: { votes: 21, voters: 3 }, provisionalGames: 30 });
   };
   try {
@@ -65,9 +67,10 @@ test('single-question boards show small provisional entries by default and aggre
           assert.equal(settings.get('board-show-small-samples'), 'false');
           continue;
         }
-        assert.match(container.innerHTML, /当前没有作品数达到 5 件的条目/);
+        const ranks = () => [...container.innerHTML.matchAll(/<td class="c-rank is-top">(\d+)<\/td>/g)].map(match => match[1]);
         assert.doesNotMatch(container.innerHTML, /Small sample sentinel/);
-        assert.equal(visibleRows, 0); assert.equal(delivered.rows.length, 1);
+        assert.deepEqual(ranks(), ['01']);
+        assert.equal(visibleRows, 1); assert.equal(delivered.rows[1].rank, 2);
         const requests = calls;
         const toggle = checked => {
           const event = new Event('change');
@@ -77,11 +80,13 @@ test('single-question boards show small provisional entries by default and aggre
         toggle(true);
         assert.match(container.innerHTML, /Small sample sentinel/);
         assert.match(container.innerHTML, /class="badge provisional"[^>]*>暂定/);
-        assert.equal(visibleRows, 1); assert.equal(delivered.rows[0].rank, 1);
+        assert.deepEqual(ranks(), ['01', '02']);
+        assert.equal(visibleRows, 2); assert.equal(delivered.rows[1].rank, 2);
         assert.equal(settings.get('board-show-small-samples'), 'true');
         toggle(false);
         assert.doesNotMatch(container.innerHTML, /Small sample sentinel/);
-        assert.equal(visibleRows, 0); assert.equal(calls, requests, 'display changes do not request a new ranking');
+        assert.deepEqual(ranks(), ['01']);
+        assert.equal(visibleRows, 1); assert.equal(calls, requests, 'display changes do not request a new ranking');
       } finally { board.destroy(); }
     }
   } finally { Object.assign(globalThis, original); }

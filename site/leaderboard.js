@@ -164,11 +164,12 @@ export function mountBoard(container, ctx) {
     const low = Math.min(1000, ...rows.map((row) => row.score - row.interval));
     const high = Math.max(1000, ...rows.map((row) => row.score + row.interval));
     const at = (value) => (((value - low) / Math.max(high - low, 1)) * 100).toFixed(2);
-    const body = rows.map((row) => {
+    const body = rows.map((row, index) => {
+      const rank = index + 1;
       const from = at(row.score - row.interval), to = at(row.score + row.interval);
       const m = modelOf(row);
       return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${esc([row.modelName, row.effort, m.vendor].join(' ').toLowerCase())}">
-      <td class="c-rank${row.rank <= 3 ? ' is-top' : ''}">${pad(row.rank)}</td>
+      <td class="c-rank${rank <= 3 ? ' is-top' : ''}">${pad(rank)}</td>
       <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b data-i18n-ignore>${esc(row.modelName)}</b>${row.effort ? `<span class="badge" data-i18n-ignore>${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
       <td class="c-score"><b><span data-i18n-number="${row.score}">${row.score}</span></b><small>±<span data-i18n-number="${row.interval}">${row.interval}</span></small></td>
       <td class="c-range" aria-hidden="true"><span class="range"><s style="left:${at(1000)}%"></s><i style="left:${from}%;width:${(to - from).toFixed(2)}%;background:linear-gradient(90deg, ${tone(from)}, ${tone(to)})"></i><em style="left:${at(row.score)}%"></em></span></td>
