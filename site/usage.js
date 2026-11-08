@@ -25,14 +25,12 @@ export const costShown = (flags) => flags?.showCost === true;
 const MILLION = 1_000_000;
 const number = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
-// The current official price: the latest entry dated no later than the table, or than today while the
-// table has no date yet. An entry that starts later is never used.
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-export function priceFor(pricing, modelId, now = today()) {
+// The current official price: the latest entry dated no later than the table. A table without a date
+// (asOf null, as the server starts) prices nothing, so no amount is shown (contracts/usage.md).
+export function priceFor(pricing, modelId) {
   const entries = pricing?.models?.[modelId];
-  if (!Array.isArray(entries)) return null;
-  const asOf = pricing.asOf ?? now;
-  return entries.filter((entry) => !entry.since || entry.since <= asOf)
+  if (!pricing?.asOf || !Array.isArray(entries)) return null;
+  return entries.filter((entry) => !entry.since || entry.since <= pricing.asOf)
     .sort((a, b) => String(b.since ?? '').localeCompare(String(a.since ?? '')))[0] ?? null;
 }
 

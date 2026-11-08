@@ -22,12 +22,11 @@ test('the price is the latest entry dated no later than the table, and unknown m
   assert.equal(priceFor({ ...PRICING, asOf: '2026-06-01' }, 'alpha').input, 2);
   assert.equal(priceFor(PRICING, 'nobody'), null);
   assert.equal(priceFor(null, 'alpha'), null);
-  // A table without a date uses today: never an entry that starts later.
-  const undated = { ...PRICING, asOf: null };
-  assert.equal(priceFor(undated, 'alpha', '2026-11-08').input, 5);
-  assert.equal(priceFor(undated, 'alpha', '2026-12-02').input, 50);
-  assert.equal(priceFor({ asOf: null, models: { later: [{ since: '2099-01-01', currency: 'CNY', input: 1, output: 1 }] } }, 'later', '2026-11-08'), null);
-  assert.equal(priceFor({ asOf: null, models: { later: [{ since: '2099-01-01', currency: 'CNY', input: 1, output: 1 }] } }, 'later'), null, 'today by default');
+  // A table without a date prices nothing, even with past entries; a dated table never takes a later entry.
+  assert.equal(priceFor({ ...PRICING, asOf: null }, 'alpha'), null);
+  assert.equal(priceFor({ ...PRICING, asOf: null }, 'beta'), null);
+  assert.equal(costOf({ input: 1, output: 1 }, priceFor({ ...PRICING, asOf: null }, 'beta'), PRICING.fx), null, 'so no amount');
+  assert.equal(priceFor({ asOf: '2026-11-01', models: { later: [{ since: '2099-01-01', currency: 'CNY', input: 1, output: 1 }] } }, 'later'), null);
 });
 
 test('cost multiplies each kind of token by its price, converts to CNY, and defaults cache prices to input', () => {

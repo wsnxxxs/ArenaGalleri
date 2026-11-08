@@ -171,6 +171,12 @@ test('the chart takes only positive costs, and the pricing read happens once eve
     assert.match(svg, /<svg class="cost-chart"/);
     assert.doesNotMatch(svg, /<title>Z /, 'the zero point is not drawn');
     assert.equal(scatter([{ key: 'z', name: 'Z', x: 0, y: 1000 }]), '');
+    // A frontier step from zero cost has no ratio: it says where it starts and gives the score difference.
+    const { frontierSteps } = await import('../site/cost-chart.js');
+    const steps = frontierSteps([{ name: 'Z', x: 0, y: 1000 }, { name: 'A', x: 1, y: 1100 }, { name: 'B', x: 2, y: 1150 }]);
+    assert.doesNotMatch(steps, /Infinity|NaN/);
+    assert.match(steps, /<li class="cost-step" aria-hidden="true"><span>从零花费起<\/span><span>\+100<\/span><\/li>/);
+    assert.match(steps, /<span>×2\.0<\/span><span>\+50<\/span>/);
     let reads = 0;
     globalThis.fetch = async () => { reads++; return Response.json({ error: 'not found' }, { status: 404 }); };
     const { pricingInfo } = await import('../site/platform.js');

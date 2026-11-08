@@ -54,7 +54,9 @@ export function scatter(all, { x = 'multiple', connect = false, currency = 'CNY'
 export function frontierSteps(front, { x = 'multiple', currency = 'CNY', fx } = {}) {
   if (!front.length) return '';
   const value = (p) => x === 'multiple' ? formatMultiple(p.x) : formatMoney(p.x, currency, fx);
-  return `<ol class="cost-path" aria-label="前沿路径">${front.map((p, i) => `${i ? `<li class="cost-step" aria-hidden="true"><span>×${(p.x / front[i - 1].x).toFixed(1)}</span><span>+${fmt(p.y - front[i - 1].y)}</span></li>` : ''}
+  // A step from a zero-cost entry has no ratio; it says so and gives the score difference only.
+  const ratio = (p, prev) => prev.x > 0 ? `<span>×${(p.x / prev.x).toFixed(1)}</span>` : '<span>从零花费起</span>';
+  return `<ol class="cost-path" aria-label="前沿路径">${front.map((p, i) => `${i ? `<li class="cost-step" aria-hidden="true">${ratio(p, front[i - 1])}<span>+${fmt(p.y - front[i - 1].y)}</span></li>` : ''}
     <li class="cost-node"><b data-i18n-ignore>${esc(p.name)}</b><small>${value(p)} · ${fmt(p.y)}</small></li>`).join('')}</ol>`;
 }
 

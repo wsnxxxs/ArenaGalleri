@@ -97,6 +97,7 @@ token 由各家分词器计数，跨模型只作参考；缓存读取是重复�
 暂定（3–4 件），不参与前沿|Provisional (3–4 works), not on the frontier
 前沿线|Frontier line
 前沿路径|Frontier path
+从零花费起|From zero cost
 花费图仍在试行，全部按暂定看待。评分来自全部有效比较，花费只来自管理员实测的作品，两者各自独立。|The cost chart is a trial; treat all of it as provisional. Scores come from all valid comparisons and cost only from works measured by administrators; the two are independent.
 当前筛选下有评分且样本足够的条目不足两个，暂不作图。|Fewer than two rated entries with enough records under these filters, so no chart yet.
 Harness 没有评分，这里只按花费倍数排序。|Harnesses have no score, so they are sorted by cost multiple only.
