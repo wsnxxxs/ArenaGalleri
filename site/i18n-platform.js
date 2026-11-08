@@ -645,11 +645,11 @@ const legal = Object.fromEntries(`
 const dynamic = Object.fromEntries(`
 {value} 道题|{value} questions
 第 {count}|#{count}
-{count} 道题，不足 {n} 道|{count} questions, fewer than {n}
-单题占比超过 {percent}%|One question has more than {percent}% of comparisons
-单题占 {percent}%，超过 {n}%|One question has {percent}% of comparisons, above {n}%
-有效投票者不足 {n} 人|Fewer than {n} effective voters
-有效投票者 {count} 人，不足 {n} 人|{count} effective voters, fewer than {n}
+{count} 道题，不足 {n} 道|Too few questions ({count};\u00a0needs\u00a0{n})
+单题占比超过 {percent}%|One question has over\u00a0{percent}% of comparisons
+单题占 {percent}%，超过 {n}%|One question has {percent}% of comparisons (max\u00a0{n}%)
+有效投票者不足 {n} 人|Too few effective voters (needs\u00a0{n})
+有效投票者 {count} 人，不足 {n} 人|Too few effective voters ({count};\u00a0needs\u00a0{n})
 混合池参考分，不参与综合排名；投票 ±{value}，换题 ±{value2}|Pooled reference score, not part of the overall ranking; votes ±{value}, question variation ±{value2}
 混合池参考分，不参与综合排名；投票 ±{value}|Pooled reference score, not part of the overall ranking; votes ±{value}
 投票 ±{value}，换题 ±{value2}|Votes ±{value}, question variation ±{value2}

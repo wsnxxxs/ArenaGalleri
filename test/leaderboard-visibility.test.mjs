@@ -203,7 +203,8 @@ test('v3 boards drop the work switch, fold partial and watch groups, show ranges
     assert.equal(reads.at(-1), '/api/leaderboard/next?by=config&category=%E5%BB%BA%E6%A8%A1', 'category boards default to configurations');
     assert.doesNotMatch(scoped.innerHTML, /data-board-group="partial"|c-part/);
     assert.match(scoped.innerHTML, /role="tooltip" id="[^"]+">投票 ±24，换题 ±32<\/span>/);
-    assert.match(scoped.innerHTML, /<span>2 道题，不足 3 道<\/span><span> · <\/span><span>单题占 70%，超过 50%<\/span><span> · <\/span><span>有效投票者 8 人，不足 10 人<\/span>/);
+    // Numbers keep their units on one line: every space inside a reason is a no-break space.
+    assert.match(scoped.innerHTML, /<span>2\u00a0道题，不足\u00a03\u00a0道<\/span><span> · <\/span><span>单题占\u00a070%，超过\u00a050%<\/span><span> · <\/span><span>有效投票者\u00a08\u00a0人，不足\u00a010\u00a0人<\/span>/);
     category.destroy();
   } finally { Object.assign(globalThis, original); }
 });

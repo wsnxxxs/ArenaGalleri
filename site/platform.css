@@ -489,6 +489,7 @@ table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-va
 .board td.c-score:not(:has(b)) { color: var(--muted); }
 .board tr.is-watch td.c-score b { color: var(--ink-2); }
 .board td.c-reason { color: var(--muted); font-size: 12.5px; text-align: left; white-space: normal; }
+.board td.c-reason, .board-reasons { word-break: keep-all; overflow-wrap: anywhere; }
 .board-name .board-parts, .board-name .board-reasons { color: var(--muted); }
 .board-part { white-space: nowrap; }
 .board-parts .is-missing { opacity: 0.6; }

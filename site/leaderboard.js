@@ -259,10 +259,12 @@ export function mountBoard(container, ctx) {
     const composite = cats.length > 0;
     const columns = composite ? 7 + cats.length : 8;
     const at = axis(rows);
+    // Numbers stay with their words (no-break spaces); platform.css lets a Chinese reason break only after its comma.
+    const nb = (text) => text.replaceAll(' ', '\u00a0');
     const reasonText = (row) => (row.reasons ?? []).map((reason) => `<span>${reason === 'coverage' ? '没有哪一类达标'
-      : reason === 'tasks' ? `${row.tasks} 道题，不足 ${s.minimumTasks} 道`
-        : reason === 'task-share' ? (row.taskShare == null ? `单题占比超过 ${percent(s.maxTaskShare)}%` : `单题占 ${Math.ceil(row.taskShare * 100)}%，超过 ${percent(s.maxTaskShare)}%`)
-          : reason === 'voters' ? (row.effectiveVoters == null ? `有效投票者不足 ${s.minimumEffectiveVoters} 人` : `有效投票者 ${Math.floor(row.effectiveVoters)} 人，不足 ${s.minimumEffectiveVoters} 人`)
+      : reason === 'tasks' ? nb(`${row.tasks} 道题，不足 ${s.minimumTasks} 道`)
+        : reason === 'task-share' ? nb(row.taskShare == null ? `单题占比超过 ${percent(s.maxTaskShare)}%` : `单题占 ${Math.ceil(row.taskShare * 100)}%，超过 ${percent(s.maxTaskShare)}%`)
+          : reason === 'voters' ? nb(row.effectiveVoters == null ? `有效投票者不足 ${s.minimumEffectiveVoters} 人` : `有效投票者 ${Math.floor(row.effectiveVoters)} 人，不足 ${s.minimumEffectiveVoters} 人`)
             : esc(reason)}</span>`).join('<span> · </span>');
     const partLabel = (part) => part?.rank ? `第 ${part.rank}` : '未达标';
     const partsLine = (row) => composite ? `<small class="board-parts">${cats.map((c) => `<span class="board-part${row.parts?.[c]?.rank ? '' : ' is-missing'}"><span>${esc(categoryLabel(c))}</span> <span>${partLabel(row.parts?.[c])}</span></span>`).join('<span> · </span>')}</small>` : '';
@@ -428,7 +430,10 @@ export function mountBoard(container, ctx) {
     closeTips(tip);
     const wrap = tip.closest('.board-wrap')?.getBoundingClientRect(), box = tip.getBoundingClientRect();
     const height = tip.querySelector('.score-tip-text')?.offsetHeight ?? 0;
-    tip.classList.toggle('is-below', Boolean(wrap) && box.top - wrap.top < height + 8 && wrap.bottom - box.bottom > box.top - wrap.top);
+    // The first row of a folded group opens downward too, so the group's heading stays readable.
+    const underHeading = tip.closest('tr')?.previousElementSibling?.classList.contains('board-group-head');
+    tip.classList.toggle('is-below', Boolean(wrap) && (underHeading ? wrap.bottom - box.bottom > height + 8
+      : box.top - wrap.top < height + 8 && wrap.bottom - box.bottom > box.top - wrap.top));
     tip.classList.add('is-open');
   };
   const onOver = (e) => {
