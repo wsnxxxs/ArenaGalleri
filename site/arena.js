@@ -338,7 +338,7 @@ function match(root, ctx, first, scope) {
     syncGate();
     if (voteWait() <= 0 && skipWait() <= 0) {
       stopGate();
-      live('现在可以投票');
+      if (!state.busy) live('现在可以投票');
     }
   }
   const onVisibility = () => {
@@ -357,7 +357,7 @@ function match(root, ctx, first, scope) {
     if (!state.match) return '正在抽取一组作品…';
     if (state.held) return '你的选择已保留，确认后立即提交';
     if (state.needVerify) return '需要完成人机验证才能提交这一票';
-    if (state.busy) return '正在提交选择…';
+    if (state.pendingPick) return '正在提交选择…';
     if (!bothReady()) {
       const parts = ['a', 'b'].map((side) => `${letter(side)} ${state.ready[side] ? '已就绪' : state.loadErrors?.[side] ? '载入超时' : '载入中'}`).join(' · ');
       return state.slow ? `载入较慢（${parts}）：可以继续等待，或跳过这一组` : `等待两件作品载入 · ${parts}`;
@@ -377,7 +377,10 @@ function match(root, ctx, first, scope) {
     const node = $('[data-status]', bar);
     if (node && shownStatus !== text) { shownStatus = text; node.textContent = text; }
     const disabled = !(canVote() && !state.busy);
-    $$('.vote-actions [data-vote]', bar).forEach((b) => { if (b.disabled !== disabled) b.disabled = disabled; });
+    $$('.vote-actions [data-vote]', bar).forEach((b) => {
+      if (b.disabled !== disabled) b.disabled = disabled;
+      b.classList.toggle('is-held', b.dataset.vote === (state.pendingPick ?? state.held));
+    });
     const skip = $('.vote-skip', bar);
     const label = skipLabel();
     const skipDisabled = !canSkip();
@@ -406,7 +409,7 @@ function match(root, ctx, first, scope) {
       return;
     }
     const disabled = canVote() && !state.busy ? '' : ' disabled';
-    const held = (pick) => (state.held === pick ? ' is-held' : '');
+    const held = (pick) => ((state.pendingPick ?? state.held) === pick ? ' is-held' : '');
     const counting = voteWait() > 0;
     shownStatus = status();
     const gate = counting ? `<span class="vote-gate" data-gate style="--gate: ${viewMs()}ms; animation-delay: -${Math.round(hold.waited)}ms" aria-hidden="true"></span>` : '';
@@ -806,7 +809,7 @@ function match(root, ctx, first, scope) {
   // A prompt to prove one is human. `submit(token)` sends the request again with the token; its errors the
   // sheet understands (a refused or unreachable check) stay inside it, any other ends it with `{ error }`.
   // Resolves `{ value }`, `{ error }`, or null when it was closed without finishing.
-  function askHuman({ challenge, submit }) {
+  function askHuman({ challenge, submit, confirmationDelay = 600 }) {
     return new Promise((resolve) => {
       let widget = null, done = false, pending = false, closed = false;
       const reason = CHALLENGE[challenge?.reason] ? challenge.reason : 'rapid_choices';
@@ -831,9 +834,11 @@ function match(root, ctx, first, scope) {
           const value = await submit(widget.token);
           if (closed) return;
           done = true;
-          status.innerHTML = `${icon('check')}已确认`;
-          status.classList.remove('is-error');
-          await new Promise((r) => setTimeout(r, 600));
+          if (confirmationDelay > 0) {
+            status.innerHTML = `${icon('check')}已确认`;
+            status.classList.remove('is-error');
+            await new Promise((r) => setTimeout(r, confirmationDelay));
+          }
           resolve({ value });
           sheet.close();
         } catch (error) {
@@ -1010,7 +1015,7 @@ function match(root, ctx, first, scope) {
     state.held = choice;
     state.needVerify = null;
     update();
-    const answer = await askHuman({ challenge, submit: (token) => {
+    const answer = await askHuman({ challenge, confirmationDelay: 0, submit: (token) => {
       if (!owns(current, version)) throw new DOMException('Vote cancelled', 'AbortError');
       return postVote(current, choice, token);
     } });
@@ -1029,15 +1034,21 @@ function match(root, ctx, first, scope) {
     const current = state.match, version = accountVersion();
     const neededVerification = state.needVerify;
     state.busy = true;
+    state.pendingPick = choice;
     state.needVerify = null;
     if (neededVerification) drawBar();
     else syncGate();
+    live(status());
     try {
       const result = await postVote(current, choice);
       if (!owns(current, version)) return;
+      state.pendingPick = null;
+      live('');
       accept(result, tieOf(choice).choice);
     } catch (error) {
       if (!owns(current, version)) return;
+      state.pendingPick = null;
+      live('');
       if (error.code === 'turnstile_required') return verifyVote(choice, error.data?.challenge);
       if (error.code === 'match_not_ready') {
         // The server never saw this pair become ready: tell it again and restart any hold.
@@ -1283,7 +1294,7 @@ function match(root, ctx, first, scope) {
         resetGate();
         frameLoads.forEach((stop) => stop());
         frameLoads.clear();
-        state.match = state.result = state.held = state.needVerify = null;
+        state.match = state.result = state.pendingPick = state.held = state.needVerify = null;
         state.counted = 0;
         state.tally = { win: 0, tie: 0, loss: 0 };
         state.place = '';

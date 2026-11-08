@@ -627,8 +627,9 @@ table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-va
   color: var(--accent); font: 500 13px/1 var(--serif); letter-spacing: .25em; white-space: nowrap;
 }
 .arena-seal small { margin-left: auto; overflow: hidden; color: var(--muted); font: 11px var(--sans); letter-spacing: 0; text-overflow: ellipsis; }
-.arena-seal.is-leaving { position: absolute; left: 46px; right: 8px; top: 50%; margin-top: -15px; pointer-events: none; animation: unseal .6s cubic-bezier(.2, .7, .2, 1) .15s both; }
+.arena-seal.is-leaving { position: absolute; left: 46px; right: 8px; top: 50%; margin-top: -15px; pointer-events: none; animation: unseal .2s cubic-bezier(.2, .7, .2, 1) both; }
 @keyframes unseal { to { transform: translateX(105%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .arena-seal.is-leaving { display: none; } }
 .arena-pick-seal {
   display: inline-flex; flex: none; gap: 1px; padding: 2px 5px; border: 1.5px solid var(--accent); border-radius: 3px; color: var(--accent);
   font: 600 12px/1.2 var(--serif); box-shadow: inset 0 0 0 1.5px var(--bg), inset 0 0 0 2.5px color-mix(in srgb, var(--accent) 50%, transparent);

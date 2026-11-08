@@ -14,7 +14,7 @@ function environment(timeout) {
   const e = { alive: true, DOMException, AbortController, voteController: null, state: { match: { id: 'current' }, busy: false, counted: 0, tally: {} },
     accountVersion: () => version, platform: { user: { id: 'one' }, me: { votes: 10 }, totals: { votes: 20 } },
     task: { id: 'task' }, stopGate() {}, levelOf: () => 1, curatedKnown: () => null,
-    canVote: () => true, canSkip: () => true, update() {}, drawBar() {}, syncGate() {}, prefetch() { e.prefetches++; }, prefetches: 0,
+    canVote: () => true, canSkip: () => true, update() {}, drawBar() {}, syncGate() {}, live() {}, status() {}, prefetch() { e.prefetches++; }, prefetches: 0,
     next() { e.nexts++; }, nexts: 0, writeWithDeadline: (write, options) => writeWithDeadline(write, { ...options, timeout }),
     toast: message => notices.push(message), performance: { now: () => 0 }, document: { hidden: false },
     hold: { mark: (...value) => deadlines.push(value), resume() {} }, later() { assert.fail('a rejected write must wait for another user action'); },
@@ -54,6 +54,7 @@ test('a rejected early vote restores the same pair and waits for an explicit sec
 test('a challenge cannot submit or accept a vote belonging to an old account epoch', async () => {
   const { e, reads, identity } = environment();
   const verifying = e.verifyForTest('a', { siteKey: 'fixture' });
+  assert.equal(e.challenge.confirmationDelay, 0);
   const pending = e.challenge.submit('token'); await Promise.resolve(); assert.equal(reads.length, 1);
   identity();
   assert.throws(() => e.challenge.submit('late-token'), { name: 'AbortError' });
@@ -69,6 +70,7 @@ test('a vote deadline restores the same pair and ignores a late counted response
   assert.equal(reads[0].signal.aborted, true);
   assert.equal(e.state.match, current);
   assert.equal(e.state.busy, false);
+  assert.equal(e.state.pendingPick, null);
   assert.match(notices[0], /提交结果未确认/);
   reads[0].resolve({ counted: true });
   await new Promise(resolve => setImmediate(resolve));
@@ -110,7 +112,10 @@ test('an immediate vote waits for the in-flight readiness write within its own d
     const sending = e.voteForTest('a');
     await Promise.resolve();
     assert.equal(e.state.busy, true, 'the click is accepted immediately');
+    assert.equal(e.state.pendingPick, 'a', 'the choice is visible while readiness is pending');
+    await e.voteForTest('b');
     assert.equal(reads.length, 0, 'the vote cannot overtake readiness');
+    assert.equal(e.state.pendingPick, 'a', 'a second click cannot replace the pending choice');
     if (timedOut) await sending;
     ready.resolve();
     await new Promise(resolve => setImmediate(resolve));
