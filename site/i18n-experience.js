@@ -416,9 +416,10 @@ Object.assign(messages, {
   '模型写出 {value} token，其中推理 {value2}。': 'The model wrote {value} tokens, {value2} of them reasoning.',
   '模型写出 {value} token。': 'The model wrote {value} tokens.',
   '作品体量': 'Work size',
-  '交付代码 {count} 行、{value} token': 'Delivered code: {count} lines, {value} tokens',
-  '交付代码 {value} token': 'Delivered code: {value} tokens',
-  '交付文字 {count} 字': 'Delivered text: {count} characters',
+  // Each number stays with its unit (no-break spaces); the phrase itself may wrap between them.
+  '交付代码 {count} 行、{value} token': 'Delivered code: {count}\u00a0lines, {value}\u00a0tokens',
+  '交付代码 {value} token': 'Delivered code: {value}\u00a0tokens',
+  '交付文字 {count} 字': 'Delivered text: {count}\u00a0characters',
   '单轮生成': 'Single-turn', '多轮生成': 'Multi-turn', '有人工介入': 'With human help',
   '构成': 'Breakdown', '花费': 'Cost', '占比': 'Share', '合计': 'Total',
   '按官方标价折算': 'At official list prices', '约 {value}': 'About {value}',

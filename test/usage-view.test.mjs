@@ -67,3 +67,18 @@ test('administrators see the edit entry; readers see nothing for unrecorded work
   assert.match(staff.usageBlock({ id: 'x' }, { results: [] }, { entry: true }), /未录入用量[\s\S]*data-usage-edit/);
   assert.doesNotMatch(reader.usageBlock(work('a', 1, 2), { results: [] }), /data-usage-edit/);
 });
+
+// The size phrase can wrap but keeps each number with its unit; the English keeps them together too.
+test('the drawer size phrase wraps between figures, never inside a figure', async () => {
+  const source = readFileSync(new URL('../site/usage-view.js', import.meta.url), 'utf8').replace(/^import [\s\S]*?;$/gm, '').replace(/^export /gm, '');
+  const context = { ...usage, esc: (s) => String(s ?? ''), store: { get: () => null }, pricingInfo: () => Promise.resolve({ showCost: false }), isStaff: () => false, locale: () => 'zh-CN' };
+  vm.runInNewContext(`${source}\nglobalThis.row = artifactRow;`, context);
+  const row = context.row({ artifact: { files: 1, lines: 4472, bytes: 668_458, tokens: 319_158 } }, (b) => `${Math.round(b / 1024)} KB`);
+  assert.match(row, /<span class="usage-phrase">交付代码 4,472 行、319k token<\/span>/);
+  assert.match(row, /<span>1 个文件<\/span>/);
+  const { setLocale, translateText } = await import('../site/i18n.js');
+  setLocale('en');
+  assert.equal(translateText('交付代码 4,472 行、319k token'), 'Delivered code: 4,472 lines, 319k tokens');
+  assert.equal(translateText('交付文字 12,345 字'), 'Delivered text: 12,345 characters');
+  setLocale('zh-CN');
+});

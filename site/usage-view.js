@@ -65,9 +65,13 @@ export function artifactRow(work, formatBytes) {
   const a = work.artifact;
   const files = finite(a?.files) ? a.files : work.files, bytes = finite(a?.bytes) ? a.bytes : work.bytes;
   if (!a && !files) return '';
-  const lines = finite(a?.lines) ? `${a.lines.toLocaleString('en')} 行、` : '';
+  // The size phrase may wrap, but never between a number and its unit (no-break spaces); files and bytes
+  // stay whole as before.
+  const nb = '\u00a0';
+  const lines = finite(a?.lines) ? `${a.lines.toLocaleString('en')}${nb}行、` : '';
+  const phrase = (text) => `<span class="usage-phrase">${esc(text)}</span>`;
   const size = [
-    finite(a?.tokens) ? bit(`交付代码 ${lines}${formatTokens(a.tokens)} token`) : finite(a?.chars) ? bit(`交付文字 ${a.chars.toLocaleString('en')} 字`) : '',
+    finite(a?.tokens) ? phrase(`交付代码 ${lines}${formatTokens(a.tokens)}${nb}token`) : finite(a?.chars) ? phrase(`交付文字 ${a.chars.toLocaleString('en')}${nb}字`) : '',
     files ? bit(`${files} 个文件`) : '',
     finite(bytes) && bytes > 0 ? bit(formatBytes(bytes)) : '',
   ];
