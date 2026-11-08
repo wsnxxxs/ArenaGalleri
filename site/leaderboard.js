@@ -619,12 +619,19 @@ export function mountBoard(container, ctx) {
   container.addEventListener('pointerout', onOut);
   const loading = load();
   // Amounts and the cost view wait for the server's switch; with it off the board stays as it was.
-  if (costScope) (ctx.pricing ?? pricingInfo()).then((info) => {
+  // Measured usage is asked for only once amounts are on (app.js loadMetrics lays it onto the works).
+  if (costScope) (ctx.pricing ?? pricingInfo()).then(async (info) => {
+    if (destroyed) return;
+    if (!costShown(info)) {
+      pricing = info;
+      if (ctx.view === 'cost') ctx.setView?.('rank', true);
+      return;
+    }
+    await ctx.loadMetrics?.();
     if (destroyed) return;
     pricing = info;
-    costOn = costShown(info);
-    if (!costOn && ctx.view === 'cost') return void ctx.setView?.('rank', true);
-    if (currentData && (costOn || ctx.view === 'cost')) draw(currentData);
+    costOn = true;
+    if (currentData) draw(currentData);
   });
   return {
     ready: drawn ? null : loading,

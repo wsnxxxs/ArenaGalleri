@@ -411,8 +411,19 @@ export function updateRememberedReviewWork(work) {
 }
 // The price table and the server's switch for amounts (GET /api/pricing; contracts/usage.md). Read
 // once per visit; a missing endpoint or a failed read keeps amounts hidden for the rest of the visit.
+// supported tells a server with usage (amounts on or off) from one without it.
 let pricingRead = null;
-export const pricingInfo = () => (pricingRead ??= api('pricing').catch(() => ({ showCost: false })));
+export const pricingInfo = () => (pricingRead ??= api('pricing')
+  .then((data) => ({ ...data, supported: true }))
+  .catch(() => ({ showCost: false, supported: false })));
+// Measured usage and artifact sizes by question and work (GET /api/works/metrics; contracts/usage.md).
+// Only pages that show them ask, once per visit; a missing endpoint or a failed read counts as none.
+// supported is true whenever the server answered (even with no records), false for an older server.
+let metricsRead = null;
+const table = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+export const metricsInfo = () => (metricsRead ??= api('works/metrics')
+  .then((data) => ({ usage: table(data?.usage), artifact: table(data?.artifact), supported: true }))
+  .catch(() => ({ usage: {}, artifact: {}, supported: false })));
 export async function apiRemembered(path, options) {
   const key = memoryKey(path);
   const generation = accountGeneration;

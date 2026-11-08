@@ -117,6 +117,21 @@ test('the leaderboard gains a cost column and a cost chart only when amounts are
     };
     const off = await draw(OFF);
     assert.doesNotMatch(off, /c-cost|data-board-view|花费/, 'switch off: the board is unchanged');
+    // Usage arrives on its own read, asked for only once amounts are on, and laid onto the same works.
+    const bare = { ...data, tasks: data.tasks.map((t) => ({ ...t, results: t.results.map(({ usage, ...w }) => w) })) };
+    const lay = () => { calls++; bare.tasks.forEach((t, i) => t.results.forEach((w, j) => { w.usage = data.tasks[i].results[j].usage; })); return Promise.resolve(); };
+    let calls = 0;
+    const late = async (pricing) => {
+      const container = box();
+      const board = mountBoard(container, boardCtx(bare, pricing, { loadMetrics: lay }));
+      await board.ready; await flush(); await flush(); await flush();
+      board.destroy();
+      return container.innerHTML;
+    };
+    assert.doesNotMatch(await late(OFF), /c-cost/);
+    assert.equal(calls, 0, 'no metrics read while amounts are off');
+    assert.equal(((await late(data.pricing)).match(/<td class="c-cost">/g) ?? []).length, 8);
+    assert.equal(calls, 1);
     const on = await draw(data.pricing);
     assert.equal((on.match(/<td class="c-cost">/g) ?? []).length, 8);
     assert.match(on, /<th class="c-cost" scope="col">花费<\/th>/);
@@ -180,8 +195,31 @@ test('the chart takes only positive costs, and the pricing read happens once eve
     let reads = 0;
     globalThis.fetch = async () => { reads++; return Response.json({ error: 'not found' }, { status: 404 }); };
     const { pricingInfo } = await import('../site/platform.js');
-    assert.deepEqual(await pricingInfo(), { showCost: false });
-    assert.deepEqual(await pricingInfo(), { showCost: false });
+    assert.deepEqual(await pricingInfo(), { showCost: false, supported: false });
+    assert.deepEqual(await pricingInfo(), { showCost: false, supported: false });
     assert.equal(reads, 1, 'a missing endpoint is asked once per visit');
+    // Metrics: one read per visit, a failure or a malformed answer counts as no records.
+    const { metricsInfo } = await import('../site/platform.js');
+    reads = 0;
+    assert.deepEqual(await metricsInfo(), { usage: {}, artifact: {}, supported: false }, 'an older server: no usage capability');
+    assert.deepEqual(await metricsInfo(), { usage: {}, artifact: {}, supported: false });
+    assert.equal(reads, 1);
+  } finally { restore(); }
+});
+
+test('a metrics answer is taken by question and work, and anything else in it is ignored', async () => {
+  const restore = globals();
+  try {
+    let reads = 0;
+    globalThis.fetch = async () => { reads++; return Response.json({ usage: { q1: { a: { input: 1, output: 2, source: 'log' } } }, artifact: [], extra: 1 }); };
+    const { metricsInfo } = await import('../site/platform.js?metrics-shape');
+    assert.deepEqual(await metricsInfo(), { usage: { q1: { a: { input: 1, output: 2, source: 'log' } } }, artifact: {}, supported: true });
+    await metricsInfo();
+    assert.equal(reads, 1);
+    // A server with usage but nothing recorded yet, and amounts off: both supported.
+    globalThis.fetch = async (url) => Response.json(String(url).endsWith('pricing') ? { showCost: false } : { usage: {}, artifact: {} });
+    const fresh = await import('../site/platform.js?metrics-empty');
+    assert.deepEqual(await fresh.metricsInfo(), { usage: {}, artifact: {}, supported: true });
+    assert.deepEqual(await fresh.pricingInfo(), { showCost: false, supported: true });
   } finally { restore(); }
 });

@@ -15,7 +15,7 @@ import { initI18n, languageButton, setPageTitle } from './i18n.js';
 //   #/me · #/review           personal center · review queue (platform)
 //   #/terms · #/privacy       terms of use and disclaimer · privacy policy
 import { $, $$, LOGO, brandMark, byName, esc, ext, formatBytes, formatDate, icon, img, pad, reducedMotion, store, syncThemeUi, themeButton, versionedMedia } from './ui.js';
-import { STATUS, accountControl, api, arenaScope, arenaText, avatarFace, bySite, catalogState, connectPlatform, can, isStaff, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, requestPlatform, setFaces, setActivityNeeded, startPlatformRecovery, statusBadge, toast } from './platform.js';
+import { STATUS, accountControl, api, arenaScope, arenaText, avatarFace, bySite, catalogState, connectPlatform, can, isStaff, metricsInfo, onPlatformChange, platform, reactionBar, refreshAccountControls, refreshPlatform, requestPlatform, setFaces, setActivityNeeded, startPlatformRecovery, statusBadge, toast } from './platform.js';
 import { bootRead } from './platform-api.js';
 import { mount as renderLanding } from './home.js';
 import { startAnnouncements } from './announcements.js';
@@ -937,6 +937,22 @@ function sourceChoices(results, field, nameField, resolve) {
   return [...choices].sort(([a, x], [b, y]) => a === 'unset' ? -1 : b === 'unset' ? 1 : byName(x.name, y.name));
 }
 
+// The task page's usage view, once its question has measured works (see loadMetrics).
+const usageNav = (t) => t.results.some((r) => r.usage) ? `<button class="side-link" data-go="cost" aria-pressed="false">${icon('clock')}<span data-usage-label>用量</span><span class="nav-count">${t.results.filter((r) => r.usage).length}</span></button>` : '';
+const usageSection = (t) => t.results.some((r) => r.usage) ? `<section id="usage" data-panel="cost" class="block wrap usage-panel" hidden>
+      <div id="usage-body"><p class="muted">正在载入用量…</p></div>
+    </section>` : '';
+// Metrics arrive after the page draws: add the view to the sidebar and the page, and open it when the
+// address asks for it.
+function showTaskUsage(t) {
+  if (taskState.task !== t.id || $('[data-go="cost"]') || !usageNav(t)) return;
+  const nav = $('.task-nav [data-go="board"]') ?? $('.task-nav [data-go="shots"]') ?? $('.task-nav [data-go="results"]');
+  const panel = $('#board') ?? $('#shots') ?? $('#results');
+  if (!nav || !panel) return;
+  nav.insertAdjacentHTML('afterend', usageNav(t));
+  panel.insertAdjacentHTML('afterend', usageSection(t));
+  if (/\/(?:usage|cost)$/.test(location.hash.split('#')[1])) activatePanel('cost', false);
+}
 function renderTask(t) {
   if (taskState.task !== t.id) {
     Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, variants: new Map(), open: new Set() });
@@ -973,7 +989,7 @@ function renderTask(t) {
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}
-        ${platform.available && votedTask(t) ? `<button class="side-link" data-go="board" aria-pressed="false">${icon('rank')}排行榜</button>` : ''}${t.results.some((r) => r.usage) ? `<button class="side-link" data-go="cost" aria-pressed="false">${icon('clock')}<span data-usage-label>用量</span><span class="nav-count">${t.results.filter((r) => r.usage).length}</span></button>` : ''}
+        ${platform.available && votedTask(t) ? `<button class="side-link" data-go="board" aria-pressed="false">${icon('rank')}排行榜</button>` : ''}${usageNav(t)}
         ${hasExhibition(t) ? `<p class="nav-sep">全屏查看</p>
         <a class="side-link" href="${sandtableHref(t)}">${icon('full')}三维沙盘<span class="nav-ext">${icon('arrow')}</span></a>
         <a class="side-link" href="#/${t.id}/exhibition">${icon('grid')}原作展厅<span class="nav-ext">${icon('arrow')}</span></a>` : ''}
@@ -1018,12 +1034,11 @@ function renderTask(t) {
     ${platform.available && votedTask(t) ? `<section id="board" data-panel="board" class="block wrap" hidden>
       <div class="block-head"><h2>榜单</h2><p>这道题的盲评结果 · 按模型与推理档位分别计分</p>${(pool?.entries ?? 0) >= 2 ? `<a class="block-hint text-link" href="#/arena/${esc(t.id)}">参与这道题的盲评${icon('right')}</a>` : ''}</div>
       <div id="board-body"><p class="muted">正在载入榜单…</p></div>
-    </section>` : ''}${t.results.some((r) => r.usage) ? `<section id="usage" data-panel="cost" class="block wrap usage-panel" hidden>
-      <div id="usage-body"><p class="muted">正在载入用量…</p></div>
-    </section>` : ''}
+    </section>` : ''}${usageSection(t)}
     ${footer()}</main></div>
   <div class="tray" role="region" aria-label="对比栏" hidden></div>`;
   setPageTitle([{ text: t.title, original: true }, DATA.title]);
+  void loadMetrics().then(() => showTaskUsage(t));
   syncTaskView(t);
   filterResults(t);
   syncPicks(t);
@@ -1928,7 +1943,7 @@ function backLink(cls) {
 }
 
 // Everything a platform page needs from the gallery.
-const context = () => ({ DATA, heroArchive, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, modelKey, entryKey, taskHref, viewHref, workKey, interactive, inGallery, settleImages, packagedWork });
+const context = () => ({ DATA, heroArchive, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, modelKey, entryKey, loadMetrics, taskHref, viewHref, workKey, interactive, inGallery, settleImages, packagedWork });
 
 // The data pack holds its questions' assets: screenshots, scenes, models and capture conditions.
 // The API decides which questions and works are public and holds their current fields; without
@@ -1977,9 +1992,6 @@ function resultOf(pack, w) {
     bytes: w.bytes,
     arena: w.arena,
     aiScore: w.aiScore ?? pack?.aiScore ?? null,
-    // Measured generation usage and the counted artifact size (contracts/usage.md); absent when unknown.
-    usage: w.usage ?? null,
-    artifact: w.artifact ?? null,
   };
 }
 function stable(map, key, fresh) {
@@ -2007,7 +2019,21 @@ function mergePlatform() {
       results: works.map((w) => stable(resultsByKey, `${id}/${w.id}`, resultOf(pack?.works.get(w.id), w))),
     });
   });
+  layMetrics();
 }
+
+// Measured usage and artifact sizes come from their own read (GET /api/works/metrics), asked for only by
+// pages that show them. They are laid onto the same work objects, so every view, and the blind test after
+// a reveal, reads r.usage and r.artifact; a catalog merge rebuilds the works, so they are laid again.
+let metrics = null, metricsLaid = null;
+function layMetrics() {
+  if (!metrics || !DATA) return;
+  for (const t of DATA.tasks) for (const r of t.results) {
+    r.usage = metrics.usage[t.id]?.[r.id] ?? null;
+    r.artifact = metrics.artifact[t.id]?.[r.id] ?? null;
+  }
+}
+const loadMetrics = () => (metricsLaid ??= metricsInfo().then((info) => { metrics = info; layMetrics(); return info; }));
 
 let page = null;
 let routeVersion = 0;
