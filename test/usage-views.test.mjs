@@ -87,6 +87,18 @@ test('a question with one record shows that record whole instead of a lone bar',
     assert.doesNotMatch(container.innerHTML, /usage-rows|usage-toolbar/, 'no sorting controls or rows for a single record');
     assert.match(container.innerHTML, /其中推理/);
     assert.match(container.innerHTML, /<span>交付代码 800 行、20k token<\/span><span>，比本题 60% 的作品长。<\/span>/);
+    // A size of 0 is a real size: it counts for the median and the share, and sits at the strip's left end.
+    const sized = (id, tokens, extra = {}) => ({ id, model: 'm2', effort: 'High', artifact: { files: 1, lines: 10, bytes: 100, tokens }, ...extra });
+    const zeroTask = { id: 'q3', results: [sized('z0', 0), sized('z1', 1000), { ...work('z2', 'm1', 'Max', 1000), artifact: { files: 1, lines: 10, bytes: 100, tokens: 2000 } }, sized('z3', 3000), sized('z4', 4000)] };
+    const zeroBox = box();
+    const zeroView = mountTaskUsage(zeroBox, viewCtx(zeroTask, OFF));
+    await zeroView.ready;
+    assert.match(zeroBox.innerHTML, /<span>交付代码 10 行、2k token<\/span><span>，比本题 40% 的作品长。<\/span>/);
+    assert.match(zeroBox.innerHTML, /<span><span>中位数<\/span> <span>2k token<\/span><\/span>/, 'label and value are separate text nodes');
+    assert.match(zeroBox.innerHTML, /<p class="usage-scale" aria-hidden="true"><span>0 token<\/span>/);
+    assert.match(zeroBox.innerHTML, /1 件作品的体量为 0，画在最左端。/);
+    assert.match(zeroBox.innerHTML, /<i style="left:0\.00%"><\/i>/, 'the zero sits at the left end');
+    zeroView.destroy();
     assert.doesNotMatch(container.innerHTML, /[¥$]/);
     view.destroy();
     // Amounts on: the card keeps its currency switch.

@@ -1722,6 +1722,12 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .usage-part-why { display: block; margin: 1px 0 4px 14px; color: var(--muted); font-size: 11.5px; white-space: normal; }
 .usage-size { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .usage-size p:first-child { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+/* Sentences end without a stranded character: break Chinese only at spaces and punctuation, and
+   balance the last line. In English the sentences that sit side by side get their space here. */
+.usage-size p:first-child, .usage-plain, .usage-lede { text-wrap: pretty; }
+.usage-size p:first-child { word-break: keep-all; overflow-wrap: anywhere; }
+:lang(en) .usage-plain > span + span::before, :lang(en) .usage-lede > span + span::before { content: " "; }
+.usage-zero { margin: 4px 0 0; }
 .usage-size .usage-dots { height: 18px; margin: 10px 6px 2px; }
 .usage-later { margin: 12px 0 0; }
 @media (max-width: 640px) {

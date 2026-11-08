@@ -180,18 +180,26 @@ export function mountTaskUsage(container, ctx) {
   function sizeLine(r) {
     const own = artifactOf(r.artifact);
     if (!own) return '';
-    const lengths = t.results.map((w) => artifactOf(w.artifact)?.value).filter((v) => v > 0);
+    // Every non-negative length counts (0 is a real size); only the log strip has no place for 0, so
+    // zero-size works sit at its left end and the strip says so.
+    const lengths = t.results.map((w) => artifactOf(w.artifact)?.value).filter((v) => Number.isFinite(v) && v >= 0);
     const what = own.unit === 'chars' ? `交付文字 ${own.value.toLocaleString('en')} 字`
       : `交付代码 ${r.artifact.lines != null ? `${r.artifact.lines.toLocaleString('en')} 行、` : ''}${formatTokens(own.value)} token`;
-    if (lengths.length < 3 || !(own.value > 0)) return `<div class="usage-size"><p><span>${what}。</span></p></div>`;
+    if (lengths.length < 3) return `<div class="usage-size"><p><span>${what}。</span></p></div>`;
     const shorter = lengths.filter((v) => v < own.value).length, longer = lengths.filter((v) => v > own.value).length;
     const place = shorter >= longer ? `，比本题 ${Math.round(shorter / lengths.length * 100)}% 的作品长。` : `，比本题 ${Math.round(longer / lengths.length * 100)}% 的作品短。`;
-    const lo = Math.min(...lengths), hi = Math.max(...lengths), span = Math.log(hi / lo) || 1;
-    const at = (v) => (Math.log(v / lo) / span * 100).toFixed(2);
-    const mid = median(lengths);
-    return `<div class="usage-size"><p><span>${what}</span><span>${place}</span></p>
+    const mid = median(lengths), positive = lengths.filter((v) => v > 0), zeros = lengths.length - positive.length;
+    const sentence = `<p><span>${what}</span><span>${place}</span></p>`;
+    if (positive.length < 2) return `<div class="usage-size">${sentence}</div>`;
+    const lo = Math.min(...positive), hi = Math.max(...positive), span = Math.log(hi / lo) || 1;
+    // With zero sizes present, the strip keeps its left end for them and draws the rest after a gap.
+    const gap = zeros ? 6 : 0;
+    const at = (v) => (v > 0 ? gap + Math.log(v / lo) / span * (100 - gap) : 0).toFixed(2);
+    const label = (text, v) => `<span><span>${text}</span> <span>${display(v, 'artifact')}</span></span>`;
+    return `<div class="usage-size">${sentence}
       <div class="usage-dots" aria-hidden="true">${lengths.map((v) => `<i style="left:${at(v)}%"></i>`).join('')}<s style="left:${at(mid)}%"></s><b style="left:${at(own.value)}%"></b></div>
-      <p class="usage-scale" aria-hidden="true"><span>${display(lo, 'artifact')}</span><span>中位数 ${display(mid, 'artifact')}</span><span>${display(hi, 'artifact')}</span></p></div>`;
+      <p class="usage-scale" aria-hidden="true"><span>${display(zeros ? 0 : lo, 'artifact')}</span>${label('中位数', mid)}<span>${display(hi, 'artifact')}</span></p>
+      ${zeros ? `<p class="fine usage-zero">${zeros} 件作品的体量为 0，画在最左端。</p>` : ''}</div>`;
   }
 
   // The plain reading of a record: how much was re-read context, and how much the model wrote.
@@ -274,7 +282,7 @@ export function mountTaskUsage(container, ctx) {
       </div>
       ${legend}
       ${sorted.length ? `<ol class="usage-rows${state.scale === 'log' ? ' is-log' : ''}">${sorted.map((row) => rowHtml(row, at, mid)).join('')}</ol>
-      <div class="usage-axis" aria-hidden="true"><span></span><span class="usage-ticks">${ticks.map((v) => `<i style="left:${tickAt(v).toFixed(2)}%">${tick(v)}</i>`).join('')}${mid != null ? `<em style="left:${at(mid).toFixed(2)}%">中位数 ${display(mid)}</em>` : ''}</span><span></span></div>`
+      <div class="usage-axis" aria-hidden="true"><span></span><span class="usage-ticks">${ticks.map((v) => `<i style="left:${tickAt(v).toFixed(2)}%">${tick(v)}</i>`).join('')}${mid != null ? `<em style="left:${at(mid).toFixed(2)}%"><span>中位数</span> <span>${display(mid)}</span></em>` : ''}</span><span></span></div>`
         : '<p class="muted">没有可比较的记录。</p>'}
       ${counted.length && counted.length < 3 && state.group === 'work' ? '<p class="fine usage-note">参与比较的作品不足 3 件，还没有中位数。</p>' : ''}`}
       ${single ? '' : `<div class="usage-foot">${state.group === 'work' && excluded ? `<label class="board-sample-toggle"><input type="checkbox" data-usage-excluded${state.showExcluded ? ' checked' : ''}><span>显示不参与比较的作品（${excluded}）</span></label>` : ''}
