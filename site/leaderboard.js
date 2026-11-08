@@ -79,6 +79,7 @@ const tone = (at) => `color-mix(in srgb, var(--ink) ${Math.round(at)}%, var(--li
 
 export function mountBoard(container, ctx) {
   const limitWorks = !ctx.task;
+  const weightedTrial = globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true && !ctx.curated;
   let unit = store.get('board-unit') === 'model' ? 'model' : 'config';
   let showSmallSamples = store.get('board-show-small-samples') === 'true';
   let currentData = null;
@@ -140,6 +141,7 @@ export function mountBoard(container, ctx) {
       + `<p class="board-meta"><span>每 10 分钟更新一次</span>${data.updatedAt ? ` · <span>最近计算</span> <time datetime="${esc(data.updatedAt)}" data-i18n-time="${esc(data.updatedAt)}">${esc(formatTime(data.updatedAt))}</time>` : ''}</p>`
       + (limitWorks ? `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>` : '')
       + '<p class="muted">当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。</p>'
+      + (weightedTrial ? '<p class="muted">测试计分：按投票时身份取基础权重，同一投票者对同一模型超过 20 场后递减。</p>' : '')
       + (ctx.curated && unit === 'config' ? '<p class="muted">入榜同时要求模型与当前配置各有至少 21 场有效比较。</p>' : '')
       + (ctx.curated && rows.length && totals.votes < 50 ? `<p class="muted">精选榜刚开始计票：目前 ${totals.votes} 次有效比较，名次可能随新票大幅变动。</p>` : '')
       + (unsupported ? '<p class="muted">后端暂不支持这项筛选，下面是未筛选的榜单。</p>' : '')
@@ -219,7 +221,7 @@ export function mountBoard(container, ctx) {
     if (destroyed) return Promise.resolve();
     const params = new URLSearchParams({ by: unit, ...(ctx.curated ? { audience: 'curated', ...(ctx.sectionId ? { sectionId: ctx.sectionId } : {}) } : ctx.task ? { task: ctx.task.id } : { ...(ctx.category ? { category: ctx.category } : {}), ...(ctx.domain ? { domain: ctx.domain } : {}) }) });
     if (filterable) for (const [field, value] of Object.entries(filters)) if (value) params.set(field, value);
-    const path = `leaderboard?${params}`;
+    const path = `leaderboard${weightedTrial ? '/weighted-trial' : ''}?${params}`;
     if (request?.path === path) return request.promise;
     request?.controller.abort();
     const controller = new AbortController();
