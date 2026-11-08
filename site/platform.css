@@ -720,6 +720,9 @@ dialog.sheet.arena-login-sheet { width: min(400px, calc(100% - 32px)); }
 .loader.blind > span:last-child { margin-top: 10px; color: rgb(241 240 236 / 55%); font-size: 12.5px; }
 .arena-empty { flex: 1; align-self: center; max-width: 560px; margin: 0 auto; }
 .arena .stage:has(.arena-empty) { background: var(--bg); }
+/* A message in a pane (the trial's staff gate, a failed draw or policy read) sits on the page colour, not on the
+   dark ground kept for works, so its theme-coloured text reads in both themes. */
+.arena .pane:has(.arena-empty) { background: var(--bg); }
 .arena-prompt-text { margin: 16px 0 0; white-space: pre-wrap; word-break: break-word; color: var(--ink-2); font: 13.5px/1.85 var(--sans); }
 
 .vote-bar { flex: none; border-top: 1px solid var(--line); background: var(--surface); }
