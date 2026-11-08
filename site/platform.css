@@ -1613,3 +1613,153 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 @media (prefers-reduced-motion: reduce) {
   .dims.is-loading, .dims-tabs button { transition: none; }
 }
+
+/* ---- usage and cost (task-usage.js; token-cost design §5.3) ----
+   One ink ramp for kinds of token, no vermilion: cheap and dear are not marks. */
+.usage-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 16px; }
+.usage-head h2 { margin: 0; font: 600 20px var(--serif); letter-spacing: 0.02em; }
+.usage-meta { margin: 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.usage-basis { margin: 0 0 0 auto; color: var(--muted); font-size: 12.5px; }
+.usage-stats { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; margin: 0 0 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.usage-stats > div { min-width: 0; padding: 12px 14px; border-left: 1px solid var(--line); }
+.usage-stats > div:first-child { border-left: 0; padding-left: 0; }
+.usage-stats dt { color: var(--muted); font-size: 12px; }
+.usage-stats dd { margin: 4px 0 0; }
+.usage-stats dd b { display: block; color: var(--ink); font: 600 21px var(--mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.usage-stats dd small { display: block; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.usage-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.usage-toolbar .collection-search { flex: 0 1 220px; }
+.usage-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.usage-display-toggle { display: none; }
+.usage-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 0 0 6px; color: var(--ink-2); font-size: 12px; }
+.usage-legend i, .usage-parts th i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 2px; vertical-align: -0.5px; }
+.usage-legend .fine { margin: 0; }
+.usage-rows { --usage-name: minmax(0, 15rem); --usage-value: 13rem; margin: 0; padding: 0; list-style: none; }
+.usage-row { position: relative; border-bottom: 1px solid var(--line); }
+.usage-link, .usage-row.is-group { display: grid; grid-template-columns: var(--usage-name) minmax(0, 1fr) var(--usage-value); align-items: stretch; gap: 0 16px; padding: 0 6px; color: inherit; text-decoration: none; }
+.usage-link:hover, .usage-link:focus-visible { background: var(--surface); }
+.usage-link:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
+.usage-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; min-width: 0; padding: 11px 0; }
+.usage-name b { color: var(--ink); font-size: 14px; font-weight: 600; }
+.usage-name .badge { margin-left: 0; }
+.usage-name small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.usage-bar { position: relative; min-height: 46px; }
+.usage-bar i { position: absolute; top: 50%; height: 12px; margin-top: -6px; }
+.usage-bar i:first-child { border-radius: 2px 0 0 2px; }
+.usage-bar i:last-of-type { border-radius: 0 2px 2px 0; }
+.usage-bar i:only-of-type { border-radius: 2px; }
+.usage-bar s { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--ink-2); }
+.usage-value { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; padding: 8px 0; text-align: right; font-variant-numeric: tabular-nums; }
+.usage-value b { color: var(--ink); font: 600 15px var(--mono); }
+.usage-value small { color: var(--muted); font: 11.5px var(--mono); white-space: nowrap; }
+.usage-row.is-excluded .usage-name, .usage-row.is-excluded .usage-bar, .usage-row.is-excluded .usage-value { opacity: 0.55; }
+.usage-why { border-style: dashed; color: var(--muted); }
+.usage-axis { display: grid; grid-template-columns: var(--usage-name, minmax(0, 15rem)) minmax(0, 1fr) var(--usage-value, 13rem); gap: 0 16px; padding: 0 6px; height: 40px; }
+.usage-ticks { position: relative; }
+.usage-ticks i, .usage-ticks em { position: absolute; top: 6px; transform: translateX(-50%); color: var(--muted); font: normal 11px var(--mono); white-space: nowrap; }
+.usage-ticks i:first-child { transform: none; }
+.usage-ticks em { top: 22px; color: var(--ink-2); }
+/* The full record of a row: on hover or keyboard focus, one at a time; Escape hides it. */
+.usage-tip { position: absolute; top: calc(100% - 6px); right: 6px; z-index: 3; display: none; min-width: 15rem; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); box-shadow: var(--shadow-sm); }
+.usage-row:hover .usage-tip, .usage-link:focus-visible + .usage-tip { display: block; }
+.usage-rows:hover .usage-row:not(:hover) .usage-tip, .is-quiet .usage-tip { display: none; }
+.usage-parts { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.usage-parts th { padding: 3px 12px 3px 0; color: var(--ink-2); font-weight: 400; text-align: left; white-space: nowrap; }
+.usage-parts td { padding: 3px 0 3px 12px; color: var(--ink); font-family: var(--mono); text-align: right; }
+.usage-parts .is-sub th { padding-left: 14px; color: var(--muted); }
+.usage-parts .is-sub td { color: var(--muted); }
+.usage-parts .is-total th, .usage-parts .is-total td { border-top: 1px solid var(--line); font-weight: 600; }
+.usage-note { margin: 10px 0 0; }
+.usage-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 10px; }
+.usage-foot .fine { margin: 0; }
+/* A question with one record so far: its full breakdown and where its artifact sits on the question. */
+.usage-card { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.usage-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; margin-bottom: 12px; }
+.usage-label { margin: 0; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.usage-stack { display: flex; gap: 2px; height: 10px; margin-bottom: 14px; overflow: hidden; border-radius: 3px; }
+.usage-stack i { flex-basis: 0; min-width: 3px; }
+.usage-card-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 36px; }
+.usage-facts { display: grid; gap: 6px; margin: 0; font-size: 12.5px; }
+.usage-facts div { display: grid; grid-template-columns: 5em minmax(0, 1fr); gap: 12px; }
+.usage-facts dt { color: var(--muted); }
+.usage-facts dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.usage-strip { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.usage-dots { position: relative; height: 26px; margin: 10px 6px 4px; }
+.usage-dots::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--line-2); }
+.usage-dots i, .usage-dots b { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border: 1px solid var(--ink-2); border-radius: 50%; background: var(--surface); }
+.usage-dots b { width: 12px; height: 12px; margin: -6px 0 0 -6px; border: 0; background: var(--ink); box-shadow: 0 0 0 2px var(--surface); }
+.usage-dots s { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--ink-2); }
+.usage-scale { display: flex; justify-content: space-between; margin: 0; color: var(--muted); font: 11px var(--mono); }
+.usage-notes { margin-top: 24px; }
+@media (max-width: 640px) {
+  .usage-basis { margin-left: 0; }
+  .usage-stats { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-stats > div:nth-child(3) { border-left: 0; padding-left: 0; }
+  .usage-stats > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  .usage-stats dd b { font-size: 18px; }
+  /* Metric, scale and currency fold into one 显示 control. */
+  .usage-display-toggle { display: inline-flex; margin-left: auto; }
+  .usage-display-toggle .i { transform: rotate(90deg); transition: transform 0.2s; }
+  .usage-display-toggle[aria-expanded="true"] .i { transform: rotate(-90deg); }
+  .usage-controls { display: none; flex-basis: 100%; margin-left: 0; }
+  .usage-controls.is-open { display: flex; }
+  .usage-toolbar .collection-search { flex: 1 1 100%; }
+  /* Each row: model and value on one line, the bar below. */
+  .usage-link, .usage-row.is-group { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name value" "bar bar"; padding: 0 2px; }
+  .usage-name { grid-area: name; padding-bottom: 2px; }
+  .usage-value { grid-area: value; }
+  .usage-bar { grid-area: bar; min-height: 22px; margin-bottom: 6px; }
+  .usage-axis { grid-template-columns: minmax(0, 1fr); padding: 0 2px; }
+  .usage-axis > span:not(.usage-ticks) { display: none; }
+  .usage-tip { left: 2px; right: 2px; min-width: 0; }
+  .usage-card-body { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .usage-display-toggle .i { transition: none; } }
+
+/* ---- leaderboard cost column and cost chart (leaderboard.js, cost-chart.js; design §5.5) ---- */
+.board .c-cost { text-align: right; }
+/* The composite has its category columns; with cost beside them the ± stands in for the range bar. */
+.board.is-composite.has-cost .c-range { display: none; }
+.board td.c-cost .cost-mult { display: inline-flex; align-items: baseline; gap: 6px; }
+.board td.c-cost b { color: var(--ink); font: 600 14px var(--mono); }
+.board td.c-cost small { display: block; color: var(--muted); font: 11px var(--mono); }
+.cost-tag { margin: 0; border-color: var(--ink-2); color: var(--ink); font-size: 10.5px; }
+.cost-tag.is-soft { border-style: dashed; border-color: var(--line-2); color: var(--muted); }
+.cost-note { margin: 10px 0 0; }
+.cost-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 4px 0 10px; }
+.cost-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 6px; color: var(--ink-2); font-size: 12px; }
+.cost-legend i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 45%, var(--bg)); vertical-align: -0.5px; }
+.cost-legend i.is-front { background: var(--ink); }
+.cost-legend i.is-provisional { border: 1.5px dashed var(--ink-2); background: none; }
+.cost-legend i.is-line { width: 14px; height: 8px; border: 0; border-right: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); border-radius: 0; background: none; }
+.cost-scroll { overflow-x: auto; border-top: 1px solid var(--ink); }
+.cost-chart { display: block; width: 100%; min-width: 600px; height: auto; font-family: var(--mono); }
+.cost-chart .cc-grid line { stroke: var(--line); stroke-width: 1; }
+.cost-chart .cc-median { stroke: var(--ink-2); stroke-dasharray: 4 4; }
+.cost-chart .cc-axis text, .cost-chart .cc-note { fill: var(--muted); font-size: 11px; }
+.cost-chart .cc-title { fill: var(--ink-2); font-family: var(--sans); font-size: 12px; }
+.cost-chart .cc-note { font-family: var(--sans); }
+.cost-chart .cc-link { fill: none; stroke: var(--line-2); stroke-width: 1.2; }
+.cost-chart .cc-front { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.cost-chart .cc-dot { fill: color-mix(in srgb, var(--ink) 45%, var(--bg)); }
+.cost-chart .cc-dot.is-front { fill: var(--ink); }
+.cost-chart .cc-dot.is-provisional { fill: var(--bg); stroke: var(--ink-2); stroke-width: 1.3; stroke-dasharray: 2 2; }
+.cost-chart .cc-name { fill: var(--ink); font-family: var(--sans); font-size: 11.5px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.cost-path-wrap { margin-top: 14px; }
+.cost-path { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.cost-node { padding: 5px 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
+.cost-node b { display: block; color: var(--ink); font-size: 12.5px; font-weight: 600; }
+.cost-node small { color: var(--muted); font: 11px var(--mono); }
+.cost-step { display: flex; flex-direction: column; color: var(--muted); font: 10.5px/1.3 var(--mono); }
+.cost-data { margin-top: 14px; }
+.cost-table td, .cost-table th { text-align: right; }
+.cost-table .c-model { text-align: left; }
+.cost-closed { text-align: left; padding: 32px 0; }
+.cost-closed p:not(.board-empty-title) { margin-left: 0; }
+.cost-closed .board-empty-actions { justify-content: flex-start; }
+/* With the 排名 / 花费图 switch the toolbar wraps instead of running past the page or squeezing its selects. */
+.toolbar-actions:has([data-board-view]) { flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .board .c-cost, .cost-note { display: none; }
+  .toolbar-actions:has([data-board-view]) .result-sort { flex: 1 1 30%; }
+}

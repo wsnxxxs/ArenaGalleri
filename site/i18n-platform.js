@@ -11,6 +11,108 @@ const phrases = Object.fromEntries(`
 当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。|At least 21 valid comparisons in the current scope are required to appear; 21–29 comparisons are marked provisional.
 测试计分：这里预览新的 v3 计分，正式榜单仍按现行方法计算。|Trial scoring: this previews the new v3 scoring. The official leaderboard still uses the current method.
 已排名|Ranked
+用量|Usage
+花费|Cost
+用量对比|Usage comparison
+花费对比|Cost comparison
+正在载入用量…|Loading usage…
+用量加载失败|Usage could not be loaded
+数字由管理员实测录入|Numbers measured and entered by administrators
+按官方标价折算 · 价格表|At official list prices · price table
+按官方标价折算|At official list prices
+本题中位|Question median
+最少|Least
+最多|Most
+最多 ÷ 最少|Most ÷ least
+最省|Cheapest
+最贵|Dearest
+最贵 ÷ 最省|Dearest ÷ cheapest
+同一道题，相差的倍数|Spread within one question
+有记录|Recorded
+计入|Counted
+不足 3 件，暂无中位|Under 3, no median yet
+都不计入对比|None counted in comparisons
+请求|Requests
+耗时|Time
+产物|Artifact
+线性|Linear
+对数|Log
+指标|Metric
+刻度|Scale
+币种|Currency
+分组|Group
+逐件|Each work
+按 Harness|By Harness
+按模型 + Harness|By model + Harness
+种类|Kind
+token 种类|Token kind
+总量|Total
+输入|Input
+缓存读取|Cache read
+缓存写入|Cache write
+输出|Output
+输出（含推理）|Output (incl. reasoning)
+其中推理|of which reasoning
+合计|Total
+数字来自|Source
+实付|Paid
+API 回执|API receipt
+工具统计|Tool summary
+账单|Bill
+会话日志|Session log
+API 按量|API pay-as-you-go
+订阅额度|Subscription allowance
+赠送额度|Free credits
+中转 / 云厂商|Reseller / cloud
+多轮|Multi-turn
+人工介入|Human intervention
+未定价|Unpriced
+缺少数字|Missing numbers
+未注明 Harness|Harness not stated
+颜色越浓，单价越高|Stronger colour, higher unit price
+没有可比较的记录。|No comparable records.
+本题计入的记录不足 3 件，暂不画中位线。|Fewer than 3 counted records on this question, so no median line yet.
+只列管理员实测过的作品；其余作品没有用量记录。|Only works measured by administrators are listed; other works have no usage record.
+本题目前只有这一件有用量记录|This is the only work with a usage record on this question so far
+再有两件作品记录用量后，这里就能排序比较，并画出本题中位线。|Two more measured works will turn this into a sorted comparison with the question median.
+这件作品的用量|Usage of this work
+用量怎么记|How usage is recorded
+花费怎么算|How cost is calculated
+来源|Source
+花费 = 各类 token × 该模型当前官方标价，再按价格表汇率换算；实付不参与比较。|Cost = each kind of token × the model's current official price, converted at the price table's exchange rate. What was actually paid is not compared.
+用量由管理员实测录入：API 回执、工具统计、账单或会话日志。中位线只算计入的作品：单轮且无人工介入。|Usage is measured and entered by administrators from API receipts, tool summaries, bills or session logs. Medians count only single-turn work without human intervention.
+用量由管理员实测录入：API 回执、工具统计、账单或会话日志。中位线只算计入的作品：单轮且无人工介入、模型已定价。|Usage is measured and entered by administrators from API receipts, tool summaries, bills or session logs. Medians count only single-turn work without human intervention, on a priced model.
+token 由各家分词器计数，跨模型只作参考；缓存读取是重复读入的上下文，推理包含在输出里。|Tokens are counted by each vendor's tokenizer, so cross-model comparisons are indicative; cache reads are re-read context, and reasoning is part of output.
+产物体量由程序从作品文件统计，所有作品用同一把尺子，可以直接比较。|Artifact size is counted from each work's files with one ruler, so it compares directly.
+排名|Ranking
+花费图|Cost chart
+正在载入花费…|Loading cost…
+花费图还在积累记录|The cost chart is still collecting records
+回到排名|Back to ranking
+横轴|Horizontal axis
+花费倍数|Cost multiple
+单件中位|Median per work
+连接同一模型的档位|Connect levels of one model
+前沿|Frontier
+暂定（3–4 件），不参与前沿|Provisional (3–4 works), not on the frontier
+前沿线|Frontier line
+前沿路径|Frontier path
+花费图仍在试行，全部按暂定看待。评分来自全部有效比较，花费只来自管理员实测的作品，两者各自独立。|The cost chart is a trial; treat all of it as provisional. Scores come from all valid comparisons and cost only from works measured by administrators; the two are independent.
+当前筛选下有评分且样本足够的条目不足两个，暂不作图。|Fewer than two rated entries with enough records under these filters, so no chart yet.
+Harness 没有评分，这里只按花费倍数排序。|Harnesses have no score, so they are sorted by cost multiple only.
+模型 + Harness 没有评分，这里只按花费倍数排序。|Model + Harness pairs have no score, so they are sorted by cost multiple only.
+查看数据表|View data table
+名称|Name
+计入件数|Counted works
+题数|Questions
+状态|Status
+样本不足|Too few records
+无评分|No score
+同题中位|Question median
+评分 ↑|Score ↑
+花费倍数（对数刻度，同题中位 = 1×）→ 更贵|Cost multiple (log scale, question median = 1×) → dearer
+单件中位花费（对数刻度）→ 更贵|Median cost per work (log scale) → dearer
+花费列：各题花费 ÷ 同题中位的几何平均，以及单件花费中位；件数是管理员实测的件数，不是「作品」列的全部作品。按官方标价折算，名次仍按评分。|Cost column: the geometric mean of each work's cost ÷ its question median, and the median cost per work. Counts are works measured by administrators, not all works in the Works column. Official list prices; ranks still follow the score.
 搜索结果|Search results
 未覆盖全部大类|Not in every category
 观察区|Watch list
@@ -643,6 +745,27 @@ const legal = Object.fromEntries(`
 `.trim().split('\n').map((line) => line.split('|')));
 
 const dynamic = Object.fromEntries(`
+{count} 件计入 · 共 {total} 件作品，{n} 件有记录|{count} counted · {total} works in all, {n} recorded
+{count} 件计入|{count} counted
+{count} 件|{count} works
+{count} 次|{count} requests
+{count} 次请求|{count} requests
+{count} 行|{count} lines
+{count} 个文件|{count} files
+{count} 字|{count} characters
+{count} 秒|{count} s
+{count} 分|{count} min
+{count} 分 {n} 秒|{count} min {n} s
+{count} 小时|{count} h
+{count} 小时 {n} 分|{count} h {n} min
+其中推理 {value}|Reasoning {value}
+中位 {value}|Median {value}
+产物体量在本题 {count} 件作品中的位置|Where this artifact sits among the question's {count} works
+这一件是中位的 {value} 倍。产物用同一把尺子统计，可以跨模型比较。|This one is {value}× the median. Artifacts are counted with one ruler, so they compare across models.
+显示不计入的作品（{count}）|Show works not counted ({count})
+{value} / 件 · {count} 件|{value} per work · {count} works
+至少 8 个配置各有 5 件以上计入记录后开放。目前 {count} 个配置达到，管理员已实测 {n} 件作品。在那之前，可以在各题的「花费」视图里直接比较。|Opens once 8 configurations have at least 5 counted records each. {count} configurations qualify so far, and administrators have measured {n} works. Until then, compare on each question's Cost view.
+评分与花费散点图，前沿 {count} 个|Score against cost scatter, {count} on the frontier
 {value} 道题|{value} questions
 第 {count}|#{count}
 {count} 道题，不足 {n} 道|Too few questions ({count};\u00a0needs\u00a0{n})

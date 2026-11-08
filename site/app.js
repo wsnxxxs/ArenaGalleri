@@ -703,7 +703,7 @@ async function updateResultPreviews(t, preferredId = null) {
 }
 // Panels are views of the one task page: they replace the address and add no level to the trail.
 // The prompt lives in the sidebar now; an old #prompt address opens the works.
-const panels = ['results', 'shots', 'board'];
+const panels = ['results', 'shots', 'board', 'cost'];
 function activatePanel(name, updateHash = true) {
   const target = panels.includes(name) && $(`[data-panel="${name}"]`) ? name : 'results';
   const shown = $(`[data-panel="${target}"]`), switched = shown.hidden && $$('[data-panel]').some((el) => !el.hidden);
@@ -712,19 +712,22 @@ function activatePanel(name, updateHash = true) {
   $$('[data-go]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.go === target)));
   resultPreviews?.setPaused(target !== 'results');
   if (target === 'board') mountTaskBoard();
+  if (target === 'cost') mountTaskUsage();
   if (target === 'results') {
     const task = DATA.tasks.find((item) => item.id === taskState.task);
     if (task) void loadTaskScores(task);
   } else if (taskScoreRead) cancelTaskScores(false);
   deferredMedia.refresh(root);
   if (updateHash) {
-    const base = `#${location.hash.split('#')[1]}`;
-    history.replaceState(history.state, '', target === 'results' ? base : `${base}#${target}`);
+    // The usage view has its own address (#/<task>/usage, or /cost once amounts show); the others ride after a second #.
+    const base = `#${location.hash.split('#')[1].replace(/\/(?:usage|cost)$/, '')}`;
+    history.replaceState(history.state, '', target === 'results' ? base : target === 'cost' ? `${base}/${usageView?.shown() ? 'cost' : 'usage'}` : `${base}#${target}`);
   }
 }
 
 // The task leaderboard doubles as the source of the "榜单评分" sort.
 let taskBoard = null;
+let usageView = null;
 let taskScoreRead = null, taskScoreController = null, taskScoreRun = 0, scoredTask = null, taskScoreError = '';
 function updateTaskScoreStatus() {
   const status = $('[data-score-state]');
@@ -784,6 +787,26 @@ async function mountTaskBoard() {
     taskBoard = mountBoard(body, { ...context(), task: t, embedded: true });
   } catch (error) {
     const failure = await loadFailure(error, '榜单加载失败');
+    if (body.isConnected) body.innerHTML = `<div class="board-empty"><p class="board-empty-title">${failure.title}</p><p>${esc(failure.text)}</p><div class="board-empty-actions">${RELOAD}</div></div>`;
+  }
+}
+// The usage view loads with the price table and the server's switch for amounts (task-usage.js).
+async function mountTaskUsage() {
+  const body = $('#usage-body');
+  if (!body || body.dataset.mounted) return;
+  body.dataset.mounted = '1';
+  const t = DATA.tasks.find((task) => task.id === taskState.task);
+  try {
+    const { mountTaskUsage: mount } = await import('./task-usage.js');
+    if (!body.isConnected) return;
+    usageView = mount(body, { ...context(), task: t });
+    await usageView.ready;
+    if (!body.isConnected || !usageView.shown()) return;
+    // Amounts are on: the view is 花费 and its address says /cost.
+    $('[data-go="cost"] [data-usage-label]')?.replaceChildren('花费');
+    if (/\/usage$/.test(location.hash.split('#')[1])) history.replaceState(history.state, '', `#${location.hash.split('#')[1].replace(/\/usage$/, '/cost')}`);
+  } catch (error) {
+    const failure = await loadFailure(error, '用量加载失败');
     if (body.isConnected) body.innerHTML = `<div class="board-empty"><p class="board-empty-title">${failure.title}</p><p>${esc(failure.text)}</p><div class="board-empty-actions">${RELOAD}</div></div>`;
   }
 }
@@ -945,7 +968,7 @@ function renderTask(t) {
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}
-        ${platform.available && votedTask(t) ? `<button class="side-link" data-go="board" aria-pressed="false">${icon('rank')}排行榜</button>` : ''}
+        ${platform.available && votedTask(t) ? `<button class="side-link" data-go="board" aria-pressed="false">${icon('rank')}排行榜</button>` : ''}${t.results.some((r) => r.usage) ? `<button class="side-link" data-go="cost" aria-pressed="false">${icon('clock')}<span data-usage-label>用量</span><span class="nav-count">${t.results.filter((r) => r.usage).length}</span></button>` : ''}
         ${hasExhibition(t) ? `<p class="nav-sep">全屏查看</p>
         <a class="side-link" href="${sandtableHref(t)}">${icon('full')}三维沙盘<span class="nav-ext">${icon('arrow')}</span></a>
         <a class="side-link" href="#/${t.id}/exhibition">${icon('grid')}原作展厅<span class="nav-ext">${icon('arrow')}</span></a>` : ''}
@@ -990,6 +1013,8 @@ function renderTask(t) {
     ${platform.available && votedTask(t) ? `<section id="board" data-panel="board" class="block wrap" hidden>
       <div class="block-head"><h2>榜单</h2><p>这道题的盲评结果 · 按模型与推理档位分别计分</p>${(pool?.entries ?? 0) >= 2 ? `<a class="block-hint text-link" href="#/arena/${esc(t.id)}">参与这道题的盲评${icon('right')}</a>` : ''}</div>
       <div id="board-body"><p class="muted">正在载入榜单…</p></div>
+    </section>` : ''}${t.results.some((r) => r.usage) ? `<section id="usage" data-panel="cost" class="block wrap usage-panel" hidden>
+      <div id="usage-body"><p class="muted">正在载入用量…</p></div>
     </section>` : ''}
     ${footer()}</main></div>
   <div class="tray" role="region" aria-label="对比栏" hidden></div>`;
@@ -1110,7 +1135,7 @@ function renderTask(t) {
 // The task page as the router sees it: its panel and selected card preview, plus board and tray cleanup.
 function taskPage(t) {
   renderTask(t);
-  activatePanel(location.hash.split('#')[2], false);
+  activatePanel(/\/(?:usage|cost)$/.test(location.hash.split('#')[1]) ? 'cost' : location.hash.split('#')[2], false);
   return {
     scoreTask: t.id,
     ready: updateResultPreviews(t),
@@ -1118,6 +1143,8 @@ function taskPage(t) {
       if (!keepTaskScores) cancelTaskScores();
       taskBoard?.destroy?.();
       taskBoard = null;
+      usageView?.destroy();
+      usageView = null;
       ++previewVersion;
       resultPreviews?.destroy();
       resultPreviews = null;
@@ -1896,7 +1923,7 @@ function backLink(cls) {
 }
 
 // Everything a platform page needs from the gallery.
-const context = () => ({ DATA, heroArchive, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, entryKey, taskHref, viewHref, workKey, interactive, inGallery, settleImages, packagedWork });
+const context = () => ({ DATA, heroArchive, backLink, MODELS, HARNESSES, PROVIDERS, header, footer, pageStart, sideNav, LIBRARY, pageEnd, label, modelOf, vendorOf, harnessOf, providerOf, sourceLine, cover, coverHtml, resultBadges, exhibitedModels, modelKey, entryKey, taskHref, viewHref, workKey, interactive, inGallery, settleImages, packagedWork });
 
 // The data pack holds its questions' assets: screenshots, scenes, models and capture conditions.
 // The API decides which questions and works are public and holds their current fields; without
@@ -1945,6 +1972,9 @@ function resultOf(pack, w) {
     bytes: w.bytes,
     arena: w.arena,
     aiScore: w.aiScore ?? pack?.aiScore ?? null,
+    // Measured generation usage and the counted artifact size (contracts/usage.md); absent when unknown.
+    usage: w.usage ?? null,
+    artifact: w.artifact ?? null,
   };
 }
 function stable(map, key, fresh) {
@@ -2049,7 +2079,9 @@ async function show(version, visit, scrollBack) {
   const platformPage = Object.hasOwn(PLATFORM_PAGES, taskId ?? '') && (taskId !== 'dimensions' || guidedTrial()) ? taskId : null;
   const t = platformPage ? null : DATA.tasks.find((x) => x.id === taskId);
   const inExhibition = t && hasExhibition(t) && (a === 'exhibition' || a === 'sandtable');
-  const inViewer = t && a && !inExhibition;
+  // #/<task>/usage and #/<task>/cost open the task page on its usage view (unless a work has that id).
+  const inUsage = t && !vs && (a === 'usage' || a === 'cost') && !t.results.some((r) => r.id === a);
+  const inViewer = t && a && !inExhibition && !inUsage;
   // Home counts come from the public catalog. Authoring, legal and exam pages use their
   // own session/data reads; fetch shared reactions and pools only where they are shown.
   const accountActivity = taskId === 'me' ? a === 'works'

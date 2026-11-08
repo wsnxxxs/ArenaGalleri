@@ -3,10 +3,12 @@ import { routeParts } from './route-path.js';
 // Leaderboard: the full page (#/leaderboard[/<category>|/<task>][/<domain>], or #/leaderboard/<domain>)
 // and the panel on each task page.
 import { $, brandMark, esc, formatDate, formatTime, icon, pad, store, vendorLine } from './ui.js';
-import { apiRemembered, arenaScope, levelOf, platform, recall } from './platform.js';
+import { apiRemembered, arenaScope, levelOf, platform, pricingInfo, recall } from './platform.js';
 import { curatedInfo, curatedKnown } from './curated.js';
 import { categoryLabel, domainsIn, domainList, domainsOf, tracksOf, votedTask } from './categories.js';
 import { textMatches } from './match.js';
+import { chartOpen, costShown, formatMoney, formatMultiple, frontier, groupCosts } from './usage.js';
+import { costTable, frontierSteps, scatter } from './cost-chart.js';
 
 const UNITS = { config: '按配置', model: '按模型' };
 // A domain board below either line is shown, but flagged as too thin to rank on.
@@ -114,6 +116,12 @@ export function mountBoard(container, ctx) {
   };
   let unit = pickUnit();
   const openGroups = new Set();
+  // Cost (token-cost design §5.5): only on aggregate public boards, and only when the server shows
+  // amounts (GET /api/pricing showCost). Until then nothing here changes the board.
+  const costScope = !ctx.task && !ctx.curated && !ctx.embedded && Boolean(ctx.DATA);
+  let pricing = null, costOn = false;
+  let costBy = null, costX = 'multiple', connect = true;
+  let currency = ['CNY', 'USD'].includes(store.get('usage-currency')) ? store.get('usage-currency') : document.documentElement?.lang === 'en' ? 'USD' : 'CNY';
   const board = ++boards;
   let tips = 0;
   let showSmallSamples = store.get('board-show-small-samples') === 'true';
@@ -170,13 +178,14 @@ export function mountBoard(container, ctx) {
     const meta = `${totals.votes} 次有效比较 · ${totals.voters} 位参与者 · ${count} 个${unit === 'model' ? '模型' : '配置'}${v3Board ? '排名' : '有评分'}${data.filters ? ' · 仅统计两件作品来源都符合筛选的比较' : ''}`;
     // On the full page the sidebar already counts comparisons and voters, so search leads the toolbar.
     const search = `<label class="collection-search">${icon('search')}<input type="search" data-board-search aria-label="搜索模型" placeholder="搜索模型" value="${esc(text)}"></label>`;
-    const unitControl = `<div class="seg" role="group" aria-label="计分单位">${Object.entries(UNITS).map(([value, text]) => `<button data-board-unit="${value}" aria-pressed="${value === unit}">${text}</button>`).join('')}</div>`;
+    const unitControl = `<div class="seg" role="group" aria-label="计分单位">${Object.entries(UNITS).map(([value, text]) => `<button data-board-unit="${value}" aria-pressed="${value === unit}">${text}</button>`).join('')}</div>`
+      + (costOn && costScope ? `<div class="seg" role="group" aria-label="视图">${[['rank', '排名'], ['cost', '花费图']].map(([value, text]) => `<button data-board-view="${value}" aria-pressed="${value === (ctx.view ?? 'rank')}">${text}</button>`).join('')}</div>` : '');
     const s = data.scoring;
     return (filterable
       ? `<div class="collection-toolbar">${search}<div class="toolbar-actions">${typeof ctx.toolbar === 'function' ? ctx.toolbar() : ctx.toolbar ?? ''}${filterSelect('harness', 'Harness', ctx.HARNESSES)}${filterSelect('provider', '服务商', ctx.PROVIDERS)}${unitControl}</div></div>${data.filters ? '<p class="muted">仅统计两件作品来源都符合筛选的比较。</p>' : ''}`
       : `<div class="board-head"><p class="board-meta">${meta}</p>${unitControl}</div>`)
       + `<p class="board-meta"><span>每 10 分钟更新一次</span>${data.updatedAt ? ` · <span>最近计算</span> <time datetime="${esc(data.updatedAt)}" data-i18n-time="${esc(data.updatedAt)}">${esc(formatTime(data.updatedAt))}</time>` : ''}</p>`
-      + (limitWorks && !v3Board ? `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>` : '')
+      + (limitWorks && !v3Board && ctx.view !== 'cost' ? `<div class="board-display"><label class="board-sample-toggle"><input type="checkbox" data-board-small${showSmallSamples ? ' checked' : ''}><span>显示作品少于 5 件的条目</span></label>${hiddenCount ? `<span class="board-meta">已隐藏 ${hiddenCount} 个作品不足 5 件的条目</span>` : ''}</div>` : '')
       + (v3Board ? `<p class="muted">当前范围内至少有 ${s.minimumGames} 场有效比较才显示；${s.minimumGames}–${(data.provisionalGames ?? 30) - 1} 场标为暂定。</p>` : '<p class="muted">当前范围内至少有 21 场有效比较才显示；21–29 场标为暂定。</p>')
       + (nextBoard ? '<p class="muted">测试计分：这里预览新的 v3 计分，正式榜单仍按现行方法计算。</p>' : '')
       + (ctx.curated && unit === 'config' ? '<p class="muted">入榜同时要求模型与当前配置各有至少 21 场有效比较。</p>' : '')
@@ -218,6 +227,80 @@ export function mountBoard(container, ctx) {
     return (value) => (((value - low) / Math.max(high - low, 1)) * 100).toFixed(2);
   };
 
+  // ---- cost ----------------------------------------------------------------------------
+  // The works this board covers: its questions (category, domain) and its source filters. Medians stay
+  // per question; the filters only pick which works join a group (usage.groupCosts).
+  const tasksInScope = () => ctx.DATA.tasks.filter((t) => votedTask(t) && (!ctx.category || t.category === ctx.category)
+    && (!ctx.domain || domainsOf(t).includes(ctx.domain)));
+  const passes = (w) => (!filters.harness || (filters.harness === 'unset' ? !w.harness : w.harness === filters.harness))
+    && (!filters.provider || (ctx.providerOf(w)?.id ?? 'unset') === filters.provider);
+  const harnessName = (w) => ctx.harnessOf(w)?.name ?? '未注明 Harness';
+  const COST_KEYS = {
+    config: (w) => ctx.entryKey(w), model: (w) => ctx.modelKey(w),
+    harness: (w) => harnessName(w), pair: (w) => `${ctx.modelKey(w)} ${harnessName(w)}`,
+  };
+  const COST_NAMES = {
+    config: (w) => ctx.label(w), model: (w) => ctx.modelOf(w).name,
+    harness: (w) => harnessName(w), pair: (w) => `${ctx.modelOf(w).name} · ${harnessName(w)}`,
+  };
+  const costsBy = (by) => groupCosts(tasksInScope(), { pricing, keyOf: COST_KEYS[by], modelOf: (w) => ctx.modelOf(w).id ?? w.model, include: passes });
+  // The chart opens once 8 configurations have 5 counted works each, whatever the unit on screen.
+  const costReady = () => costOn && costScope && chartOpen(costsBy('config'));
+  const money = (cny) => formatMoney(cny, currency, pricing?.fx);
+  const scoresOf = (rows) => new Map(rows.map((row) => [row.key, row.score]));
+  const rankedRows = (data) => isV3(data) ? data.rows : visibleBoardEntries(data, true).rows;
+  // Groups on the chart: rated, with enough works; the frontier is drawn from the firm ones.
+  function costPoints(scores, by) {
+    const points = [...costsBy(by).values()].map((g) => ({ ...g, name: COST_NAMES[by](g.sample), model: ctx.modelKey(g.sample), score: scores.get(g.key) ?? null }));
+    const rated = points.filter((p) => p.score != null && p.status !== 'insufficient').map((p) => ({ ...p, x: costX === 'multiple' ? p.multiple : p.medianCost, y: p.score }));
+    const front = new Set(frontier(rated.filter((p) => p.status === 'firm')).map((p) => p.key));
+    return { points, rated: rated.map((p) => ({ ...p, frontier: front.has(p.key) })), front };
+  }
+  // The ranking table's cost column, once the chart is open: multiple, median per work and count.
+  function costColumn(rows) {
+    if (!costReady() || (ctx.view ?? 'rank') !== 'rank') return null;
+    const { points, front } = costPoints(scoresOf(rows), unit);
+    return { groups: new Map(points.map((p) => [p.key, p])), front };
+  }
+  function costCell(cost, row) {
+    if (!cost) return '';
+    const g = cost.groups.get(row.key);
+    if (!g || g.status === 'insufficient') return '<td class="c-cost">—</td>';
+    const tag = cost.front.has(row.key) ? '<span class="badge cost-tag">前沿</span>' : g.status === 'provisional' ? '<span class="badge cost-tag is-soft">暂定</span>' : '';
+    return `<td class="c-cost"><span class="cost-mult">${tag}<b>${formatMultiple(g.multiple)}</b></span><small>${money(g.medianCost)} / 件 · ${g.works} 件</small></td>`;
+  }
+  const COST_HEAD = '<th class="c-cost" scope="col">花费</th>';
+  const COST_NOTE = '<p class="fine cost-note">花费列：各题花费 ÷ 同题中位的几何平均，以及单件花费中位；件数是管理员实测的件数，不是「作品」列的全部作品。按官方标价折算，名次仍按评分。</p>';
+
+  // The cost view: the chart for configurations or models, a cost table for Harness groupings.
+  function costView(data) {
+    const by = costBy ?? unit;
+    const scored = by === 'config' || by === 'model';
+    const select = `<label class="result-sort">分组<select data-cost-by aria-label="花费图分组">${Object.entries({ config: '按配置', model: '按模型', harness: '按 Harness', pair: '按模型 + Harness' })
+      .map(([value, text]) => `<option value="${value}"${value === by ? ' selected' : ''}>${text}</option>`).join('')}</select></label>`;
+    const seg = (name, options, current) => `<div class="seg" role="group" aria-label="${name}">${options.map(([value, text]) => `<button type="button" data-cost-set="${name}" data-value="${value}" aria-pressed="${value === current}">${text}</button>`).join('')}</div>`;
+    const configs = costsBy('config');
+    if (!chartOpen(configs)) {
+      const ready = [...configs.values()].filter((g) => g.works >= 5).length;
+      return `<div class="board-empty cost-closed"><p class="board-empty-title">花费图还在积累记录</p>
+        <p>至少 8 个配置各有 5 件以上计入记录后开放。目前 ${ready} 个配置达到，管理员已实测 ${tasksInScope().reduce((sum, t) => sum + t.results.filter((w) => w.usage && passes(w)).length, 0)} 件作品。在那之前，可以在各题的「花费」视图里直接比较。</p>
+        <div class="board-empty-actions"><button class="btn sm" type="button" data-board-view="rank">回到排名</button></div></div>`;
+    }
+    const { points, rated } = costPoints(scoresOf(rankedRows(data)), by);
+    const front = rated.filter((p) => p.frontier).sort((a, b) => a.x - b.x);
+    const tableRows = points.map((p) => ({ ...p, status: scored && p.score == null && p.status !== 'insufficient' ? 'unrated' : p.status, frontier: front.some((f) => f.key === p.key) }))
+      .sort((a, b) => Number(a.status === 'insufficient') - Number(b.status === 'insufficient') || a.multiple - b.multiple);
+    const controls = `<div class="cost-controls">${select}${scored ? seg('横轴', [['multiple', '花费倍数'], ['cost', '单件中位']], costX) : ''}${seg('币种', [['CNY', '¥'], ['USD', '$']], currency)}
+      ${scored && by === 'config' ? `<label class="board-sample-toggle"><input type="checkbox" data-cost-connect${connect ? ' checked' : ''}><span>连接同一模型的档位</span></label>` : ''}</div>`;
+    const legend = '<p class="cost-legend" aria-hidden="true"><span><i class="is-front"></i>前沿</span><span><i></i>其他</span><span><i class="is-provisional"></i>暂定（3–4 件），不参与前沿</span><span><i class="is-line"></i>前沿线</span></p>';
+    return `${controls}
+      <p class="muted">花费图仍在试行，全部按暂定看待。评分来自全部有效比较，花费只来自管理员实测的作品，两者各自独立。</p>
+      ${scored ? (rated.length >= 2 ? `${legend}<div class="cost-scroll">${scatter(rated, { x: costX, connect: connect && by === 'config', currency, fx: pricing?.fx })}</div>
+        ${front.length ? `<div class="cost-path-wrap"><p class="usage-label">前沿路径</p>${frontierSteps(front, { x: costX, currency, fx: pricing?.fx })}</div>` : ''}` : '<p class="muted">当前筛选下有评分且样本足够的条目不足两个，暂不作图。</p>')
+        : `<p class="muted">${by === 'harness' ? 'Harness 没有评分，这里只按花费倍数排序。' : '模型 + Harness 没有评分，这里只按花费倍数排序。'}</p>`}
+      ${scored ? `<details class="board-unranked cost-data"><summary>查看数据表${icon('next')}</summary>${costTable(tableRows, { currency, fx: pricing?.fx })}</details>` : costTable(tableRows, { currency, fx: pricing?.fx, scored: false })}`;
+  }
+
   function table(data, { rows, unranked }) {
     if (isV3(data)) return tableV3(data, unranked);
     const hiddenCount = limitWorks && !showSmallSamples ? visibleBoardEntries(data, true).rows.length - rows.length : 0;
@@ -227,6 +310,7 @@ export function mountBoard(container, ctx) {
     }
     if (!rows.length) return empty(data, top, unranked);
     const at = axis(rows);
+    const cost = costColumn(rows);
     const body = rows.map((row, index) => {
       const rank = index + 1;
       const m = modelOf(row);
@@ -234,15 +318,15 @@ export function mountBoard(container, ctx) {
       <td class="c-rank${rank <= 3 ? ' is-top' : ''}">${pad(rank)}</td>
       <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name">${nameParts(data, row)}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
       <td class="c-score"><b><span data-i18n-number="${row.score}">${row.score}</span></b><small>±<span data-i18n-number="${row.interval}">${row.interval}</span></small></td>
-      <td class="c-range" aria-hidden="true">${rangeBar(row, at)}</td>
+      <td class="c-range" aria-hidden="true">${rangeBar(row, at)}</td>${costCell(cost, row)}
       ${recordCells(row)}
       <td class="c-works"><span data-i18n-number="${row.works}">${row.works}</span></td>
     </tr>`;
     }).join('');
     return `${top}<div class="board-wrap"><table class="board">
-      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th><th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">胜率</th><th class="c-works" scope="col">作品</th></tr></thead>
+      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cost ? COST_HEAD : ''}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">胜率</th><th class="c-works" scope="col">作品</th></tr></thead>
       <tbody>${body}</tbody>
-    </table></div>
+    </table></div>${cost ? COST_NOTE : ''}
     <p class="muted filter-empty" data-board-none hidden>没有匹配的模型，请换个关键词。</p>
     ${unrankedList(unranked)}`;
   }
@@ -257,7 +341,8 @@ export function mountBoard(container, ctx) {
     // The composite lists its categories as columns on wide screens and as a line under the name on narrow ones.
     const cats = overall ? Object.keys(s.composite ?? {}) : [];
     const composite = cats.length > 0;
-    const columns = composite ? 7 + cats.length : 8;
+    const cost = costColumn(rows);
+    const columns = (composite ? 7 + cats.length : 8) + (cost ? 1 : 0);
     const at = axis(rows);
     // Numbers stay with their words (no-break spaces); platform.css lets a Chinese reason break only after its comma.
     const nb = (text) => text.replaceAll(' ', '\u00a0');
@@ -302,7 +387,7 @@ export function mountBoard(container, ctx) {
       ${rank}
       ${line(row, m, group === 'watch' ? reasons : partsLine(row))}
       ${scoreCell(row, group)}
-      <td class="c-range" aria-hidden="true">${group === 'ranked' ? rangeBar(row, at) : ''}</td>
+      <td class="c-range" aria-hidden="true">${group === 'ranked' ? rangeBar(row, at) : ''}</td>${costCell(cost, row)}
       ${middle}
       ${tail(row)}
     </tr>`;
@@ -316,12 +401,12 @@ export function mountBoard(container, ctx) {
     </tbody>`;
     };
     const noun = unit === 'model' ? '模型' : '配置';
-    return `${top}<p class="board-meta board-found" data-board-found hidden></p><div class="board-wrap"><table class="board is-v3${composite ? ' is-composite' : ''}">
-      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cats.map((c) => `<th class="c-part" scope="col">${esc(categoryLabel(c))}</th>`).join('')}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">实际胜率</th>${composite ? '' : '<th class="c-works" scope="col">作品</th>'}</tr></thead>
+    return `${top}<p class="board-meta board-found" data-board-found hidden></p><div class="board-wrap"><table class="board is-v3${composite ? ' is-composite' : ''}${cost ? ' has-cost' : ''}">
+      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cost ? COST_HEAD : ''}${cats.map((c) => `<th class="c-part" scope="col">${esc(categoryLabel(c))}</th>`).join('')}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">实际胜率</th>${composite ? '' : '<th class="c-works" scope="col">作品</th>'}</tr></thead>
       <tbody data-board-group="ranked">${rows.length ? rows.map(render('ranked')).join('') : `<tr class="board-group-empty"><td colspan="${columns}">还没有达标的${noun}，已有成绩的列在下方。</td></tr>`}</tbody>
       ${fold('partial', '有各类名次，缺类的不进综合排名', partial)}
       ${fold('watch', '有分数，暂不排名', watch)}
-    </table></div>
+    </table></div>${cost ? COST_NOTE : ''}
     <p class="muted filter-empty" data-board-none hidden>没有匹配的模型，请换个关键词。</p>
     ${unrankedList(unranked)}`;
   }
@@ -363,6 +448,13 @@ export function mountBoard(container, ctx) {
         load();
         return;
       }
+    }
+    if (ctx.view === 'cost' && costScope) {
+      container.innerHTML = head(data, rankedRows(data).length) + (pricing ? costView(data) : '<p class="muted">正在载入花费…</p>');
+      currentData = data;
+      ctx.onData?.(data, { visibleRows: rankedRows(data).length });
+      drawn = true;
+      return;
     }
     // A fresh board can land while the reader types; the search keeps its focus.
     const typing = document.activeElement?.matches('[data-board-search]');
@@ -457,6 +549,14 @@ export function mountBoard(container, ctx) {
     if (tip) return void openTip(tip);
     closeTips();
     if (e.target.closest('[data-board-retry]')) return void load();
+    const view = e.target.closest('[data-board-view]');
+    if (view) return void ctx.setView?.(view.dataset.boardView);
+    const costSet = e.target.closest('[data-cost-set]');
+    if (costSet) {
+      if (costSet.dataset.costSet === '币种') { currency = costSet.dataset.value; store.set('usage-currency', currency); }
+      else costX = costSet.dataset.value;
+      return void (currentData && draw(currentData));
+    }
     const fold = e.target.closest('[data-board-group-toggle]');
     if (fold) {
       const name = fold.dataset.boardGroupToggle;
@@ -471,6 +571,7 @@ export function mountBoard(container, ctx) {
     const button = e.target.closest('[data-board-unit]');
     if (!button || button.dataset.boardUnit === unit) return;
     unit = button.dataset.boardUnit;
+    costBy = null;
     store.set(unitKey(), unit);
     load();
   };
@@ -480,6 +581,13 @@ export function mountBoard(container, ctx) {
       store.set('board-show-small-samples', String(showSmallSamples));
       if (currentData) draw(currentData);
       return;
+    }
+    if (e.target.matches('[data-cost-connect]')) { connect = e.target.checked; return void (currentData && draw(currentData)); }
+    if (e.target.matches('[data-cost-by]')) {
+      const by = e.target.value;
+      costBy = by === 'harness' || by === 'pair' ? by : null;
+      if (!costBy && by !== unit) { unit = by; store.set(unitKey(), unit); return void load(); }
+      return void (currentData && draw(currentData));
     }
     const select = e.target.closest('[data-board-filter]');
     if (!select) return;
@@ -495,6 +603,14 @@ export function mountBoard(container, ctx) {
   container.addEventListener('pointerover', onOver);
   container.addEventListener('pointerout', onOut);
   const loading = load();
+  // Amounts and the cost view wait for the server's switch; with it off the board stays as it was.
+  if (costScope) (ctx.pricing ?? pricingInfo()).then((info) => {
+    if (destroyed) return;
+    pricing = info;
+    costOn = costShown(info);
+    if (!costOn && ctx.view === 'cost') return void ctx.setView?.('rank', true);
+    if (currentData && (costOn || ctx.view === 'cost')) draw(currentData);
+  });
   return {
     ready: drawn ? null : loading,
     reload: load,
@@ -524,7 +640,16 @@ export function mountBoard(container, ctx) {
 export function mount(root, ctx) {
   const tasks = ctx.DATA.tasks.filter(votedTask);
   const tracks = tracksOf(tasks);
-  const [first = null, second = null] = (routeParts(location.hash) ?? []).slice(1);
+  const parts = (routeParts(location.hash) ?? []).slice(1);
+  // A trailing /cost opens the cost chart of the same board (#/leaderboard[/<category>][/<domain>]/cost).
+  const costView = parts.at(-1) === 'cost';
+  if (costView) parts.pop();
+  const [first = null, second = null] = parts;
+  const rankHref = ['#/leaderboard', ...parts.map(encodeURIComponent)].join('/');
+  const setView = (view, replace = false) => {
+    const href = view === 'cost' ? `${rankHref}/cost` : rankHref;
+    if (replace) location.replace(href); else location.hash = href;
+  };
   const curated = first === 'curated';
   if (curated && second === 'frontend') {
     location.replace('#/leaderboard/curated');
@@ -535,8 +660,8 @@ export function mount(root, ctx) {
   const track = curated ? null : task ? tracks.find((x) => x.name === task.category) ?? null : first ? tracks.find((x) => x.slug === first) ?? null : null;
   const hasDomain = (name) => tasks.some((t) => domainsOf(t).includes(name));
   const domain = curated || task ? null : !track && hasDomain(first) ? first : track && hasDomain(second) ? second : null;
-  if (first && !curated && !task && !track && !domain) {
-    location.replace('#/leaderboard');
+  if ((first && !curated && !task && !track && !domain) || (costView && (curated || task))) {
+    location.replace(task ? rankHref : '#/leaderboard');
     return {};
   }
   const base = track ? `#/leaderboard/${encodeURIComponent(track.slug)}` : '#/leaderboard';
@@ -625,6 +750,8 @@ export function mount(root, ctx) {
       domain,
       tracks: task || track || domain || curated ? null : tracks,
       toolbar: () => domainSelect + taskSelect(),
+      view: costView ? 'cost' : 'rank',
+      setView,
       emptyTitle: domain ? `${domain}榜单还在等第一批盲评` : track && !task ? `${track.label}榜单还在等第一批盲评` : undefined,
       onLoad: (data) => live?.update(data),
       onData: (data, { visibleRows }) => {
