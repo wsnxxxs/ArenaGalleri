@@ -760,16 +760,22 @@ function match(root, ctx, first, scope) {
     strip.className = 'arena-switched';
     strip.setAttribute('role', 'status');
     strip.innerHTML = `<span>这一组换成了</span><b data-i18n-ignore>${esc(task.title)}</b><button class="link" type="button" data-a="open-prompt">看提示词</button>`;
-    // Below the skip reasons when those are showing; in its usual place otherwise.
-    const why = $('.arena-why:not(.is-gone)', el);
-    if (why) strip.style.top = `${why.offsetTop + why.offsetHeight + 8}px`;
     $('.arena-stage', el).append(strip);
+    stackNotes();
     later(() => { strip.classList.add('is-gone'); later(() => strip.remove(), 600); }, 4500);
   }
 
   // Skipping moves on at once; the next pair then offers the reasons for a few seconds. Nothing is recorded
   // unless one is picked, and each skipped pair sends at most one reason.
   let skipReason = null;
+  // The task note sits below the skip reasons while they show, and in its usual place otherwise. The strip
+  // changes height when it is translated, wraps or says thanks, so the note follows its size.
+  function stackNotes() {
+    const note = $('.arena-switched', el);
+    if (!note) return;
+    const why = $('.arena-why:not(.is-gone)', el);
+    note.style.top = why ? `${why.offsetTop + why.offsetHeight + 8}px` : '';
+  }
   function askSkipReason(matchId) {
     const strip = document.createElement('div');
     strip.className = 'arena-why';
@@ -781,7 +787,8 @@ function match(root, ctx, first, scope) {
     const stage = $('.arena-stage', el);
     $$('.arena-why', stage).forEach((node) => node.remove());
     stage.append(strip);
-    const current = skipReason = { matchId, strip, sent: false, timer: 0, version: accountVersion() };
+    const current = skipReason = { matchId, strip, sent: false, timer: 0, version: accountVersion(), observer: new ResizeObserver(stackNotes) };
+    current.observer.observe(strip);
     // The countdown stops while the strip is pointed at or focused, and starts over when it is left.
     const wait = () => { clearTimeout(current.timer); current.timer = setTimeout(() => { if (skipReason === current) dropSkipReason(); }, SKIP_REASON_MS); };
     const pause = () => clearTimeout(current.timer);
@@ -797,7 +804,12 @@ function match(root, ctx, first, scope) {
     skipReason = null;
     clearTimeout(current.timer);
     const { strip } = current;
-    const go = () => { strip.classList.add('is-gone'); later(() => strip.remove(), 400); };
+    const go = () => {
+      current.observer.disconnect();
+      strip.classList.add('is-gone');
+      stackNotes();
+      later(() => strip.remove(), 400);
+    };
     if (delay) later(go, delay); else go();
   }
   function sendSkipReason(button) {
@@ -1443,6 +1455,7 @@ function match(root, ctx, first, scope) {
       timers.forEach(clearTimeout);
       clearTimeout(peekTimer);
       clearTimeout(skipReason?.timer);
+      skipReason?.observer.disconnect();
       document.body.classList.remove('is-viewer');
     },
   };

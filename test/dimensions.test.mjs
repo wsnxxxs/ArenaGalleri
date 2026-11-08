@@ -42,12 +42,12 @@ test('the radar draws dimension scores on one 900–1500 scale and rests unanswe
 
   // One scale for the page: 900–1500, widened to the next hundred when a drawn value falls outside.
   const { scaleFor } = await chart();
-  assert.deepEqual(scaleFor([entry], dimensions), { min: 900, max: 1500, ticks: [1000, 1200, 1400] });
-  assert.deepEqual(scaleFor([], dimensions), { min: 900, max: 1500, ticks: [1000, 1200, 1400] });
+  assert.deepEqual(scaleFor([entry], dimensions), { min: 900, max: 1500, step: 200, ticks: [1000, 1200, 1400] });
+  assert.deepEqual(scaleFor([], dimensions), { min: 900, max: 1500, step: 200, ticks: [1000, 1200, 1400] });
   const low = { prior: 621, dimensions: { aesthetic: { score: 640, interval: 238, n: 3, thin: true } } };
   const high = { prior: 1444, dimensions: { craft: { score: 1430, interval: 90, n: 30, thin: false } } };
   const wide = scaleFor([entry, low, high], dimensions);
-  assert.deepEqual(wide, { min: 400, max: 1600, ticks: [600, 1000, 1400] }, 'the interval floor 402 and the ceiling 1520 round outward');
+  assert.deepEqual(wide, { min: 400, max: 1600, step: 400, ticks: [600, 1000, 1400] }, 'the interval floor 402 and the ceiling 1520 round outward');
   assert.equal(axesOf(low, dimensions, wide)[0].low, scaleOf(402, wide));
   assert.deepEqual(scaleFor([{ prior: 820, dimensions: {} }], dimensions).ticks, [1000, 1200, 1400], 'widened by 100, the rings keep their 200 steps');
   assert.deepEqual(scaleFor([{ prior: 820, dimensions: {} }], dimensions).min, 800);
@@ -127,4 +127,19 @@ test('a staff read that lands after the account changed to a member shows the ga
   f.answer(0);
   await flush();
   assert.match(f.root.innerHTML, /维度图只对管理员开放/);
+});
+
+test('widened scales label only rings that stay apart, keeping 1000', async () => {
+  const { scaleFor, tickLabels } = await chart();
+  const dimensions = [1, 2, 3, 4].map((i) => ({ id: `d${i}`, name: `d${i}`, aspects: [{ id: `a${i}`, keyword: 'k' }] }));
+  assert.deepEqual(tickLabels(scaleFor([], dimensions), 4), [1000, 1200, 1400], 'the default scale labels every ring');
+  for (const prior of [4500, -1500, 200]) {
+    const scale = scaleFor([{ prior, dimensions: {} }], dimensions);
+    const labels = tickLabels(scale, 4);
+    assert.ok(labels.includes(1000) || !scale.ticks.includes(1000));
+    // Labels sit on the 45° line; consecutive ones must be at least 12px apart vertically.
+    const radius = (tick) => (84 * (tick - scale.min)) / (scale.max - scale.min);
+    for (let i = 1; i < labels.length; i++) assert.ok((radius(labels[i]) - radius(labels[i - 1])) * Math.SQRT1_2 >= 12, `${prior}: ${labels}`);
+    assert.ok(scale.ticks.length > labels.length || scale.ticks.length <= 3, 'rings stay every 400 even when not all are labelled');
+  }
 });

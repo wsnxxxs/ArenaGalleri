@@ -46,7 +46,16 @@ export function scaleFor(entries, dimensions) {
   const step = max - min > 900 ? 400 : 200;
   const ticks = [];
   for (let tick = 1000 - Math.floor((999 - min) / step) * step; tick < max; tick += step) ticks.push(tick);
-  return { min, max, ticks };
+  return { min, max, step, ticks };
+}
+
+// Which rings carry their value. Labels run along one line from the centre; on a widened scale the rings are
+// close, so only every k-th ring from 1000 is labelled, keeping at least `gap` px (vertically) between labels.
+export function tickLabels(scale, n, radius = RADAR.radius, gap = 12) {
+  const ring = (radius * scale.step) / (scale.max - scale.min);
+  const rise = Math.max(0.5, Math.abs(Math.sin(angleOf(0.5, n))));
+  const every = Math.max(1, Math.ceil(gap / (ring * rise)));
+  return scale.ticks.filter((tick) => Math.abs(Math.round((tick - 1000) / scale.step)) % every === 0);
 }
 
 // Axis i of n starts at 12 o'clock and runs clockwise; value 1 lands on the outer ring.
@@ -87,7 +96,7 @@ function radar(entry, dimensions, name, scale) {
   const ring = (value, cls) => `<circle class="${cls}" cx="${cx}" cy="${cy}" r="${fixed(radius * value)}"/>`;
   const rings = [...scale.ticks.map((tick) => ring(scaleOf(tick, scale), `radar-ring${tick === 1000 ? ' is-mid' : ''}`)), ring(1, 'radar-ring')].join('');
   // Tick values run along the bisector of the first two axes, clear of the labels.
-  const ticks = scale.ticks.map((tick) => {
+  const ticks = tickLabels(scale, n, radius).map((tick) => {
     const angle = angleOf(0.5, n);
     const r = radius * scaleOf(tick, scale);
     return `<text class="radar-tick" x="${fixed(cx + Math.cos(angle) * r + 3)}" y="${fixed(cy + Math.sin(angle) * r - 3)}">${tick}</text>`;
@@ -132,7 +141,7 @@ function tipHtml(axis, entry) {
   lines.push(`<span>${entry.prior == null ? '没有建模分类分，从 1000 起' : `建模分类分 ${esc(entry.prior)}`}</span>`);
   for (const aspect of dimension.aspects) {
     const part = cell.aspects?.[aspect.id];
-    lines.push(`<span><span>${esc(aspect.keyword)}</span> · <span>${part?.n ? `胜率 ${percent(rateOf(part))} · ${part.n} 票` : '未作答'}</span></span>`);
+    lines.push(`<span><span>${esc(aspect.keyword)}</span> · <span>${part?.n ? `胜率 ${percent(rateOf(part))} · ${esc(part.n)} 票` : '未作答'}</span></span>`);
   }
   return `<b><span>${esc(dimension.name)}</span> · <span>${esc(`${axis.score} ±${axis.interval}`)}</span></b>${lines.join('')}`;
 }
@@ -291,7 +300,7 @@ export function mount(root, ctx) {
       <div class="board-empty-actions"><a class="btn primary" href="#/arena/random">随机一组</a></div></div>`, meta);
     const body = view === 'board' ? boardView(dimensions) : view === 'health' ? healthView(dimensions) : radarView(entries, dimensions, noun);
     page(`${toolbar}<div class="dims-panel" id="dims-panel" role="tabpanel" aria-labelledby="dims-tab-${view}">${body}
-      <p class="dims-foot"><span>只统计带测评点的测试对局，目前只有${esc(data.categories.join('、'))}题有测评点。</span><span>两边是同一${noun}的一对不计。</span>${totals.since ? `<span>数据从 ${formatDate(totals.since)} 到 ${formatDate(totals.until)}。</span>` : ''}</p></div>`, meta);
+      <p class="dims-foot"><span>只统计带测评点的测试对局。</span><span>两边是同一${noun}的一对不计。</span>${totals.since ? `<span>数据从 ${formatDate(totals.since)} 到 ${formatDate(totals.until)}。</span>` : ''}<span><span>有测评点的题目类型：</span>${data.categories.map((category) => `<span>${esc(category)}</span>`).join(' · ')}</span></p></div>`, meta);
   }
 
   // Every load, including one that ends at the gate, makes earlier reads stale; a read that lands is shown

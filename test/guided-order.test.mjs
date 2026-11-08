@@ -111,7 +111,8 @@ test('a skip reason is offered for six seconds and sent at most once', async () 
     node.contains = (target) => target?.strip === node;
     return node;
   };
-  const e = { accountVersion: () => version, icon: () => '', $$: () => [], el: {}, $: () => ({ append(node) { e.shown = node; } }), document: { createElement: strip, activeElement: null },
+  const e = { accountVersion: () => version, icon: () => '', $$: () => [], el: {}, ResizeObserver: class { observe() {} disconnect() {} },
+    $: (selector) => (selector === '.arena-stage' ? { append(node) { e.shown = node; } } : null), document: { createElement: strip, activeElement: null },
     later: (fn) => fn(), setTimeout: (fn, ms) => { waits.push({ fn, ms }); return waits.length; }, clearTimeout() {},
     api: (path, options) => { calls.push(JSON.parse(JSON.stringify({ path, body: options.body }))); return Promise.resolve({ ok: true }); } };
   vm.runInNewContext(constant('SKIP_REASONS') + constant('SKIP_REASON_MS') + chunk('  let skipReason = null;', '\n  function showError')
@@ -138,4 +139,27 @@ test('a skip reason is offered for six seconds and sent at most once', async () 
   version = 2;
   e.t.sendSkipReason(pick('recognized'));
   assert.equal(calls.length, 1);
+});
+
+test('the task note follows the skip reasons as they change size and returns to its place when they go', () => {
+  const note = { style: {} };
+  let strip = null, resize = null, disconnected = 0;
+  const e = { accountVersion: () => 1, icon: () => '', $$: () => [], el: {}, later: (fn) => fn(), setTimeout: () => 0, clearTimeout() {},
+    ResizeObserver: class { constructor(callback) { resize = callback; } observe() {} disconnect() { disconnected++; } },
+    document: { createElement: () => (strip = { offsetTop: 56, offsetHeight: 44, classList: { add(name) { strip.gone = name; } }, setAttribute() {}, addEventListener() {}, remove() {} }) },
+    $: (selector) => (selector === '.arena-stage' ? { append() {} } : selector === '.arena-switched' ? note
+      : selector === '.arena-why:not(.is-gone)' && strip && !strip.gone ? strip : null) };
+  vm.runInNewContext(constant('SKIP_REASONS') + constant('SKIP_REASON_MS') + chunk('  let skipReason = null;', '\n  function showError')
+    + '\nglobalThis.t = { askSkipReason, dropSkipReason, stackNotes };', e);
+  e.t.stackNotes();
+  assert.equal(note.style.top, '', 'without skip reasons the note keeps its own place');
+  e.t.askSkipReason('skipped');
+  e.t.stackNotes();
+  assert.equal(note.style.top, '108px');
+  strip.offsetHeight = 168; // translated to English and wrapped on a phone
+  resize();
+  assert.equal(note.style.top, '232px');
+  e.t.dropSkipReason();
+  assert.equal(note.style.top, '');
+  assert.equal(disconnected, 1);
 });
