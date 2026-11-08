@@ -7,7 +7,7 @@
 // save; text that is not a number does, since the server would refuse it. Converted amounts appear
 // only while the server's switch is on.
 import { $, $$, esc, formatTime, icon } from './ui.js';
-import { api, openDialog, refreshPlatform, toast } from './platform.js';
+import { api, metricsInfo, openDialog, refreshPlatform, toast } from './platform.js';
 import { KINDS, parseAmount, recognize, warnings } from './usage-paste.js';
 import { PAID_BASIS, SOURCES, costOf, costShown, formatMoney, formatTokens, priceFor, tokensOf } from './usage.js';
 import { currencyNow, loadPricing, pricingNow } from './usage-view.js';
@@ -203,8 +203,17 @@ const normal = (usage) => (usage ? Object.fromEntries(ORDER.filter((key) => usag
 
 const path = (task, id) => `admin/works/${encodeURIComponent(task)}/${encodeURIComponent(id)}/usage`;
 export const readUsage = (task, id) => api(path(task, id));
-// Saves a read() result: a record replaces the old one, null removes it.
-export const saveUsage = (task, id, usage) => (usage ? api(path(task, id), { method: 'PUT', body: usage }) : api(path(task, id), { method: 'DELETE' }));
+// Saves a read() result: a record replaces the old one, null removes it. The visit's one metrics read
+// (platform.js metricsInfo) takes the change too, so pages redrawn after the catalog refresh show it.
+export async function saveUsage(task, id, usage) {
+  const saved = await (usage ? api(path(task, id), { method: 'PUT', body: usage }) : api(path(task, id), { method: 'DELETE' }));
+  const info = await metricsInfo();
+  if (info.supported) {
+    const works = (info.usage[task] ??= {});
+    if (usage) works[id] = usage; else delete works[id];
+  }
+  return saved;
+}
 
 // Loads a work's record into a bound block. True when the block may be saved: the record was read,
 // or there is none (404). After any other failure the block stays empty and must not be saved, so an

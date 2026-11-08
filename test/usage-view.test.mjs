@@ -47,6 +47,7 @@ test('with the switch on amounts lead, unpriced works say so, and the comparison
 test('administrators see the edit entry; readers see nothing for unrecorded works', async () => {
   const reader = view({ showCost: false }), staff = view({ showCost: false }, { staff: true });
   assert.equal(reader.usageBlock({ id: 'x' }, { results: [] }), '');
-  assert.match(staff.usageBlock({ id: 'x' }, { results: [] }), /未录入用量[\s\S]*data-usage-edit/);
+  assert.equal(staff.usageBlock({ id: 'x' }, { results: [] }), '', 'an older server without usage: no entry');
+  assert.match(staff.usageBlock({ id: 'x' }, { results: [] }, { entry: true }), /未录入用量[\s\S]*data-usage-edit/);
   assert.doesNotMatch(reader.usageBlock(work('a', 1, 2), { results: [] }), /data-usage-edit/);
 });

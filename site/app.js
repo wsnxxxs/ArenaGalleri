@@ -956,6 +956,15 @@ function showTaskUsage(t) {
   panel.insertAdjacentHTML('afterend', usageSection(t));
   if (/\/(?:usage|cost)$/.test(location.hash.split('#')[1])) activatePanel('cost', false);
 }
+// Cards drawn before the metrics arrived gain their usage line under the source; the rest stay as they are.
+function showCardUsage(t) {
+  if (taskState.task !== t.id) return;
+  for (const card of $$('[data-results] .result[data-id]')) {
+    const line = cardUsage(t.results.find((r) => r.id === card.dataset.id));
+    $('.result-usage', card)?.remove();
+    if (line) $('.result-by', card)?.insertAdjacentHTML('afterend', line);
+  }
+}
 function renderTask(t) {
   if (taskState.task !== t.id) {
     Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, variants: new Map(), open: new Set() });
@@ -1041,7 +1050,7 @@ function renderTask(t) {
     ${footer()}</main></div>
   <div class="tray" role="region" aria-label="对比栏" hidden></div>`;
   setPageTitle([{ text: t.title, original: true }, DATA.title]);
-  void loadMetrics().then(() => showTaskUsage(t));
+  void loadMetrics().then((info) => { showTaskUsage(t); if (info.supported) showCardUsage(t); });
   syncTaskView(t);
   filterResults(t);
   syncPicks(t);
@@ -1590,7 +1599,7 @@ function createViewer(t) {
         <button class="icon-btn" data-v="guide" aria-label="收起指南">${icon('close')}</button>
       </div>
       ${r.summary ? `<p class="guide-summary"><span data-i18n-ignore>${esc(r.summary)}</span></p>` : ''}
-      ${workFacts(t, r)}${usageBlock(r, t)}
+      ${workFacts(t, r)}${usageBlock(r, t, { entry: metrics?.supported === true })}
       ${platform.available ? `<div class="guide-block"><h3>表情</h3>${reactionBar(workKey(t, r), { locked: !interactive(r) }) || '<p class="fine">存疑作品不再接受互动。</p>'}</div>` : ''}
       ${g.presets?.length ? `<div class="guide-block"><h3>快速跳转</h3>
         <div class="presets">${g.presets.map((p) => `<button class="chip${state.queries[state.active] === p.query ? ' on' : ''}" data-preset="${esc(p.query)}"><span data-i18n-ignore>${esc(p.label)}</span></button>`).join('')}
@@ -1785,6 +1794,14 @@ function createViewer(t) {
     e.preventDefault();
   };
   document.addEventListener('keydown', onKey);
+  // Usage, artifact sizes and the administrators' entry come with the metrics; the first preview of a
+  // visit asks for them and redraws the pane lines and the guide once they are laid on the works.
+  let gone = false;
+  if (!metrics) void loadMetrics().then((info) => {
+    if (gone || !info.supported || !state.panes.length) return;
+    $$('.pane', stage).forEach((p, i) => drawPaneUsage(p, byId(state.panes[i])));
+    renderGuide();
+  });
 
   return {
     task: t,
@@ -1803,6 +1820,7 @@ function createViewer(t) {
     destroy() {
       themeObserver.disconnect();
       removeEventListener('message', onAudioMessage);
+      gone = true;
       clearFrameLoads();
       clearTimeout(blurTimer);
       controls.destroy();

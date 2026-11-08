@@ -537,10 +537,26 @@ function match(root, ctx, first, scope) {
     return id ? ctx.DATA.tasks.find((t) => t.id === task.id)?.results.find((r) => r.id === id) ?? null : null;
   };
 
+  // Measured usage is asked for only once a vote has revealed the works (app.js loadMetrics lays it on
+  // the catalog's works); the reveal that asked is redrawn when it arrives, later ones find it laid.
+  let metricsAsked = false;
+  function askMetrics() {
+    if (metricsAsked || !ctx.loadMetrics) return;
+    metricsAsked = true;
+    const result = state.result;
+    void ctx.loadMetrics().then(() => {
+      if (!alive || state.result !== result || !revealed() || !(revealedWork('a')?.usage || revealedWork('b')?.usage)) return;
+      const focus = document.activeElement?.closest?.('[data-bar] [data-a]')?.dataset.a;
+      drawHeads();
+      drawBar();
+      if (focus) $(`[data-bar] [data-a="${focus}"]`, el)?.focus({ preventScroll: true });
+    });
+  }
+
   function drawHeads(sides = ['a', 'b']) {
     // The strip comes off once, on the draw that first shows the names.
     const unseal = revealed() && !state.unsealed;
-    if (revealed()) state.unsealed = true;
+    if (revealed()) { state.unsealed = true; askMetrics(); }
     for (const side of sides) {
       $(`[data-head="${side}"]`, el).innerHTML = revealed() ? revealHead(side, unseal) : blindHead(side);
       // Usage only after the vote: before it the page does not even know which works these are, and no

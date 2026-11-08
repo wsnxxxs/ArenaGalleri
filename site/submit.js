@@ -4,7 +4,7 @@
 // After submitting, one stage track shows where the work is and follows it while it waits.
 import { $, $$, esc, formatBytes, formatTime, icon } from './ui.js';
 import { setPageTitle } from './i18n.js';
-import { accountVersion, api, can, isStaff, needsEmail, platform, refreshPlatform, toast } from './platform.js';
+import { accountVersion, api, can, isStaff, metricsInfo, needsEmail, platform, refreshPlatform, toast } from './platform.js';
 import { levelGate } from './level-gate.js';
 import { createUploadRequest, resolveApiMedia } from './platform-api.js';
 import { onWorkFieldChange, readWorkFields, registeredModel, workFieldsHtml } from './work-fields.js';
@@ -305,7 +305,6 @@ export function uploadFlow(root, ctx, options) {
       <p class="field-hint">PNG / JPEG / WebP，不超过 ${formatBytes(platform.site.limits.coverBytes)}。<span>${platform.site.capture ? '不上传时使用平台自动截图。' : '不上传时显示文字封面。'}</span></p></div>`;
     return `<form class="step-body submit-form" novalidate>
       ${workFieldsHtml(ctx, task, null, { extra: cover })}
-      ${isStaff() ? usageEntryHtml() : ''}
       <label class="confirm"><input type="checkbox" name="attest" required><span>作品由所选模型按本题提示词生成，人工介入如实填写；我有权提交，并同意 <a href="#/terms" target="_blank" rel="noopener">《使用条款》</a> 与 <a href="#/privacy" target="_blank" rel="noopener">《隐私政策》</a>。</span></label>
       <p class="form-error" role="alert"></p>
       <div class="form-actions"><button class="btn primary" type="submit">${icon('upload')}<span data-submit-label>${options.submitLabel ?? '提交作品'}</span></button><span class="fine">${options.submitNote ?? '核验前可在个人中心修改信息。'}</span></div>
@@ -391,9 +390,20 @@ export function uploadFlow(root, ctx, options) {
     onWorkFieldChange(form, form.elements.modelName);
     if (form.elements.summary?.value || form.elements.note?.value) $('.more-fields', form)?.setAttribute('open', '');
   }
-  // Administrators record the work's usage with the upload; it is saved once the work exists.
+  // Administrators record the work's usage with the upload; it is saved once the work exists. The block
+  // joins the form only once the server is known to keep usage (GET /api/works/metrics answered), so
+  // with an older server the form stays as it was.
+  let usageSupported = null;
   function bindUsage(form = $('.submit-form', root)) {
-    const block = form && $('[data-usage-entry]', form);
+    usageEntry = null;
+    if (!form || !isStaff()) return;
+    if (usageSupported === null) {
+      usageSupported = false;
+      void metricsInfo().then((info) => { usageSupported = info.supported; if (active && info.supported) bindUsage(); });
+    }
+    if (!usageSupported) return;
+    $('label.confirm', form).insertAdjacentHTML('beforebegin', usageEntryHtml());
+    const block = $('[data-usage-entry]', form);
     usageEntry = block ? bindUsageEntry(block, { draft: state.usage, modelOf: () => {
       const name = form.elements.modelName?.value.trim() ?? '';
       return name ? { id: registeredModel(form, name) ?? null, name } : null;

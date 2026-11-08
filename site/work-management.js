@@ -1,6 +1,6 @@
 // Work metadata and display settings share a sheet; review decisions keep their own dialogs.
 import { $, $$, brandMark, esc, formatTime, icon, img } from './ui.js';
-import { accountVersion, api, byStaff, canDecide, isSenior, moderationBadge, openDialog, refreshPlatform, ROLE_LABELS, setFaces, statusBadge, toast, updateRememberedReviewWork } from './platform.js';
+import { accountVersion, api, byStaff, canDecide, isSenior, metricsInfo, moderationBadge, openDialog, refreshPlatform, ROLE_LABELS, setFaces, statusBadge, toast, updateRememberedReviewWork } from './platform.js';
 import { templatesOf } from './categories.js';
 import { registeredModel, workFieldsHtml } from './work-fields.js';
 import { bindUsageEntry, loadInto, saveUsage, usageEntryHtml } from './usage-entry.js';
@@ -76,7 +76,6 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
           <h3 class="mini-heading">作品信息</h3>
           <label class="field"><span class="field-label">所属题目</span><select class="input" name="task"${movable ? '' : ' disabled'}>${[...homes].map(([id, title]) => `<option data-i18n-ignore value="${esc(id)}"${id === w.task ? ' selected' : ''}>${esc(title)}</option>`).join('')}</select><span class="field-hint">${homeHint}</span></label>
           ${workFieldsHtml(ctx, task, w, { expanded: true })}
-          ${usageEntryHtml()}
           <div class="work-display-settings"><h3 class="mini-heading">展示设置</h3>
             <label class="work-display-setting"><span><b>展览馆公开展示</b><small data-gallery-hint></small></span><input type="checkbox" role="switch" name="show_gallery" aria-label="展览馆公开展示"${initial.show_gallery ? ' checked' : ''}></label>
             <label class="work-display-setting"><span><b>参加盲评</b><small data-arena-hint></small></span><input type="checkbox" role="switch" name="show_arena" aria-label="参加盲评"${initial.show_arena ? ' checked' : ''}></label>
@@ -94,15 +93,20 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
   const form = $('form', sheet.el);
   const editor = createEditor(form, task, w);
   // Usage is saved with the same button, after the work's information; the model for its conversion is
-  // whatever the information fields say now.
-  void loadPricing();
-  const usage = bindUsageEntry($('[data-usage-entry]', form), { modelOf: () => {
-    const name = form.elements.modelName?.value.trim() || w.modelName;
-    return { id: registeredModel(form, name) ?? (name === w.modelName ? w.model : null), name };
-  } });
-  form.addEventListener('input', (event) => { if (event.target.name === 'modelName') usage.refresh(); });
-  let usageReady = false;
-  void loadInto(usage, w.task, w.id).then((ok) => { usageReady = ok; });
+  // whatever the information fields say now. The block appears only once the server is known to keep
+  // usage (GET /api/works/metrics answered); with an older server the sheet stays as it was.
+  let usage = null, usageReady = false;
+  void metricsInfo().then((info) => {
+    if (!info.supported || !form.isConnected) return;
+    $('.work-display-settings', form).insertAdjacentHTML('beforebegin', usageEntryHtml());
+    void loadPricing();
+    usage = bindUsageEntry($('[data-usage-entry]', form), { modelOf: () => {
+      const name = form.elements.modelName?.value.trim() || w.modelName;
+      return { id: registeredModel(form, name) ?? (name === w.modelName ? w.model : null), name };
+    } });
+    form.addEventListener('input', (event) => { if (event.target.name === 'modelName') usage.refresh(); });
+    void loadInto(usage, w.task, w.id).then((ok) => { usageReady = ok; });
+  });
   const error = $('.form-error:not(.field-error)', form);
   let busy = false;
   // Text questions retain the backend's earlier blind-pool rules.
@@ -171,7 +175,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
         if (owner !== accountVersion()) { sheet.close(); return; }
       }
       sheet.close();
-      toast(metadataSaved || Object.keys(faces).length || usageSaved ? `已保存：${w.title}` : '信息、展示设置与用量没有改动');
+      toast(metadataSaved || Object.keys(faces).length || usageSaved ? `已保存：${w.title}` : usage ? '信息、展示设置与用量没有改动' : '信息与展示设置没有改动');
       await refreshPlatform('review');
     } catch (err) {
       const settingsDone = !Object.keys(faces).length || facesSaved;

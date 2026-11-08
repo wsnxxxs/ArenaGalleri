@@ -105,11 +105,13 @@ function position(task, work, metric) {
 }
 
 // The 「生成用量」 block under 核验状态. Readers see it only for recorded works; administrators also
-// see 「未录入用量 · 录入」 on the rest, and 「编辑」 on recorded ones (data-usage-edit).
-export function usageBlock(work, task) {
+// see 「编辑」 on recorded ones (data-usage-edit) and, once the server is known to keep usage
+// (`entry`: GET /api/works/metrics answered), 「未录入用量 · 录入」 on the rest. An older server
+// leaves the drawer exactly as it was.
+export function usageBlock(work, task, { entry = false } = {}) {
   const usage = work?.usage, admin = isStaff();
   if (!usage) {
-    return admin ? `<div class="guide-block usage-block is-empty"><div class="usage-block-head"><h3>生成用量</h3><span class="fine">未录入用量</span><button class="btn sm" type="button" data-usage-edit>录入</button></div></div>` : '';
+    return admin && entry ? `<div class="guide-block usage-block is-empty"><div class="usage-block-head"><h3>生成用量</h3><span class="fine">未录入用量</span><button class="btn sm" type="button" data-usage-edit>录入</button></div></div>` : '';
   }
   const shown = costShown(pricing), cost = costFor(work), price = shown ? priceFor(pricing, work.model) : null;
   const tokens = tokensOf(usage);
