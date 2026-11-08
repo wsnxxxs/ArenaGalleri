@@ -768,6 +768,8 @@ function match(root, ctx, first, scope) {
   // Skipping moves on at once; the next pair then offers the reasons for a few seconds. Nothing is recorded
   // unless one is picked, and each skipped pair sends at most one reason.
   let skipReason = null;
+  // Every strip still on the page, shown or on its way out, so leaving the page stops all their observers.
+  const skipStrips = new Set();
   // The task note sits below the skip reasons while they show, and in its usual place otherwise. The strip
   // changes height when it is translated, wraps or says thanks, so the note follows its size.
   function stackNotes() {
@@ -789,8 +791,9 @@ function match(root, ctx, first, scope) {
     stage.append(strip);
     const current = skipReason = { matchId, strip, sent: false, timer: 0, version: accountVersion(), observer: new ResizeObserver(stackNotes) };
     current.observer.observe(strip);
+    skipStrips.add(current);
     // The countdown stops while the strip is pointed at or focused, and starts over when it is left.
-    const wait = () => { clearTimeout(current.timer); current.timer = setTimeout(() => { if (skipReason === current) dropSkipReason(); }, SKIP_REASON_MS); };
+    const wait = () => { if (skipReason !== current) return; clearTimeout(current.timer); current.timer = setTimeout(() => { if (skipReason === current) dropSkipReason(); }, SKIP_REASON_MS); };
     const pause = () => clearTimeout(current.timer);
     strip.addEventListener('pointerenter', pause);
     strip.addEventListener('focusin', pause);
@@ -806,11 +809,17 @@ function match(root, ctx, first, scope) {
     const { strip } = current;
     const go = () => {
       current.observer.disconnect();
+      skipStrips.delete(current);
       strip.classList.add('is-gone');
       stackNotes();
       later(() => strip.remove(), 400);
     };
     if (delay) later(go, delay); else go();
+  }
+  function clearSkipReasons() {
+    skipStrips.forEach((item) => { clearTimeout(item.timer); item.observer.disconnect(); });
+    skipStrips.clear();
+    skipReason = null;
   }
   function sendSkipReason(button) {
     const current = skipReason;
@@ -1454,8 +1463,7 @@ function match(root, ctx, first, scope) {
       notice?.close();
       timers.forEach(clearTimeout);
       clearTimeout(peekTimer);
-      clearTimeout(skipReason?.timer);
-      skipReason?.observer.disconnect();
+      clearSkipReasons();
       document.body.classList.remove('is-viewer');
     },
   };

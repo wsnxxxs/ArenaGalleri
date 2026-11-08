@@ -163,3 +163,24 @@ test('the task note follows the skip reasons as they change size and returns to 
   assert.equal(note.style.top, '');
   assert.equal(disconnected, 1);
 });
+
+test('leaving the page during the thanks stops every skip-reason observer and timer', () => {
+  let live = 0;
+  const pending = [], cleared = [];
+  const strip = () => { const node = { classList: { add() {} }, setAttribute() {}, addEventListener() {}, remove() {} }; node.contains = (target) => target?.strip === node; return node; };
+  const e = { accountVersion: () => 1, icon: () => '', $$: () => [], el: {}, document: { createElement: strip, activeElement: null },
+    ResizeObserver: class { constructor() { live++; } observe() {} disconnect() { if (!this.gone) { this.gone = true; live--; } } },
+    // `later` belongs to the page and destroy cancels it, so the delayed exit never runs here.
+    later: (fn) => pending.push(fn), setTimeout: () => pending.length + 100, clearTimeout: (id) => cleared.push(id),
+    api: () => Promise.resolve({ ok: true }),
+    $: (selector) => (selector === '.arena-stage' ? { append(node) { e.shown = node; } } : null) };
+  vm.runInNewContext(constant('SKIP_REASONS') + constant('SKIP_REASON_MS') + chunk('  let skipReason = null;', '\n  function showError')
+    + '\nglobalThis.t = { askSkipReason, sendSkipReason, dropSkipReason, clearSkipReasons };', e);
+  for (const id of ['one', 'two', 'three']) {
+    e.t.askSkipReason(id);
+    e.t.sendSkipReason({ strip: e.shown, dataset: { reason: 'broken' } });
+    e.t.clearSkipReasons();
+    assert.equal(live, 0, `after ${id}: no observer outlives the page`);
+  }
+  assert.ok(cleared.length >= 3, 'their countdowns are cleared too');
+});
