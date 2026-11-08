@@ -508,10 +508,12 @@ table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-va
 .score-tip-btn { padding: 0; border: 0; border-radius: 3px; background: none; color: inherit; font: inherit; text-align: inherit; cursor: help; }
 .score-tip-btn small { text-decoration: underline dotted var(--line-2); text-underline-offset: 3px; }
 .score-tip-btn:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 3px; }
-.score-tip-text { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 3; width: max-content; max-width: 15em; padding: 6px 9px; border-radius: 6px; background: var(--ink); color: var(--bg); font: 400 12px/1.5 var(--sans); letter-spacing: 0; text-align: left; white-space: normal; visibility: hidden; pointer-events: none; }
-.score-tip-btn:focus-visible + .score-tip-text, .score-tip.is-open .score-tip-text { visibility: visible; }
-@media (hover: hover) { .score-tip:hover .score-tip-text { visibility: visible; } }
-.score-tip.is-quiet .score-tip-text { visibility: hidden; }
+.score-tip-text { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 3; width: max-content; max-width: 15em; padding: 6px 9px; border-radius: 6px; background: var(--ink); color: var(--bg); font: 400 12px/1.5 var(--sans); letter-spacing: 0; text-align: left; white-space: normal; cursor: auto; visibility: hidden; transition-property: none; }
+/* A transparent bridge over the gap keeps the pointer inside the tip on its way to the text. */
+.score-tip-text::before { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 8px; }
+.score-tip.is-below .score-tip-text { top: calc(100% + 6px); bottom: auto; }
+.score-tip.is-below .score-tip-text::before { top: auto; bottom: 100%; }
+.score-tip.is-open .score-tip-text { visibility: visible; }
 @media (max-width: 1180px) {
   .board.is-composite .c-part, .board.is-composite .c-reason, .board.is-composite .c-range { display: none; }
   .board.is-composite .board-parts, .board.is-composite .board-reasons { display: block; }

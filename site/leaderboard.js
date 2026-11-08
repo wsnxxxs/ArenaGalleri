@@ -419,14 +419,35 @@ export function mountBoard(container, ctx) {
     return reading.promise;
   }
 
-  // A tap opens one score explanation and closes the others; Escape hides the one in view.
+  // One score explanation at a time, whether a mouse hovers it, the keyboard focuses it or a tap opens it.
+  // Hovering the open explanation keeps it; Escape closes it. Near the top of the scrolling table it opens downward.
   const closeTips = (except) => {
-    for (const tip of container.querySelectorAll('.score-tip.is-open, .score-tip.is-quiet')) if (tip !== except) tip.classList.remove('is-open', 'is-quiet');
+    for (const tip of container.querySelectorAll('.score-tip.is-open')) if (tip !== except) tip.classList.remove('is-open');
   };
-  const onClick = (e) => {
-    const tip = e.target.closest('[data-score-tip]')?.parentElement;
+  const openTip = (tip) => {
     closeTips(tip);
-    if (tip) return void tip.classList.toggle('is-open');
+    const wrap = tip.closest('.board-wrap')?.getBoundingClientRect(), box = tip.getBoundingClientRect();
+    const height = tip.querySelector('.score-tip-text')?.offsetHeight ?? 0;
+    tip.classList.toggle('is-below', Boolean(wrap) && box.top - wrap.top < height + 8 && wrap.bottom - box.bottom > box.top - wrap.top);
+    tip.classList.add('is-open');
+  };
+  const onOver = (e) => {
+    const tip = e.pointerType === 'mouse' && e.target.closest?.('.score-tip');
+    if (tip && !tip.classList.contains('is-open')) openTip(tip);
+  };
+  const onOut = (e) => {
+    const tip = e.pointerType === 'mouse' && e.target.closest?.('.score-tip');
+    if (tip && !tip.contains(e.relatedTarget) && !tip.contains(document.activeElement)) tip.classList.remove('is-open');
+  };
+  const onFocusIn = (e) => { if (e.target.matches?.('[data-score-tip]:focus-visible')) openTip(e.target.parentElement); };
+  const onFocusOut = (e) => { if (e.target.matches?.('[data-score-tip]')) e.target.parentElement.classList.remove('is-open'); };
+  const onKey = (e) => { if (e.key === 'Escape') closeTips(); };
+  const onClick = (e) => {
+    if (e.target.closest('.score-tip-text')) return;
+    const tip = e.target.closest('[data-score-tip]')?.parentElement;
+    if (tip?.classList.contains('is-open') && e.pointerType !== 'mouse') return void tip.classList.remove('is-open');
+    if (tip) return void openTip(tip);
+    closeTips();
     if (e.target.closest('[data-board-retry]')) return void load();
     const fold = e.target.closest('[data-board-group-toggle]');
     if (fold) {
@@ -457,16 +478,14 @@ export function mountBoard(container, ctx) {
     filters[select.dataset.boardFilter] = select.value;
     load();
   };
-  const onKey = (e) => {
-    if (e.key !== 'Escape') return;
-    const tip = e.target.closest?.('.score-tip');
-    if (tip) { tip.classList.remove('is-open'); tip.classList.add('is-quiet'); }
-  };
-  const onFocusOut = (e) => e.target.closest?.('.score-tip')?.classList.remove('is-open', 'is-quiet');
   container.addEventListener('click', onClick);
   container.addEventListener('change', onChange);
-  container.addEventListener('keydown', onKey);
+  // Escape also dismisses an explanation opened by hovering while focus is elsewhere on the page.
+  container.ownerDocument?.addEventListener('keydown', onKey);
+  container.addEventListener('focusin', onFocusIn);
   container.addEventListener('focusout', onFocusOut);
+  container.addEventListener('pointerover', onOver);
+  container.addEventListener('pointerout', onOut);
   const loading = load();
   return {
     ready: drawn ? null : loading,
@@ -481,8 +500,11 @@ export function mountBoard(container, ctx) {
       request?.controller.abort();
       container.removeEventListener('click', onClick);
       container.removeEventListener('change', onChange);
-      container.removeEventListener('keydown', onKey);
+      container.ownerDocument?.removeEventListener('keydown', onKey);
+      container.removeEventListener('focusin', onFocusIn);
       container.removeEventListener('focusout', onFocusOut);
+      container.removeEventListener('pointerover', onOver);
+      container.removeEventListener('pointerout', onOut);
     },
   };
 }
