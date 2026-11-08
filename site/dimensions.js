@@ -114,7 +114,7 @@ function radar(entry, dimensions, name, scale) {
     const baseline = sin < -0.3 ? y - 16 : sin > 0.3 ? y + 10 : y - 2;
     const thin = axis.thin ? ' is-thin' : '';
     return `<text class="radar-label${thin}" x="${fixed(x)}" y="${fixed(baseline)}" text-anchor="${anchor}">${esc(axis.dimension.name)}</text>`
-      + `<text class="radar-value${thin}" x="${fixed(x)}" y="${fixed(baseline + 14)}" text-anchor="${anchor}">${axis.score}</text>`;
+      + `<text class="radar-value${thin}" x="${fixed(x)}" y="${fixed(baseline + 14)}" text-anchor="${anchor}">${esc(axis.score)}</text>`;
   }).join('');
   const marks = (draw) => axes.map((axis, i) => draw(axis, i, ...at(i, axis.value).map(fixed))).join('');
   return `<svg class="radar" viewBox="0 0 ${width} ${height}" role="group" aria-label="${esc(`${name} 各维度分`)}">
@@ -127,23 +127,23 @@ function radar(entry, dimensions, name, scale) {
 // Names, values and counts sit in separate text nodes so each translates as a whole phrase.
 function tipHtml(axis, entry) {
   const { cell, dimension } = axis;
-  const lines = [`<span>${cell.n ? `${cell.n} 票 · 胜 ${cell.win} · 平 ${cell.tie} · 负 ${cell.loss}` : '还没有作答'}</span>`];
+  const lines = [`<span>${cell.n ? esc(`${cell.n} 票 · 胜 ${cell.win} · 平 ${cell.tie} · 负 ${cell.loss}`) : '还没有作答'}</span>`];
   if (axis.thin && cell.n) lines.push(`<span>不足 ${THIN_ANSWERS} 票，贴近分类分</span>`);
-  lines.push(`<span>${entry.prior == null ? '没有建模分类分，从 1000 起' : `建模分类分 ${entry.prior}`}</span>`);
+  lines.push(`<span>${entry.prior == null ? '没有建模分类分，从 1000 起' : `建模分类分 ${esc(entry.prior)}`}</span>`);
   for (const aspect of dimension.aspects) {
     const part = cell.aspects?.[aspect.id];
     lines.push(`<span><span>${esc(aspect.keyword)}</span> · <span>${part?.n ? `胜率 ${percent(rateOf(part))} · ${part.n} 票` : '未作答'}</span></span>`);
   }
-  return `<b><span>${esc(dimension.name)}</span> · <span>${axis.score} ±${axis.interval}</span></b>${lines.join('')}`;
+  return `<b><span>${esc(dimension.name)}</span> · <span>${esc(`${axis.score} ±${axis.interval}`)}</span></b>${lines.join('')}`;
 }
 
 const modelLine = (entry, unit, m, extra = '') => `<span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b data-i18n-ignore>${esc(entry.modelName)}</b>${unit === 'config' && entry.effort ? `<span class="badge" data-i18n-ignore>${esc(entry.effort)}</span>` : ''}${extra}</span></span>`;
-const priorText = (entry) => (entry.prior == null ? '<span>没有分类分</span>' : `<span>分类分 ${entry.prior}</span>`);
+const priorText = (entry) => (entry.prior == null ? '<span>没有分类分</span>' : `<span>分类分 ${esc(entry.prior)}</span>`);
 
 function card(entry, dimensions, unit, m, scale) {
   const name = `${entry.modelName}${unit === 'config' && entry.effort ? ` · ${entry.effort}` : ''}`;
   return `<article class="dims-card" data-entry="${esc(entry.key)}">
-    ${modelLine(entry, unit, m, `<small>${vendorLine(m)} · ${priorText(entry)} · <span>${entry.overall?.n ?? 0} 组</span></small>`)}
+    ${modelLine(entry, unit, m, `<small>${vendorLine(m)} · ${priorText(entry)} · <span>${esc(entry.overall?.n ?? 0)} 组</span></small>`)}
     ${radar(entry, dimensions, name, scale)}
     <div class="dims-tip" role="tooltip" hidden></div>
   </article>`;
@@ -154,11 +154,11 @@ function detail(entries, dimensions, unit, modelOf) {
     const value = entry.dimensions?.[dimension.id];
     if (!value?.n) return '<td class="dims-cell is-empty">—</td>';
     const thin = value.thin ?? value.n < THIN_ANSWERS;
-    return `<td class="dims-cell${thin ? ' is-thin' : ''}"${thin ? ` title="不足 ${THIN_ANSWERS} 票"` : ''}><b>${value.score}</b><small><span>±${value.interval}</span> · <span>${value.n} 票</span></small></td>`;
+    return `<td class="dims-cell${thin ? ' is-thin' : ''}"${thin ? ` title="不足 ${THIN_ANSWERS} 票"` : ''}><b>${esc(value.score)}</b><small><span>±${esc(value.interval)}</span> · <span>${esc(value.n)} 票</span></small></td>`;
   };
   return `<div class="board-wrap"><table class="board dims-table">
     <thead><tr><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th scope="col">分类分</th>${dimensions.map((dimension) => `<th scope="col">${esc(dimension.name)}</th>`).join('')}<th scope="col">测试组</th></tr></thead>
-    <tbody>${entries.map((entry) => `<tr><td class="c-model">${modelLine(entry, unit, modelOf(entry))}</td><td class="dims-prior">${entry.prior ?? '—'}</td>${dimensions.map((dimension) => cell(entry, dimension)).join('')}<td>${entry.overall?.n ?? 0}</td></tr>`).join('')}</tbody>
+    <tbody>${entries.map((entry) => `<tr><td class="c-model">${modelLine(entry, unit, modelOf(entry))}</td><td class="dims-prior">${esc(entry.prior ?? '—')}</td>${dimensions.map((dimension) => cell(entry, dimension)).join('')}<td>${esc(entry.overall?.n ?? 0)}</td></tr>`).join('')}</tbody>
   </table></div>`;
 }
 
@@ -174,13 +174,13 @@ function board(rows, unit, modelOf, dimension) {
   const body = rows.map((row) => {
     const m = modelOf(row.entry);
     const from = at(row.score - row.interval), to = at(row.score + row.interval);
-    const span = row.rankLow != null && row.rankHigh != null && row.rankLow !== row.rankHigh ? `<small class="rank-range">${row.rankLow}–${row.rankHigh}</small>` : '';
+    const span = row.rankLow != null && row.rankHigh != null && row.rankLow !== row.rankHigh ? `<small class="rank-range">${esc(row.rankLow)}–${esc(row.rankHigh)}</small>` : '';
     return `<tr${row.thin ? ' class="is-provisional"' : ''}>
-      <td class="c-rank${row.rank <= 3 ? ' is-top' : ''}">${pad(row.rank)}${span}</td>
+      <td class="c-rank${row.rank <= 3 ? ' is-top' : ''}">${esc(pad(row.rank))}${span}</td>
       <td class="c-model">${modelLine(row.entry, unit, m, `${row.thin ? `<span class="badge provisional" title="不足 ${THIN_ANSWERS} 票">单薄</span>` : ''}<small>${vendorLine(m)} · ${priorText(row.entry)}</small>`)}</td>
-      <td class="c-score"><b>${row.score}</b><small>±${row.interval}</small></td>
+      <td class="c-score"><b>${esc(row.score)}</b><small>±${esc(row.interval)}</small></td>
       <td class="c-range" aria-hidden="true"><span class="range"><s style="left:${at(1000)}%"></s><i style="left:${from}%;width:${(to - from).toFixed(2)}%;background:linear-gradient(90deg, ${tone(from)}, ${tone(to)})"></i><em style="left:${at(row.score)}%"></em></span></td>
-      <td class="c-games">${row.n}</td>
+      <td class="c-games">${esc(row.n)}</td>
     </tr>`;
   }).join('');
   return `<div class="board-wrap"><table class="board dims-board">
@@ -194,7 +194,7 @@ function health(rows, dimensions, order) {
   const names = new Map(dimensions.map((dimension) => [dimension.id, dimension.name]));
   const rate = (metrics, key, base) => {
     const flag = Object.entries(FLAGS).find(([id, f]) => f.rate === key && metrics.flags?.includes(id));
-    const denominator = base == null ? '' : `<small>${base}</small>`;
+    const denominator = base == null ? '' : `<small>${esc(base)}</small>`;
     return flag ? `<td class="dims-rate is-flag" title="${flag[1].text}"><b>${percent(metrics[key])}</b><i aria-hidden="true">▲</i><span class="sr">${flag[1].text}</span>${denominator}</td>`
       : `<td class="dims-rate">${percent(metrics[key])}${denominator}</td>`;
   };
@@ -205,7 +205,7 @@ function health(rows, dimensions, order) {
     return `<tr${eligible ? '' : ' class="is-early"'}>
       <th class="c-aspect" scope="row">${esc(row.keyword)}</th>
       <td class="c-dimension">${esc(names.get(row.dimension) ?? row.dimension)}</td>
-      <td class="dims-rate"><b>${metrics.n}</b>${eligible ? '' : `<small title="满 ${HEALTH_ANSWERS} 票才判断">未满 ${HEALTH_ANSWERS}</small>`}</td>
+      <td class="dims-rate"><b>${esc(metrics.n)}</b>${eligible ? '' : `<small title="满 ${HEALTH_ANSWERS} 票才判断">未满 ${HEALTH_ANSWERS}</small>`}</td>
       ${rate(metrics, 'skipRate')}${rate(metrics, 'tieRate')}${rate(metrics, 'sameSideRate', metrics.sameSideN)}${rate(metrics, 'agreementRate', metrics.agreementN)}
     </tr>`;
   }).join('');
@@ -223,7 +223,7 @@ export function mount(root, ctx) {
   let order = 'all';
   let data = null, failure = null, request = 0, destroyed = false, active = null;
   const modelOf = (entry) => ctx.modelOf({ model: entry.model, modelName: entry.modelName, vendor: entry.vendor });
-  const stat = (label, value) => `<div><dt>${label}</dt><dd>${pad(value)}</dd></div>`;
+  const stat = (label, value) => `<div><dt>${label}</dt><dd>${esc(pad(value))}</dd></div>`;
   const seg = (label, attr, options, current) => `<div class="seg" role="group" aria-label="${label}">${Object.entries(options).map(([value, text]) =>
     `<button type="button" ${attr}="${esc(value)}" aria-pressed="${value === current}">${esc(text)}</button>`).join('')}</div>`;
 
@@ -260,7 +260,7 @@ export function mount(root, ctx) {
     if (!dimension) return '<p class="muted">还没有带测评点的维度。</p>';
     const rows = boardRows(data, dimension.id);
     return `<div class="dims-bar">${seg('维度', 'data-dims-board', Object.fromEntries(dimensions.map((item) => [item.id, item.name])), dimension.id)}
-      <p class="board-meta"><span>${rows.length} 个${unit === 'model' ? '模型' : '配置'}答过</span> · <span>${dimension.aspects.map((aspect) => aspect.keyword).join('、')}</span></p></div>
+      <p class="board-meta"><span>${rows.length} 个${unit === 'model' ? '模型' : '配置'}答过</span> · ${dimension.aspects.map((aspect) => `<span>${esc(aspect.keyword)}</span>`).join(' · ')}</p></div>
       ${board(rows, unit, modelOf, dimension)}
       <p class="dims-foot"><span>维度分只用这个维度的测评点作答拟合，起点是建模分类分，没有分类分的从 1000 起。</span><span>不足 ${THIN_ANSWERS} 票标为单薄，分数主要还是分类分。</span></p>`;
   }
@@ -294,14 +294,17 @@ export function mount(root, ctx) {
       <p class="dims-foot"><span>只统计带测评点的测试对局，目前只有${esc(data.categories.join('、'))}题有测评点。</span><span>两边是同一${noun}的一对不计。</span>${totals.since ? `<span>数据从 ${formatDate(totals.since)} 到 ${formatDate(totals.until)}。</span>` : ''}</p></div>`, meta);
   }
 
+  // Every load, including one that ends at the gate, makes earlier reads stale; a read that lands is shown
+  // only to someone who is still staff.
   async function load() {
-    if (!isStaff()) return gate();
     const id = ++request;
+    if (!isStaff()) return gate();
     $('.dims', root)?.classList.add('is-loading');
     if (!data) page('<p class="muted">正在载入维度图…</p>');
     try {
       const next = await api(`arena/guided/dimensions?by=${unit}`);
       if (destroyed || id !== request) return;
+      if (!isStaff()) return gate();
       data = next;
     } catch (error) {
       if (destroyed || id !== request) return;

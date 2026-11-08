@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import vm from 'node:vm';
 
 async function chart() {
   const original = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener };
@@ -74,4 +76,55 @@ test('the dimension board joins rows to their entries and the health check reads
   assert.equal(healthOf({ n: 3 }, 'before'), null);
   assert.deepEqual(Object.keys(FLAGS), ['same-side', 'ties', 'skips']);
   assert.deepEqual(Object.values(FLAGS).map((flag) => flag.rate), ['sameSideRate', 'tieRate', 'skipRate']);
+});
+
+// The page run in a sandbox: imports replaced by stubs, the root a plain object whose markup is read back.
+function page(response, stored = {}) {
+  const source = readFileSync(new URL('../site/dimensions.js', import.meta.url), 'utf8');
+  const reads = [];
+  const root = Object.assign(new EventTarget(), { innerHTML: '', querySelector: () => null });
+  const state = { platform: { user: { role: 'admin' } }, setPageTitle() {}, store: { get: (key) => stored[key] ?? null, set() {} },
+    esc: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]),
+    pad: (n) => String(n).padStart(2, '0'), formatDate: String, brandMark: () => '', vendorLine: () => '', $: () => null, $$: () => [],
+    api(path) { const read = { path, ...deferred() }; reads.push(read); return read.promise; } };
+  state.isStaff = () => ['admin', 'moderator'].includes(state.platform.user?.role);
+  vm.runInNewContext(source.replace(/^import .*$/gm, '').replace(/^export /gm, '') + '\nglobalThis.mountForTest = mount;', state);
+  const ctx = { pageStart: ({ meta }) => meta ?? '', pageEnd: () => '', sideNav: () => '', modelOf: (m) => m };
+  const view = state.mountForTest(root, ctx);
+  return { state, root, reads, view, answer: (i = reads.length - 1) => reads[i].resolve(structuredClone(response)) };
+}
+const deferred = () => { let resolve; const promise = new Promise((yes) => { resolve = yes; }); return { promise, resolve }; };
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+const response = {
+  categories: ['建模'], totals: { pairs: 1, answered: 1, voters: 1 }, health: [],
+  dimensions: [{ id: 'aesthetic', name: '审美', aspects: [{ id: 'atmosphere', keyword: '<img src=x onerror=alert(1)>' }, { id: 'lighting', keyword: '光影' }] }],
+  entries: [{ key: 'm1', modelName: 'One<b>', prior: null, overall: { n: 1 }, dimensions: { aesthetic: { score: 1010, interval: 80, n: 1, thin: true, win: 1, tie: 0, loss: 0, aspects: {} } } }],
+  boards: { aesthetic: [{ key: 'm1', rank: 1, score: 1010, interval: 80, n: 1, thin: true }] },
+};
+
+test('server text on the dimension board is escaped, one keyword per text node', async () => {
+  const e = page(response, { 'dimensions-view': 'board' });
+  e.answer();
+  await flush();
+  assert.doesNotMatch(e.root.innerHTML, /<img/);
+  assert.match(e.root.innerHTML, /<span>&lt;img src=x onerror=alert\(1\)&gt;<\/span> · <span>光影<\/span>/);
+  assert.doesNotMatch(e.root.innerHTML, /One<b>/);
+});
+
+test('a staff read that lands after the account changed to a member shows the gate, not the chart', async () => {
+  const e = page(response);
+  assert.equal(e.reads.length, 1);
+  e.state.platform.user = { role: 'user' };
+  e.view.onPlatformChange('identity');
+  assert.match(e.root.innerHTML, /维度图只对管理员开放/);
+  e.answer(0);
+  await flush();
+  assert.match(e.root.innerHTML, /维度图只对管理员开放/);
+  assert.doesNotMatch(e.root.innerHTML, /dims-card/);
+  // Even without an identity event, a read that lands for a non-staff account is not drawn.
+  const f = page(response);
+  f.state.platform.user = { role: 'user' };
+  f.answer(0);
+  await flush();
+  assert.match(f.root.innerHTML, /维度图只对管理员开放/);
 });

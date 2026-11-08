@@ -760,19 +760,11 @@ function match(root, ctx, first, scope) {
     strip.className = 'arena-switched';
     strip.setAttribute('role', 'status');
     strip.innerHTML = `<span>这一组换成了</span><b data-i18n-ignore>${esc(task.title)}</b><button class="link" type="button" data-a="open-prompt">看提示词</button>`;
-    notes().append(strip);
+    // Below the skip reasons when those are showing; in its usual place otherwise.
+    const why = $('.arena-why:not(.is-gone)', el);
+    if (why) strip.style.top = `${why.offsetTop + why.offsetHeight + 8}px`;
+    $('.arena-stage', el).append(strip);
     later(() => { strip.classList.add('is-gone'); later(() => strip.remove(), 600); }, 4500);
-  }
-  // Notes over the top of the pair stack in one column: why the last pair was skipped, then a task change.
-  function notes() {
-    const stage = $('.arena-stage', el);
-    let box = $(':scope > .arena-notes', stage);
-    if (!box) {
-      box = document.createElement('div');
-      box.className = 'arena-notes';
-      stage.append(box);
-    }
-    return box;
   }
 
   // Skipping moves on at once; the next pair then offers the reasons for a few seconds. Nothing is recorded
@@ -786,9 +778,9 @@ function match(root, ctx, first, scope) {
     strip.innerHTML = `<p class="arena-why-ask"><b>上一组为什么跳过？</b><small>可选，不影响计分</small></p>
       <span class="arena-why-picks">${Object.entries(SKIP_REASONS).map(([reason, text]) => `<button class="arena-why-pick" type="button" data-a="skip-reason" data-reason="${reason}">${text}</button>`).join('')}</span>
       <button class="arena-why-close" type="button" data-a="skip-reason-close" title="关闭" aria-label="关闭">${icon('close')}</button>`;
-    const box = notes();
-    $$('.arena-why', box).forEach((node) => node.remove());
-    box.prepend(strip);
+    const stage = $('.arena-stage', el);
+    $$('.arena-why', stage).forEach((node) => node.remove());
+    stage.append(strip);
     const current = skipReason = { matchId, strip, sent: false, timer: 0, version: accountVersion() };
     // The countdown stops while the strip is pointed at or focused, and starts over when it is left.
     const wait = () => { clearTimeout(current.timer); current.timer = setTimeout(() => { if (skipReason === current) dropSkipReason(); }, SKIP_REASON_MS); };

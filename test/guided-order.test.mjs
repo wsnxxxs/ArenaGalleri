@@ -111,7 +111,7 @@ test('a skip reason is offered for six seconds and sent at most once', async () 
     node.contains = (target) => target?.strip === node;
     return node;
   };
-  const e = { accountVersion: () => version, icon: () => '', $$: () => [], notes: () => ({ prepend(node) { e.shown = node; } }), document: { createElement: strip, activeElement: null },
+  const e = { accountVersion: () => version, icon: () => '', $$: () => [], el: {}, $: () => ({ append(node) { e.shown = node; } }), document: { createElement: strip, activeElement: null },
     later: (fn) => fn(), setTimeout: (fn, ms) => { waits.push({ fn, ms }); return waits.length; }, clearTimeout() {},
     api: (path, options) => { calls.push(JSON.parse(JSON.stringify({ path, body: options.body }))); return Promise.resolve({ ok: true }); } };
   vm.runInNewContext(constant('SKIP_REASONS') + constant('SKIP_REASON_MS') + chunk('  let skipReason = null;', '\n  function showError')

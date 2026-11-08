@@ -392,4 +392,10 @@ for (const a of Object.keys(loadingLabels)) for (const b of Object.keys(loadingL
   messages[`等待两件作品载入 · ${status}`] = `Waiting for both works · ${translated}`;
   messages[`载入较慢（${status}）：可以继续等待，或跳过这一组`] = `Loading is taking longer (${translated}). Keep waiting or skip this pair.`;
 }
+// Each radar point's label names its dimension, so every dimension gets its own pair of templates.
+const dimensionNames = { 审美: 'Aesthetics', 工程完备: 'Craft', 逻辑: 'Logic', 贴题: 'Prompt fit', 发散: 'Originality' };
+for (const [name, english] of Object.entries(dimensionNames)) {
+  messages[`${name} {score} ±{interval}，{count} 票`] = `${english} {score} ±{interval}, {count} votes`;
+  messages[`${name} {score} ±{interval}，{count} 票，不足 {min} 票`] = `${english} {score} ±{interval}, {count} votes, fewer than {min}`;
+}
 export default messages;
