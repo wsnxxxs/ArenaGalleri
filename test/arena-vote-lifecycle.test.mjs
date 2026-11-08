@@ -150,3 +150,36 @@ test('only current ready acknowledgements set deadlines and zero stays zero', as
     assert.deepEqual(marked, change === 'current' ? [['vote', 0], ['skip', 3000.1]] : []);
   }
 });
+
+test('usage read late redraws only the reveal still on screen, with one read for the page', async () => {
+  for (const leave of [false, true]) {
+    const metrics = deferred(), drawn = [];
+    let reads = 0, laid = false;
+    const works = { x: { id: 'x' }, y: { id: 'y' }, p: { id: 'p' }, q: { id: 'q' } };
+    const e = { alive: true, state: { match: null, result: null }, document: {}, $: () => null, el: {},
+      ctx: { loadMetrics() { reads++; return metrics.promise; } },
+      revealed: () => Boolean(e.state.result) && e.state.result.choice !== 'skip',
+      revealedWork: (side) => (laid ? { ...works[e.state.result[side].id], usage: { input: 1 } } : works[e.state.result[side].id]),
+      drawHeads() { drawn.push(['heads', e.state.match.id]); }, drawBar() { drawn.push(['bar', e.state.match.id]); } };
+    vm.runInNewContext(chunk('  let metricsRead', '\n  function drawHeads') + '\nglobalThis.askMetrics = askMetrics;', e);
+    assert.match(source, /if \(revealed\(\)\) \{ state\.unsealed = true; askMetrics\(\); \}/, 'nothing is asked before a reveal');
+    // The first pair is revealed and drawn more than once; then, before the read lands, the next pair is.
+    Object.assign(e.state, { match: { id: 'one' }, result: { a: { id: 'x' }, b: { id: 'y' }, choice: 'a' } });
+    e.askMetrics(); e.askMetrics();
+    Object.assign(e.state, { match: { id: 'two' }, result: null });
+    Object.assign(e.state, { result: { a: { id: 'p' }, b: { id: 'q' }, choice: 'b' } });
+    e.askMetrics();
+    assert.equal(reads, 1);
+    if (leave) e.alive = false;
+    laid = true;
+    metrics.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(drawn, leave ? [] : [['heads', 'two'], ['bar', 'two']], 'the second reveal gets its usage; the first is not drawn over it');
+    // Later reveals find the usage laid and draw it themselves.
+    Object.assign(e.state, { match: { id: 'three' }, result: { a: { id: 'x' }, b: { id: 'p' }, choice: 'a' } });
+    e.askMetrics();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(reads, 1);
+    assert.equal(drawn.length, leave ? 0 : 2);
+  }
+});

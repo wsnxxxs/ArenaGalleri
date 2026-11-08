@@ -538,14 +538,15 @@ function match(root, ctx, first, scope) {
   };
 
   // Measured usage is asked for only once a vote has revealed the works (app.js loadMetrics lays it on
-  // the catalog's works); the reveal that asked is redrawn when it arrives, later ones find it laid.
-  let metricsAsked = false;
+  // the catalog's works), with one read for the page. Every reveal before it lands waits on that read and
+  // is redrawn if it is still the reveal on screen; once it has landed, reveals draw it straight away.
+  let metricsRead = null, metricsIn = false, waiting = null;
   function askMetrics() {
-    if (metricsAsked || !ctx.loadMetrics) return;
-    metricsAsked = true;
-    const result = state.result;
-    void ctx.loadMetrics().then(() => {
-      if (!alive || state.result !== result || !revealed() || !(revealedWork('a')?.usage || revealedWork('b')?.usage)) return;
+    if (metricsIn || !ctx.loadMetrics || waiting === state.result) return;
+    const result = waiting = state.result, match = state.match?.id;
+    void (metricsRead ??= ctx.loadMetrics()).then(() => {
+      metricsIn = true;
+      if (!alive || state.match?.id !== match || !revealed() || !(revealedWork('a')?.usage || revealedWork('b')?.usage)) return;
       const focus = document.activeElement?.closest?.('[data-bar] [data-a]')?.dataset.a;
       drawHeads();
       drawBar();
