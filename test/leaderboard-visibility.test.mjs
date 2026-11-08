@@ -119,7 +119,7 @@ test('v3 boards drop the work switch, fold partial and watch groups, show ranges
       ],
       partial: composite ? [{ ...stats, key: 'half', model: 'half', modelName: 'Claude Partial', tasks: 4, parts: { 建模: { rank: 3, aligned: 1050 } }, missing: ['静态网页', '文学'] }] : [],
       watch: composite
-        ? [{ ...stats, key: 'thin', model: 'thin', modelName: 'Claude Watch', score: 1070, interval: 94.4, tasks: 5, reasons: ['coverage'] }]
+        ? [{ ...stats, key: 'thin', model: 'thin', modelName: 'Claude Watch', score: 1070, interval: 94.4, intervalVotes: 50, tasks: 5, reasons: ['coverage'] }]
         : [{ ...stats, key: 'few', model: 'few', modelName: 'Few Tasks', score: 1010, interval: 120, tasks: 2, taskShare: 0.7, effectiveVoters: 8.6, reasons: ['tasks', 'task-share', 'voters'] }] });
   };
   // Enough of a DOM for the search: rows, groups and the "found in" line are read back from the rendered markup.
@@ -157,7 +157,13 @@ test('v3 boards drop the work switch, fold partial and watch groups, show ranges
     assert.equal(visibleRows, 2, 'works below five no longer hide ranked rows');
     assert.match(html, /<td class="c-rank is-top">01<\/td>/, 'a single possible place has no range');
     assert.match(html, /<td class="c-rank is-top">02<small class="rank-range">2–8<\/small><\/td>/);
-    assert.match(html, /title="三类区间合成[^"]*"><b><span data-i18n-number="1181">1181<\/span><\/b><small>±<span data-i18n-number="30">30<\/span>/);
+    // Each group explains its own score: ranked composite rows are combined, composite watch rows are pooled references.
+    const tip = (name) => html.match(new RegExp(`<tr class="[^"]*" data-board-row="${name}[^]*?<td class="c-score">([^]*?)</td>`))[1];
+    assert.match(tip('solo'), /^<span class="score-tip"><button type="button" class="score-tip-btn" data-score-tip aria-describedby="(board-tip-\d+-\d+)"><b><span data-i18n-number="1181">1181<\/span><\/b><small>±<span data-i18n-number="30">30<\/span><\/small><\/button><span class="score-tip-text" role="tooltip" id="\1">三类区间合成，已含投票和换题的波动<\/span>/);
+    assert.match(tip('claude watch'), /role="tooltip" id="[^"]+">混合池参考分，不参与综合排名；投票 ±50，换题 ±80<\/span>/);
+    assert.doesNotMatch(tip('claude watch'), /三类区间合成/);
+    assert.equal(tip('claude partial'), '—');
+    assert.doesNotMatch(html, /<td class="c-score" title=/, 'explanations are focusable, not hover-only titles');
     assert.match(html, /<span>12 道题<\/span>/);
     assert.match(html, /实际胜率/);
     assert.match(html, /<tbody data-board-group="ranked">/);
@@ -196,7 +202,7 @@ test('v3 boards drop the work switch, fold partial and watch groups, show ranges
     await category.ready;
     assert.equal(reads.at(-1), '/api/leaderboard/next?by=config&category=%E5%BB%BA%E6%A8%A1', 'category boards default to configurations');
     assert.doesNotMatch(scoped.innerHTML, /data-board-group="partial"|c-part/);
-    assert.match(scoped.innerHTML, /title="投票 ±24，换题 ±32"/);
+    assert.match(scoped.innerHTML, /role="tooltip" id="[^"]+">投票 ±24，换题 ±32<\/span>/);
     assert.match(scoped.innerHTML, /<span>2 道题，不足 3 道<\/span><span> · <\/span><span>单题占 70%，超过 50%<\/span><span> · <\/span><span>有效投票者 8 人，不足 10 人<\/span>/);
     category.destroy();
   } finally { Object.assign(globalThis, original); }

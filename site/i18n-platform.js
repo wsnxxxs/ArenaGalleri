@@ -20,6 +20,7 @@ const phrases = Object.fromEntries(`
 未达标|Not qualified
 没有哪一类达标|No category qualifies
 三类区间合成，已含投票和换题的波动|Combined from the category intervals, including vote and question variation
+混合池参考分，不参与综合排名|Pooled reference score, not part of the overall ranking
 还没有达标的模型，已有成绩的列在下方。|No models qualify yet. Entries with results are listed below.
 还没有达标的配置，已有成绩的列在下方。|No configurations qualify yet. Entries with results are listed below.
 达标|Eligibility
@@ -649,6 +650,8 @@ const dynamic = Object.fromEntries(`
 单题占 {percent}%，超过 {n}%|One question has {percent}% of comparisons, above {n}%
 有效投票者不足 {n} 人|Fewer than {n} effective voters
 有效投票者 {count} 人，不足 {n} 人|{count} effective voters, fewer than {n}
+混合池参考分，不参与综合排名；投票 ±{value}，换题 ±{value2}|Pooled reference score, not part of the overall ranking; votes ±{value}, question variation ±{value2}
+混合池参考分，不参与综合排名；投票 ±{value}|Pooled reference score, not part of the overall ranking; votes ±{value}
 投票 ±{value}，换题 ±{value2}|Votes ±{value}, question variation ±{value2}
 投票 ±{value}|Votes ±{value}
 当前范围内至少有 {value} 场有效比较才显示；{value2}–{value3} 场标为暂定。|At least {value} valid comparisons in the current scope are required to appear; {value2}–{value3} comparisons are marked provisional.

@@ -96,6 +96,7 @@ const tone = (at) => `color-mix(in srgb, var(--ink) ${Math.round(at)}%, var(--li
 // v3 places an entry in one of three groups; partial only exists on the overall (composite) board.
 const GROUPS = { ranked: '已排名', partial: '未覆盖全部大类', watch: '观察区' };
 const isV3 = (data) => data?.scoring?.version >= 3;
+let boards = 0;
 
 export function mountBoard(container, ctx) {
   const limitWorks = !ctx.task;
@@ -113,6 +114,8 @@ export function mountBoard(container, ctx) {
   };
   let unit = pickUnit();
   const openGroups = new Set();
+  const board = ++boards;
+  let tips = 0;
   let showSmallSamples = store.get('board-show-small-samples') === 'true';
   let currentData = null;
   let request = null;
@@ -263,12 +266,24 @@ export function mountBoard(container, ctx) {
             : esc(reason)}</span>`).join('<span> · </span>');
     const partLabel = (part) => part?.rank ? `第 ${part.rank}` : '未达标';
     const partsLine = (row) => composite ? `<small class="board-parts">${cats.map((c) => `<span class="board-part${row.parts?.[c]?.rank ? '' : ' is-missing'}"><span>${esc(categoryLabel(c))}</span> <span>${partLabel(row.parts?.[c])}</span></span>`).join('<span> · </span>')}</small>` : '';
-    // The server keeps full precision; the composite's intervalVotes is a pooled diagnostic, not a part of its interval.
-    const scoreCell = (row) => {
-      if (row.score == null) return '<td class="c-score">—</td>';
+    // What a score and its ± are made of, per group (contracts/leaderboard-v3.md): a ranked composite row is
+    // the three category scores combined, and its intervalVotes is a pooled diagnostic that must not be split
+    // out; a composite watch row is the weighted pooled reference score; other boards split votes and questions.
+    const spreadOf = (row, group) => {
+      if (composite && group === 'ranked') return '三类区间合成，已含投票和换题的波动';
+      if (row.intervalVotes == null) return composite ? '混合池参考分，不参与综合排名' : '';
       const votes = Math.round(row.intervalVotes), tasks = Math.round(Math.sqrt(Math.max(0, row.interval ** 2 - row.intervalVotes ** 2)));
-      const spread = composite ? '三类区间合成，已含投票和换题的波动' : row.intervalVotes == null ? '' : tasks ? `投票 ±${votes}，换题 ±${tasks}` : `投票 ±${votes}`;
-      return `<td class="c-score"${spread ? ` title="${spread}"` : ''}><b><span data-i18n-number="${Math.round(row.score)}">${Math.round(row.score)}</span></b><small>±<span data-i18n-number="${Math.round(row.interval)}">${Math.round(row.interval)}</span></small></td>`;
+      const split = tasks ? `投票 ±${votes}，换题 ±${tasks}` : `投票 ±${votes}`;
+      return composite ? `混合池参考分，不参与综合排名；${split}` : split;
+    };
+    // The explanation sits in a focusable button: hover, keyboard focus or a tap shows it (platform.css .score-tip).
+    const scoreCell = (row, group) => {
+      if (row.score == null) return '<td class="c-score">—</td>';
+      const value = `<b><span data-i18n-number="${Math.round(row.score)}">${Math.round(row.score)}</span></b><small>±<span data-i18n-number="${Math.round(row.interval)}">${Math.round(row.interval)}</span></small>`;
+      const spread = spreadOf(row, group);
+      if (!spread) return `<td class="c-score">${value}</td>`;
+      const id = `board-tip-${board}-${++tips}`;
+      return `<td class="c-score"><span class="score-tip"><button type="button" class="score-tip-btn" data-score-tip aria-describedby="${id}">${value}</button><span class="score-tip-text" role="tooltip" id="${id}">${spread}</span></span></td>`;
     };
     const line = (row, m, extra = '') => `<td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name">${nameParts(data, row)}<small>${[vendorLine(m), ...(ctx.task || row.tasks == null ? [] : [`<span>${row.tasks} 道题</span>`])].join(' · ')}</small>${extra}</span></span></td>`;
     const tail = (row) => `${recordCells(row)}${composite ? '' : `<td class="c-works">${row.works == null ? '—' : `<span data-i18n-number="${row.works}">${row.works}</span>`}</td>`}`;
@@ -284,7 +299,7 @@ export function mountBoard(container, ctx) {
       return `<tr class="${[`is-${group}`, row.provisional ? 'is-provisional' : ''].filter(Boolean).join(' ')}" data-board-row="${searchText(row, m)}" data-board-in="${group}">
       ${rank}
       ${line(row, m, group === 'watch' ? reasons : partsLine(row))}
-      ${scoreCell(row)}
+      ${scoreCell(row, group)}
       <td class="c-range" aria-hidden="true">${group === 'ranked' ? rangeBar(row, at) : ''}</td>
       ${middle}
       ${tail(row)}
@@ -404,7 +419,14 @@ export function mountBoard(container, ctx) {
     return reading.promise;
   }
 
+  // A tap opens one score explanation and closes the others; Escape hides the one in view.
+  const closeTips = (except) => {
+    for (const tip of container.querySelectorAll('.score-tip.is-open, .score-tip.is-quiet')) if (tip !== except) tip.classList.remove('is-open', 'is-quiet');
+  };
   const onClick = (e) => {
+    const tip = e.target.closest('[data-score-tip]')?.parentElement;
+    closeTips(tip);
+    if (tip) return void tip.classList.toggle('is-open');
     if (e.target.closest('[data-board-retry]')) return void load();
     const fold = e.target.closest('[data-board-group-toggle]');
     if (fold) {
@@ -435,8 +457,16 @@ export function mountBoard(container, ctx) {
     filters[select.dataset.boardFilter] = select.value;
     load();
   };
+  const onKey = (e) => {
+    if (e.key !== 'Escape') return;
+    const tip = e.target.closest?.('.score-tip');
+    if (tip) { tip.classList.remove('is-open'); tip.classList.add('is-quiet'); }
+  };
+  const onFocusOut = (e) => e.target.closest?.('.score-tip')?.classList.remove('is-open', 'is-quiet');
   container.addEventListener('click', onClick);
   container.addEventListener('change', onChange);
+  container.addEventListener('keydown', onKey);
+  container.addEventListener('focusout', onFocusOut);
   const loading = load();
   return {
     ready: drawn ? null : loading,
@@ -451,6 +481,8 @@ export function mountBoard(container, ctx) {
       request?.controller.abort();
       container.removeEventListener('click', onClick);
       container.removeEventListener('change', onChange);
+      container.removeEventListener('keydown', onKey);
+      container.removeEventListener('focusout', onFocusOut);
     },
   };
 }

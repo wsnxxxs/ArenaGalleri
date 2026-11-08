@@ -493,7 +493,7 @@ table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-va
 .board-part { white-space: nowrap; }
 .board-parts .is-missing { opacity: 0.6; }
 .board.is-composite .board-parts, .board.is-composite .board-reasons, .board.is-composite .c-record { display: none; }
-.board-group-head th { padding: 0; border-bottom: 1px solid var(--line); text-align: left; }
+.board-group-head th { padding: 0; border-bottom: 1px solid var(--line); text-align: left; white-space: normal; }
 .board tbody tr.board-group-head:hover { background: none; }
 .board-group-head button { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; width: 100%; padding: 26px 10px 12px; border: 0; background: none; color: var(--ink); font: 500 13.5px var(--sans); text-align: left; cursor: pointer; }
 .board-group-head button .i { width: 14px; height: 14px; align-self: center; margin-right: -4px; color: var(--muted); transform: rotate(90deg); transition: transform 0.25s var(--ease); }
@@ -504,6 +504,14 @@ table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-va
 .board-group:not(.is-open) > tr[data-board-row] { display: none; }
 .board-group-empty td { padding: 28px 10px; color: var(--muted); text-align: left; white-space: normal; }
 .board-found { margin: 0 0 10px; }
+.score-tip { position: relative; display: inline-block; }
+.score-tip-btn { padding: 0; border: 0; border-radius: 3px; background: none; color: inherit; font: inherit; text-align: inherit; cursor: help; }
+.score-tip-btn small { text-decoration: underline dotted var(--line-2); text-underline-offset: 3px; }
+.score-tip-btn:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 3px; }
+.score-tip-text { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 3; width: max-content; max-width: 15em; padding: 6px 9px; border-radius: 6px; background: var(--ink); color: var(--bg); font: 400 12px/1.5 var(--sans); letter-spacing: 0; text-align: left; white-space: normal; visibility: hidden; pointer-events: none; }
+.score-tip-btn:focus-visible + .score-tip-text, .score-tip.is-open .score-tip-text { visibility: visible; }
+@media (hover: hover) { .score-tip:hover .score-tip-text { visibility: visible; } }
+.score-tip.is-quiet .score-tip-text { visibility: hidden; }
 @media (max-width: 1180px) {
   .board.is-composite .c-part, .board.is-composite .c-reason, .board.is-composite .c-range { display: none; }
   .board.is-composite .board-parts, .board.is-composite .board-reasons { display: block; }
@@ -1159,6 +1167,7 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .board td.c-score b { font-size: 17px; }
   .board-model .brand-mark { display: none; }
   .board.is-v3 .c-games, .board.is-v3 .c-works { display: none; }
+  .board.is-v3 th.c-rate { white-space: normal; }
   .step-head p, .step-placeholder { padding-left: 0; }
   .trial-note { display: none; }
   .trial-bar .seg button { padding: 0 10px; }
