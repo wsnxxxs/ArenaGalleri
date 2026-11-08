@@ -38,6 +38,19 @@ test('the radar draws dimension scores on one 900–1500 scale and rests unanswe
   assert.equal(axesOf({ prior: null, dimensions: {} }, dimensions)[0].score, 1000, 'without a prior an unanswered axis rests at 1000');
   assert.equal(axesOf({ prior: 1100, dimensions: { aesthetic: { score: 1180, interval: 40, n: 12 } } }, dimensions)[0].thin, false, 'without the flag, thin follows the answer count');
 
+  // One scale for the page: 900–1500, widened to the next hundred when a drawn value falls outside.
+  const { scaleFor } = await chart();
+  assert.deepEqual(scaleFor([entry], dimensions), { min: 900, max: 1500, ticks: [1000, 1200, 1400] });
+  assert.deepEqual(scaleFor([], dimensions), { min: 900, max: 1500, ticks: [1000, 1200, 1400] });
+  const low = { prior: 621, dimensions: { aesthetic: { score: 640, interval: 238, n: 3, thin: true } } };
+  const high = { prior: 1444, dimensions: { craft: { score: 1430, interval: 90, n: 30, thin: false } } };
+  const wide = scaleFor([entry, low, high], dimensions);
+  assert.deepEqual(wide, { min: 400, max: 1600, ticks: [600, 1000, 1400] }, 'the interval floor 402 and the ceiling 1520 round outward');
+  assert.equal(axesOf(low, dimensions, wide)[0].low, scaleOf(402, wide));
+  assert.deepEqual(scaleFor([{ prior: 820, dimensions: {} }], dimensions).ticks, [1000, 1200, 1400], 'widened by 100, the rings keep their 200 steps');
+  assert.deepEqual(scaleFor([{ prior: 820, dimensions: {} }], dimensions).min, 800);
+  assert.ok(axesOf(low, dimensions, wide)[0].low > 0, 'on the widened scale nothing drawn is clamped');
+
   // Axis 0 points up from the centre and the axes run clockwise.
   const near = ([x, y], [ex, ey]) => assert.ok(Math.abs(x - ex) < 1e-9 && Math.abs(y - ey) < 1e-9, `${x},${y} vs ${ex},${ey}`);
   near(radarPoint(0, 4, 1, 70, 150, 112), [150, 42]);

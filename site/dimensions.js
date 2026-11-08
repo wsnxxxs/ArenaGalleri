@@ -7,9 +7,10 @@ import { setPageTitle } from './i18n.js';
 import { $, $$, brandMark, esc, formatDate, pad, store, vendorLine } from './ui.js';
 import { api, isStaff, platform } from './platform.js';
 
-// Every radar shares one scale, so cards compare at a glance. 1000 is the average of the main board.
+// Every radar on the page shares one scale, so cards compare at a glance: 900–1500 unless something drawn
+// (a score with its interval, or a prior) falls outside, and then widened to the next hundred. 1000 is the
+// average of the main board.
 export const SCALE = { min: 900, max: 1500 };
-const TICKS = [1000, 1200, 1400];
 // Below this many answers a dimension is thin: drawn hollow with a dashed interval. The server says so too.
 export const THIN_ANSWERS = 10;
 // The health check judges a question only after this many answers in the trial.
@@ -33,7 +34,20 @@ const fixed = (value) => value.toFixed(1);
 export const chartedDimensions = (dimensions) => dimensions.filter((dimension) => dimension.aspects?.length);
 
 // Where a score sits between the centre (900) and the outer ring (1500), clamped to the chart.
-export const scaleOf = (score) => Math.min(1, Math.max(0, (score - SCALE.min) / (SCALE.max - SCALE.min)));
+export const scaleOf = (score, scale = SCALE) => Math.min(1, Math.max(0, (score - scale.min) / (scale.max - scale.min)));
+
+// The page's scale for these entries, and its labelled rings: 1000 and every 200 from it inside the scale,
+// every 400 once the scale has widened past 900 points, so the rings stay apart.
+export function scaleFor(entries, dimensions) {
+  const values = entries.flatMap((entry) => [entry.prior, ...axesOf(entry, dimensions).flatMap((axis) => [axis.score - axis.interval, axis.score + axis.interval])])
+    .filter(Number.isFinite);
+  const min = Math.min(SCALE.min, Math.floor(Math.min(...values) / 100) * 100);
+  const max = Math.max(SCALE.max, Math.ceil(Math.max(...values) / 100) * 100);
+  const step = max - min > 900 ? 400 : 200;
+  const ticks = [];
+  for (let tick = 1000 - Math.floor((999 - min) / step) * step; tick < max; tick += step) ticks.push(tick);
+  return { min, max, ticks };
+}
 
 // Axis i of n starts at 12 o'clock and runs clockwise; value 1 lands on the outer ring.
 const angleOf = (i, n) => -Math.PI / 2 + (2 * Math.PI * i) / n;
@@ -43,14 +57,14 @@ export function radarPoint(i, n, value, radius = RADAR.radius, cx = RADAR.cx, cy
 }
 
 // What the radar draws per dimension. An unanswered dimension rests on the prior (1000 without one), thin.
-export function axesOf(entry, dimensions) {
+export function axesOf(entry, dimensions, scale = SCALE) {
   const rest = entry.prior ?? 1000;
   return dimensions.map((dimension) => {
     const cell = entry.dimensions?.[dimension.id] ?? { n: 0, win: 0, tie: 0, loss: 0, aspects: {} };
     const score = cell.score ?? rest;
     const interval = cell.interval ?? 0;
     const thin = cell.thin ?? cell.n < THIN_ANSWERS;
-    return { dimension, cell, score, interval, thin, value: scaleOf(score), low: scaleOf(score - interval), high: scaleOf(score + interval) };
+    return { dimension, cell, score, interval, thin, value: scaleOf(score, scale), low: scaleOf(score - interval, scale), high: scaleOf(score + interval, scale) };
   });
 }
 
@@ -65,24 +79,24 @@ export const healthOf = (row, order) => (order === 'all' ? row : row.byOrder?.[o
 
 const axisText = (axis) => `${axis.dimension.name} ${axis.score} ±${axis.interval}，${axis.cell.n} 票${axis.thin ? `，不足 ${THIN_ANSWERS} 票` : ''}`;
 
-function radar(entry, dimensions, name) {
+function radar(entry, dimensions, name, scale) {
   const { width, height, cx, cy, radius, gap } = RADAR;
-  const axes = axesOf(entry, dimensions);
+  const axes = axesOf(entry, dimensions, scale);
   const n = axes.length;
   const at = (i, value) => radarPoint(i, n, value, radius, cx, cy);
   const ring = (value, cls) => `<circle class="${cls}" cx="${cx}" cy="${cy}" r="${fixed(radius * value)}"/>`;
-  const rings = [...TICKS.map((tick) => ring(scaleOf(tick), `radar-ring${tick === 1000 ? ' is-mid' : ''}`)), ring(1, 'radar-ring')].join('');
+  const rings = [...scale.ticks.map((tick) => ring(scaleOf(tick, scale), `radar-ring${tick === 1000 ? ' is-mid' : ''}`)), ring(1, 'radar-ring')].join('');
   // Tick values run along the bisector of the first two axes, clear of the labels.
-  const ticks = TICKS.map((tick) => {
+  const ticks = scale.ticks.map((tick) => {
     const angle = angleOf(0.5, n);
-    const r = radius * scaleOf(tick);
+    const r = radius * scaleOf(tick, scale);
     return `<text class="radar-tick" x="${fixed(cx + Math.cos(angle) * r + 3)}" y="${fixed(cy + Math.sin(angle) * r - 3)}">${tick}</text>`;
   }).join('');
   const spokes = axes.map((_, i) => {
     const [x, y] = at(i, 1);
     return `<line class="radar-spoke" x1="${cx}" y1="${cy}" x2="${fixed(x)}" y2="${fixed(y)}"/>`;
   }).join('');
-  const prior = entry.prior == null ? '' : ring(scaleOf(entry.prior), 'radar-prior');
+  const prior = entry.prior == null ? '' : ring(scaleOf(entry.prior, scale), 'radar-prior');
   // Each axis carries its 95% interval as a whisker with short caps across the spoke.
   const whiskers = axes.map((axis, i) => {
     const angle = angleOf(i, n);
@@ -126,11 +140,11 @@ function tipHtml(axis, entry) {
 const modelLine = (entry, unit, m, extra = '') => `<span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b data-i18n-ignore>${esc(entry.modelName)}</b>${unit === 'config' && entry.effort ? `<span class="badge" data-i18n-ignore>${esc(entry.effort)}</span>` : ''}${extra}</span></span>`;
 const priorText = (entry) => (entry.prior == null ? '<span>没有分类分</span>' : `<span>分类分 ${entry.prior}</span>`);
 
-function card(entry, dimensions, unit, m) {
+function card(entry, dimensions, unit, m, scale) {
   const name = `${entry.modelName}${unit === 'config' && entry.effort ? ` · ${entry.effort}` : ''}`;
   return `<article class="dims-card" data-entry="${esc(entry.key)}">
     ${modelLine(entry, unit, m, `<small>${vendorLine(m)} · ${priorText(entry)} · <span>${entry.overall?.n ?? 0} 组</span></small>`)}
-    ${radar(entry, dimensions, name)}
+    ${radar(entry, dimensions, name, scale)}
     <div class="dims-tip" role="tooltip" hidden></div>
   </article>`;
 }
@@ -160,7 +174,7 @@ function board(rows, unit, modelOf, dimension) {
   const body = rows.map((row) => {
     const m = modelOf(row.entry);
     const from = at(row.score - row.interval), to = at(row.score + row.interval);
-    const span = row.rankLow != null && row.rankHigh != null && row.rankLow !== row.rankHigh ? `<small>${row.rankLow}–${row.rankHigh}</small>` : '';
+    const span = row.rankLow != null && row.rankHigh != null && row.rankLow !== row.rankHigh ? `<small class="rank-range">${row.rankLow}–${row.rankHigh}</small>` : '';
     return `<tr${row.thin ? ' class="is-provisional"' : ''}>
       <td class="c-rank${row.rank <= 3 ? ' is-top' : ''}">${pad(row.rank)}${span}</td>
       <td class="c-model">${modelLine(row.entry, unit, m, `${row.thin ? `<span class="badge provisional" title="不足 ${THIN_ANSWERS} 票">单薄</span>` : ''}<small>${vendorLine(m)} · ${priorText(row.entry)}</small>`)}</td>
@@ -233,8 +247,9 @@ export function mount(root, ctx) {
 
   function radarView(entries, dimensions, noun) {
     const charted = entries.filter((entry) => dimensions.some((dimension) => entry.dimensions?.[dimension.id]?.n));
-    return `<p class="dims-key"><span>刻度 ${SCALE.min}–${SCALE.max}，所有卡片相同</span><span><i class="dims-swatch is-prior"></i>虚线圈：这个条目的建模分类分，伸出去的是长板</span><span><i class="dims-swatch is-whisker"></i>须线：95% 区间</span><span><i class="dims-swatch is-thin"></i>空心点、虚线：不足 ${THIN_ANSWERS} 票</span></p>
-      ${charted.length ? `<div class="dims-grid">${charted.map((entry) => card(entry, dimensions, unit, modelOf(entry))).join('')}</div>`
+    const scale = scaleFor(charted, dimensions);
+    return `<p class="dims-key"><span>刻度 ${scale.min}–${scale.max}，所有卡片相同</span><span><i class="dims-swatch is-prior"></i>虚线圈：这个条目的建模分类分，伸出去的是长板</span><span><i class="dims-swatch is-whisker"></i>须线：95% 区间</span><span><i class="dims-swatch is-thin"></i>空心点、虚线：不足 ${THIN_ANSWERS} 票</span></p>
+      ${charted.length ? `<div class="dims-grid">${charted.map((entry) => card(entry, dimensions, unit, modelOf(entry), scale)).join('')}</div>`
         : `<p class="muted">还没有${noun}答过测评点。</p>`}
       <h3 class="dims-heading">明细</h3>
       ${detail(entries, dimensions, unit, modelOf)}`;
