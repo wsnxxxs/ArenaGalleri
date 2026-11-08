@@ -25,11 +25,13 @@ export const costShown = (flags) => flags?.showCost === true;
 const MILLION = 1_000_000;
 const number = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
-// The current official price: the latest entry dated no later than the table itself.
-export function priceFor(pricing, modelId) {
+// The current official price: the latest entry dated no later than the table, or than today while the
+// table has no date yet. An entry that starts later is never used.
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+export function priceFor(pricing, modelId, now = today()) {
   const entries = pricing?.models?.[modelId];
   if (!Array.isArray(entries)) return null;
-  const asOf = pricing.asOf ?? '9999-12-31';
+  const asOf = pricing.asOf ?? now;
   return entries.filter((entry) => !entry.since || entry.since <= asOf)
     .sort((a, b) => String(b.since ?? '').localeCompare(String(a.since ?? '')))[0] ?? null;
 }
@@ -126,12 +128,16 @@ export function groupCosts(tasks, { pricing, keyOf, modelOf = (work) => work.mod
 }
 export const chartOpen = (groups) => [...groups.values()].filter((g) => g.works >= OPEN.works).length >= OPEN.groups;
 
-// The cost/score frontier: points that no other point beats on both, cheaper (lower x) and better
-// (higher y). Ties in cost keep the higher score. Returns the frontier from cheapest to dearest.
+// The cost/score frontier: points no other point dominates (as cheap or cheaper and as good or better,
+// strictly one of the two). Entries at exactly the same cost and score are all on it. Returns the
+// frontier from cheapest to dearest.
 export function frontier(points) {
   const sorted = [...points].filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)).sort((a, b) => a.x - b.x || b.y - a.y);
   const kept = [];
-  for (const point of sorted) if (!kept.length || point.y > kept.at(-1).y) kept.push(point);
+  for (const point of sorted) {
+    const last = kept.at(-1);
+    if (!last || point.y > last.y || (point.y === last.y && point.x === last.x)) kept.push(point);
+  }
   return kept;
 }
 

@@ -801,7 +801,12 @@ async function mountTaskUsage() {
     if (!body.isConnected) return;
     usageView = mount(body, { ...context(), task: t });
     await usageView.ready;
-    if (!body.isConnected || !usageView.shown()) return;
+    if (!body.isConnected) return;
+    // Amounts off: the view is 用量 and an old /cost address becomes /usage, as the leaderboard's /cost returns to its ranking.
+    if (!usageView.shown()) {
+      if (/\/cost$/.test(location.hash.split('#')[1])) history.replaceState(history.state, '', `#${location.hash.split('#')[1].replace(/\/cost$/, '/usage')}`);
+      return;
+    }
     // Amounts are on: the view is 花费 and its address says /cost.
     $('[data-go="cost"] [data-usage-label]')?.replaceChildren('花费');
     if (/\/usage$/.test(location.hash.split('#')[1])) history.replaceState(history.state, '', `#${location.hash.split('#')[1].replace(/\/usage$/, '/cost')}`);

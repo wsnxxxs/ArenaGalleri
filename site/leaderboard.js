@@ -8,7 +8,7 @@ import { curatedInfo, curatedKnown } from './curated.js';
 import { categoryLabel, domainsIn, domainList, domainsOf, tracksOf, votedTask } from './categories.js';
 import { textMatches } from './match.js';
 import { chartOpen, costShown, formatMoney, formatMultiple, frontier, groupCosts } from './usage.js';
-import { costTable, frontierSteps, scatter } from './cost-chart.js';
+import { costTable, frontierSteps, plottable, scatter } from './cost-chart.js';
 
 const UNITS = { config: '按配置', model: '按模型' };
 // A domain board below either line is shown, but flagged as too thin to rank on.
@@ -273,6 +273,10 @@ export function mountBoard(container, ctx) {
   const COST_NOTE = '<p class="fine cost-note">花费列：各题花费 ÷ 同题中位的几何平均，以及单件花费中位；件数是管理员实测的件数，不是「作品」列的全部作品。按官方标价折算，名次仍按评分。</p>';
 
   // The cost view: the chart for configurations or models, a cost table for Harness groupings.
+  function controlsOf(by, scored, seg, select) {
+    return `<div class="cost-controls">${select}${scored ? seg('横轴', [['multiple', '花费倍数'], ['cost', '单件中位']], costX) : ''}${seg('币种', [['CNY', '¥'], ['USD', '$']], currency)}
+      ${scored && by === 'config' ? `<label class="board-sample-toggle"><input type="checkbox" data-cost-connect${connect ? ' checked' : ''}><span>连接同一模型的档位</span></label>` : ''}</div>`;
+  }
   function costView(data) {
     const by = costBy ?? unit;
     const scored = by === 'config' || by === 'model';
@@ -286,16 +290,22 @@ export function mountBoard(container, ctx) {
         <p>至少 8 个配置各有 5 件以上计入记录后开放。目前 ${ready} 个配置达到，管理员已实测 ${tasksInScope().reduce((sum, t) => sum + t.results.filter((w) => w.usage && passes(w)).length, 0)} 件作品。在那之前，可以在各题的「花费」视图里直接比较。</p>
         <div class="board-empty-actions"><button class="btn sm" type="button" data-board-view="rank">回到排名</button></div></div>`;
     }
-    const { points, rated } = costPoints(scoresOf(rankedRows(data)), by);
+    const all = costPoints(scoresOf(rankedRows(data)), by);
+    // The search narrows what is drawn and listed; the frontier stays the whole board's.
+    const matches = (p) => textMatches(query, `${p.name} ${p.sample?.harnessName ?? ''}`.toLowerCase());
+    const points = all.points.filter(matches), rated = all.rated.filter(matches);
     const front = rated.filter((p) => p.frontier).sort((a, b) => a.x - b.x);
+    // A log axis cannot place 0: zero-cost entries are named under the chart and stay in the table.
+    const zero = rated.filter((p) => !plottable(p));
     const tableRows = points.map((p) => ({ ...p, status: scored && p.score == null && p.status !== 'insufficient' ? 'unrated' : p.status, frontier: front.some((f) => f.key === p.key) }))
       .sort((a, b) => Number(a.status === 'insufficient') - Number(b.status === 'insufficient') || a.multiple - b.multiple);
-    const controls = `<div class="cost-controls">${select}${scored ? seg('横轴', [['multiple', '花费倍数'], ['cost', '单件中位']], costX) : ''}${seg('币种', [['CNY', '¥'], ['USD', '$']], currency)}
-      ${scored && by === 'config' ? `<label class="board-sample-toggle"><input type="checkbox" data-cost-connect${connect ? ' checked' : ''}><span>连接同一模型的档位</span></label>` : ''}</div>`;
+    if (query && !points.length) return `${controlsOf(by, scored, seg, select)}<p class="muted">没有匹配的模型，请换个关键词。</p>`;
+    const controls = controlsOf(by, scored, seg, select);
     const legend = '<p class="cost-legend" aria-hidden="true"><span><i class="is-front"></i>前沿</span><span><i></i>其他</span><span><i class="is-provisional"></i>暂定（3–4 件），不参与前沿</span><span><i class="is-line"></i>前沿线</span></p>';
     return `${controls}
       <p class="muted">花费图仍在试行，全部按暂定看待。评分来自全部有效比较，花费只来自管理员实测的作品，两者各自独立。</p>
-      ${scored ? (rated.length >= 2 ? `${legend}<div class="cost-scroll">${scatter(rated, { x: costX, connect: connect && by === 'config', currency, fx: pricing?.fx })}</div>
+      ${scored ? (rated.filter(plottable).length >= 2 ? `${legend}<div class="cost-scroll">${scatter(rated, { x: costX, connect: connect && by === 'config', currency, fx: pricing?.fx })}</div>
+        ${zero.length ? `<p class="fine cost-zero">花费为 0，无法画在对数轴上：<span data-i18n-ignore>${zero.map((p) => esc(p.name)).join('、')}</span>。它们仍列在数据表里。</p>` : ''}
         ${front.length ? `<div class="cost-path-wrap"><p class="usage-label">前沿路径</p>${frontierSteps(front, { x: costX, currency, fx: pricing?.fx })}</div>` : ''}` : '<p class="muted">当前筛选下有评分且样本足够的条目不足两个，暂不作图。</p>')
         : `<p class="muted">${by === 'harness' ? 'Harness 没有评分，这里只按花费倍数排序。' : '模型 + Harness 没有评分，这里只按花费倍数排序。'}</p>`}
       ${scored ? `<details class="board-unranked cost-data"><summary>查看数据表${icon('next')}</summary>${costTable(tableRows, { currency, fx: pricing?.fx })}</details>` : costTable(tableRows, { currency, fx: pricing?.fx, scored: false })}`;
@@ -413,6 +423,9 @@ export function mountBoard(container, ctx) {
 
   // Search covers every group: a folded group with matches opens, and a line says where the matches are.
   function applyQuery() {
+    // The cost view has no rows to hide: it redraws its chart and tables for the query.
+    const costBody = ctx.view === 'cost' && pricing && currentData ? $('[data-cost-body]', container) : null;
+    if (costBody) costBody.innerHTML = costView(currentData);
     const rows = [...container.querySelectorAll('[data-board-row]')];
     const found = {};
     for (const row of rows) {
@@ -450,7 +463,9 @@ export function mountBoard(container, ctx) {
       }
     }
     if (ctx.view === 'cost' && costScope) {
-      container.innerHTML = head(data, rankedRows(data).length) + (pricing ? costView(data) : '<p class="muted">正在载入花费…</p>');
+      const typing = document.activeElement?.matches('[data-board-search]');
+      container.innerHTML = head(data, rankedRows(data).length) + `<div data-cost-body>${pricing ? costView(data) : '<p class="muted">正在载入花费…</p>'}</div>`;
+      if (typing) $('[data-board-search]', container)?.focus();
       currentData = data;
       ctx.onData?.(data, { visibleRows: rankedRows(data).length });
       drawn = true;

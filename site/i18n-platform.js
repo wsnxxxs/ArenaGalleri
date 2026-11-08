@@ -102,6 +102,8 @@ token 由各家分词器计数，跨模型只作参考；缓存读取是重复�
 Harness 没有评分，这里只按花费倍数排序。|Harnesses have no score, so they are sorted by cost multiple only.
 模型 + Harness 没有评分，这里只按花费倍数排序。|Model + Harness pairs have no score, so they are sorted by cost multiple only.
 查看数据表|View data table
+花费为 0，无法画在对数轴上：|Zero cost cannot sit on the log axis: 
+。它们仍列在数据表里。|. They remain in the data table.
 名称|Name
 计入件数|Counted works
 题数|Questions

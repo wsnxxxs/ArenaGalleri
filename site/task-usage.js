@@ -140,7 +140,7 @@ export function mountTaskUsage(container, ctx) {
     const name = r ? `<b data-i18n-ignore>${esc(ctx.modelOf(r).name)}</b>${r.effort ? `<span class="badge" data-i18n-ignore>${esc(r.effort)}</span>` : ''}${row.why && row.why !== 'missing' ? `<span class="badge usage-why">${EXCLUSIONS[row.why]}</span>` : ''}<small>${sourceOf(r)}</small>`
       : `<b data-i18n-ignore>${esc(row.name)}</b>`;
     const body = `<span class="usage-name">${name}</span>${bar(row, at, mid)}<span class="usage-value"><b>${value}</b><small>${secondary}</small></span>`;
-    if (!r) return `<li class="usage-row is-group">${body}</li>`;
+    if (!r) return `<li class="usage-row is-group" data-usage-row="${esc(String(row.name).toLowerCase())}">${body}</li>`;
     const id = `usage-tip-${++tips}`;
     return `<li class="usage-row${row.why ? ' is-excluded' : ''}" data-usage-row="${esc([ctx.label(r), ctx.harnessOf(r)?.name].join(' ').toLowerCase())}">
       <a class="usage-link" href="${ctx.viewHref(t, r.id)}" aria-describedby="${id}">${body}</a>
@@ -188,7 +188,8 @@ export function mountTaskUsage(container, ctx) {
     const parts = state.metric === 'cost' ? composition(r) : Object.fromEntries(PARTS.map((part) => [part, r.usage[part] ?? 0]));
     const total = PARTS.reduce((sum, part) => sum + (parts?.[part] ?? 0), 0);
     return `<section class="usage-card" aria-label="这件作品的用量">
-      <div class="usage-card-head"><p class="usage-label">本题目前只有这一件有用量记录</p><a class="text-link" href="${ctx.viewHref(t, r.id)}">在线预览${icon('right')}</a></div>
+      <div class="usage-card-head"><p class="usage-label">本题目前只有这一件有用量记录</p>
+        <span class="usage-card-tools">${shown ? seg('currency', [['CNY', '¥'], ['USD', '$']], state.currency) : ''}<a class="text-link" href="${ctx.viewHref(t, r.id)}">在线预览${icon('right')}</a></span></div>
       ${total > 0 ? `<span class="usage-stack" aria-hidden="true">${PARTS.filter((part) => parts[part] > 0).map((part) => `<i style="flex-grow:${parts[part] / total};background:${shade(part)}"></i>`).join('')}</span>` : ''}
       <div class="usage-card-body">${details(r)}
         <dl class="usage-facts">
@@ -196,7 +197,7 @@ export function mountTaskUsage(container, ctx) {
           ${r.usage.durationSec != null ? `<div><dt>耗时</dt><dd>${formatDuration(r.usage.durationSec)}</dd></div>` : ''}
           ${SOURCES[r.usage.source] ? `<div><dt>数字来自</dt><dd>${SOURCES[r.usage.source]}</dd></div>` : ''}
           ${paid ? `<div><dt>实付</dt><dd>${paid}</dd></div>` : ''}
-          ${r.artifact ? `<div><dt>产物</dt><dd>${[r.artifact.lines != null ? count(r.artifact.lines.toLocaleString('en'), '行') : '', r.artifact.files != null ? count(r.artifact.files, '个文件') : '', artifactOf(r.artifact) ? display(artifactOf(r.artifact).value, 'artifact') : ''].filter(Boolean).join(' · ')}</dd></div>` : ''}
+          ${r.artifact ? `<div><dt>产物</dt><dd>${[r.artifact.lines != null ? count(r.artifact.lines.toLocaleString('en'), '行') : '', r.artifact.files != null ? count(r.artifact.files, '个文件') : '', artifactOf(r.artifact) ? display(artifactOf(r.artifact).value, 'artifact') : ''].filter(Boolean).map((bit) => `<span>${bit}</span>`).join(' · ')}</dd></div>` : ''}
         </dl></div>
       ${artifactStrip(r)}
       <p class="fine">再有两件作品记录用量后，这里就能排序比较，并画出本题中位线。</p>

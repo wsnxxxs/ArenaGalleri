@@ -22,6 +22,12 @@ test('the price is the latest entry dated no later than the table, and unknown m
   assert.equal(priceFor({ ...PRICING, asOf: '2026-06-01' }, 'alpha').input, 2);
   assert.equal(priceFor(PRICING, 'nobody'), null);
   assert.equal(priceFor(null, 'alpha'), null);
+  // A table without a date uses today: never an entry that starts later.
+  const undated = { ...PRICING, asOf: null };
+  assert.equal(priceFor(undated, 'alpha', '2026-11-08').input, 5);
+  assert.equal(priceFor(undated, 'alpha', '2026-12-02').input, 50);
+  assert.equal(priceFor({ asOf: null, models: { later: [{ since: '2099-01-01', currency: 'CNY', input: 1, output: 1 }] } }, 'later', '2026-11-08'), null);
+  assert.equal(priceFor({ asOf: null, models: { later: [{ since: '2099-01-01', currency: 'CNY', input: 1, output: 1 }] } }, 'later'), null, 'today by default');
 });
 
 test('cost multiplies each kind of token by its price, converts to CNY, and defaults cache prices to input', () => {
@@ -105,6 +111,10 @@ test('the frontier keeps points no other point beats on both cost and score', ()
     { id: 'd', x: 2.86, y: 1320 }, { id: 'e', x: 4.05, y: 1319 }, { id: 'f', x: 0.12, y: 1080 }];
   assert.deepEqual(frontier(points).map((p) => p.id), ['a', 'c', 'd']);
   assert.deepEqual(frontier([]), []);
+  // Two entries at exactly the same cost and score do not dominate each other: both stay.
+  assert.deepEqual(frontier([{ id: 'a', x: 1, y: 1000 }, { id: 'b', x: 1, y: 1000 }, { id: 'c', x: 2, y: 900 }]).map((p) => p.id), ['a', 'b']);
+  assert.deepEqual(frontier([{ id: 'a', x: 1, y: 1000 }, { id: 'b', x: 1, y: 990 }]).map((p) => p.id), ['a']);
+  assert.deepEqual(frontier([{ id: 'z', x: 0, y: 950 }, { id: 'a', x: 1, y: 1000 }]).map((p) => p.id), ['z', 'a'], 'a free entry leads the frontier');
 });
 
 test('formatting: compact tokens, money in the chosen currency, multiples and durations', () => {

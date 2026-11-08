@@ -17,7 +17,12 @@ function globals() {
   globalThis.localStorage = { getItem: (key) => settings.get(key) ?? null, setItem: (key, value) => settings.set(key, value) };
   return () => Object.assign(globalThis, original);
 }
-const box = () => Object.assign(new EventTarget(), { innerHTML: '', setAttribute() {}, removeAttribute() {}, querySelector: () => null, querySelectorAll: () => [], classList: { add() {}, remove() {} } });
+// A container whose cost body (the part the leaderboard redraws on search) is a separate node.
+const box = () => {
+  const body = { innerHTML: '' };
+  return Object.assign(new EventTarget(), { innerHTML: '', body, setAttribute() {}, removeAttribute() {}, querySelectorAll: () => [], classList: { add() {}, remove() {} },
+    querySelector(selector) { return selector === '[data-cost-body]' && this.innerHTML.includes('data-cost-body') ? body : null; } });
+};
 const work = (id, model, effort, output, extra = {}) => ({ id, model, modelName: model.toUpperCase(), effort, harness: extra.harness ?? 'cli',
   usage: { input: 1000, cacheRead: 50_000, output, reasoning: Math.round(output / 4), requests: 12, durationSec: 600, source: 'log' },
   artifact: { files: 2, lines: 800, bytes: 40_000, tokens: 20_000 }, ...extra });
@@ -42,6 +47,10 @@ test('with amounts off the task view compares tokens only; on, it adds cost in t
     assert.equal((off.innerHTML.match(/class="usage-row"/g) ?? []).length, 3);
     assert.match(off.innerHTML, /<s style="left:/, 'three counted works draw the median');
     assert.match(off.innerHTML, /aria-describedby="usage-tip-1"/);
+    // Grouped rows carry their names for the search, like single works.
+    const select = (value) => { const event = new Event('change'); Object.defineProperty(event, 'target', { value: { value, matches: (q) => q === '[data-usage-group]' } }); off.dispatchEvent(event); };
+    select('model');
+    assert.deepEqual([...off.innerHTML.matchAll(/class="usage-row is-group" data-usage-row="([^"]+)"/g)].map((m) => m[1]).sort(), ['m1', 'm2']);
     const on = box();
     const shown = mountTaskUsage(on, viewCtx(task, PRICING));
     await shown.ready;
@@ -70,6 +79,13 @@ test('a question with one record shows that record whole instead of a lone bar',
     assert.match(container.innerHTML, /产物体量在本题 5 件作品中的位置/);
     assert.doesNotMatch(container.innerHTML, /[¥$]/);
     view.destroy();
+    // Amounts on: the card keeps its currency switch.
+    const priced = box();
+    const shown = mountTaskUsage(priced, viewCtx(task, PRICING));
+    await shown.ready;
+    assert.match(priced.innerHTML, /usage-card-tools"><div class="seg" role="group" aria-label="币种"><button type="button" data-usage-set="currency" data-value="CNY"/);
+    assert.match(priced.innerHTML, /<span>2 lines<\/span>|<span>100 行<\/span>|<span>800 行<\/span>/, 'each artifact fact is its own text node');
+    shown.destroy();
   } finally { restore(); }
 });
 
@@ -111,6 +127,28 @@ test('the leaderboard gains a cost column and a cost chart only when amounts are
     assert.match(chart, /<svg class="cost-chart"/);
     assert.match(chart, /class="cc-dot is-front"/);
     assert.match(chart, /查看数据表/);
+    assert.match(chart, /<div data-cost-body>/);
+    // Search narrows the chart and its table.
+    const searched = box();
+    const searching = mountBoard(searched, boardCtx(data, data.pricing, { view: 'cost' }));
+    await searching.ready; await flush(); await flush();
+    searching.search('m3');
+    assert.match(searched.body.innerHTML, /<b data-i18n-ignore>M3 · High<\/b>/);
+    assert.doesNotMatch(searched.body.innerHTML, /M4 · Max/);
+    searching.search('no-such-model');
+    assert.match(searched.body.innerHTML, /没有匹配的模型/);
+    assert.doesNotMatch(searched.body.innerHTML, /cost-chart/);
+    searching.destroy();
+    // A configuration that cost nothing stays off the log axis, named under it, and the chart still draws.
+    const free = { ...data, tasks: data.tasks.map((t) => ({ ...t, results: t.results.map((w, i) => i ? w : { ...w, usage: { ...w.usage, input: 0, cacheRead: 0, output: 0, reasoning: 0 } }) })) };
+    const zeroChart = await (async () => {
+      const container = box();
+      const board = mountBoard(container, boardCtx(free, data.pricing, { view: 'cost' }));
+      await board.ready; await flush(); await flush(); board.destroy();
+      return container.innerHTML;
+    })();
+    assert.match(zeroChart, /<svg class="cost-chart"/);
+    assert.match(zeroChart, /花费为 0，无法画在对数轴上：<span data-i18n-ignore>M0 · Max<\/span>/);
     // One configuration short of the threshold: no column, and the chart explains instead of drawing.
     const short = { ...data, tasks: data.tasks.map((t) => ({ ...t, results: t.results.slice(1) })) };
     globalThis.fetch = async () => Response.json(data.board);
@@ -122,5 +160,22 @@ test('the leaderboard gains a cost column and a cost chart only when amounts are
     })();
     assert.match(closedBoard, /花费图还在积累记录/);
     assert.doesNotMatch(closedBoard, /class="cost-chart"/);
+  } finally { restore(); }
+});
+
+test('the chart takes only positive costs, and the pricing read happens once even when it fails', async () => {
+  const restore = globals();
+  try {
+    const { scatter } = await import('../site/cost-chart.js');
+    const svg = scatter([{ key: 'z', name: 'Z', x: 0, y: 1000 }, { key: 'a', name: 'A', x: 1, y: 1100 }, { key: 'b', name: 'B', x: 2, y: 1050 }]);
+    assert.match(svg, /<svg class="cost-chart"/);
+    assert.doesNotMatch(svg, /<title>Z /, 'the zero point is not drawn');
+    assert.equal(scatter([{ key: 'z', name: 'Z', x: 0, y: 1000 }]), '');
+    let reads = 0;
+    globalThis.fetch = async () => { reads++; return Response.json({ error: 'not found' }, { status: 404 }); };
+    const { pricingInfo } = await import('../site/platform.js');
+    assert.deepEqual(await pricingInfo(), { showCost: false });
+    assert.deepEqual(await pricingInfo(), { showCost: false });
+    assert.equal(reads, 1, 'a missing endpoint is asked once per visit');
   } finally { restore(); }
 });

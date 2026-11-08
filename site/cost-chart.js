@@ -8,8 +8,12 @@ const W = 880, H = 440, M = { left: 58, right: 24, top: 34, bottom: 52 };
 const fmt = (n) => Math.round(n).toLocaleString('en');
 
 // x: 'multiple' (×, 1× is the question's median) or 'cost' (median cost per work, in CNY).
-// points: [{ key, name, model, x, y, status, frontier }]
-export function scatter(points, { x = 'multiple', connect = false, currency = 'CNY', fx } = {}) {
+// points: [{ key, name, model, x, y, status, frontier }]. A log axis has no place for 0: callers list
+// zero-cost entries beside the chart, and anything not finite and positive is left out here.
+export const plottable = (p) => Number.isFinite(p.x) && p.x > 0 && Number.isFinite(p.y);
+export function scatter(all, { x = 'multiple', connect = false, currency = 'CNY', fx } = {}) {
+  const points = all.filter(plottable);
+  if (!points.length) return '';
   const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
   const lo = Math.min(...xs, x === 'multiple' ? 1 : Infinity) / 1.25, hi = Math.max(...xs, x === 'multiple' ? 1 : -Infinity) * 1.25;
   const yStep = (Math.max(...ys) - Math.min(...ys)) > 300 ? 100 : 50;
@@ -18,8 +22,8 @@ export function scatter(points, { x = 'multiple', connect = false, currency = 'C
   const py = (v) => H - M.bottom - (v - yLo) / Math.max(yHi - yLo, 1) * (H - M.top - M.bottom);
   // Ticks at 1, 2 and 5 of each decade in range.
   const xTicks = [];
-  for (let d = 10 ** Math.floor(Math.log10(lo)); d <= hi; d *= 10) for (const m of [1, 2, 5]) if (d * m >= lo && d * m <= hi) xTicks.push(d * m);
-  const yTicks = []; for (let v = yLo; v <= yHi; v += yStep) yTicks.push(v);
+  for (let d = 10 ** Math.floor(Math.log10(lo)), n = 0; d <= hi && n < 12; d *= 10, n++) for (const m of [1, 2, 5]) if (d * m >= lo && d * m <= hi) xTicks.push(d * m);
+  const yTicks = []; for (let v = yLo; v <= yHi && yTicks.length < 40; v += yStep) yTicks.push(v);
   const xLabel = (v) => x === 'multiple' ? formatMultiple(v).replace(/\.?0+×$/, '×') : formatMoney(v, currency, fx);
   const front = points.filter((p) => p.frontier).sort((a, b) => a.x - b.x);
   const steps = front.slice(1).map((p, i) => `L${px(p.x).toFixed(1)},${py(front[i].y).toFixed(1)} L${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');

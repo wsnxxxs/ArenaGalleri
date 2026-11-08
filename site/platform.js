@@ -410,12 +410,9 @@ export function updateRememberedReviewWork(work) {
   remember(key, { ...data, works: data.works.map((item) => item.task === work.task && item.id === work.id ? { ...item, ...work } : item) });
 }
 // The price table and the server's switch for amounts (GET /api/pricing; contracts/usage.md). Read
-// once per visit; a missing endpoint or a failed read keeps amounts hidden and tries again next time.
+// once per visit; a missing endpoint or a failed read keeps amounts hidden for the rest of the visit.
 let pricingRead = null;
-export const pricingInfo = () => (pricingRead ??= api('pricing').catch(() => {
-  pricingRead = null;
-  return { showCost: false };
-}));
+export const pricingInfo = () => (pricingRead ??= api('pricing').catch(() => ({ showCost: false })));
 export async function apiRemembered(path, options) {
   const key = memoryKey(path);
   const generation = accountGeneration;
