@@ -430,8 +430,11 @@ export function mountBoard(container, ctx) {
     closeTips(tip);
     const wrap = tip.closest('.board-wrap')?.getBoundingClientRect(), box = tip.getBoundingClientRect();
     const height = tip.querySelector('.score-tip-text')?.offsetHeight ?? 0;
-    // The first row of a folded group opens downward too, so the group's heading stays readable.
-    const underHeading = tip.closest('tr')?.previousElementSibling?.classList.contains('board-group-head');
+    // The first visible row of a folded group opens downward too, so the group's heading stays readable.
+    // Rows hidden by the search are skipped.
+    let above = tip.closest('tr')?.previousElementSibling;
+    while (above?.hidden) above = above.previousElementSibling;
+    const underHeading = above?.classList.contains('board-group-head');
     tip.classList.toggle('is-below', Boolean(wrap) && (underHeading ? wrap.bottom - box.bottom > height + 8
       : box.top - wrap.top < height + 8 && wrap.bottom - box.bottom > box.top - wrap.top));
     tip.classList.add('is-open');
