@@ -168,6 +168,6 @@ export function warnings(usage) {
   }
   if (total > 2e9) out.push({ field: 'cacheRead', text: '合计超过 20 亿 token，检查单位' });
   if (n('requests') !== null && n('requests') > 10_000) out.push({ field: 'requests', text: '请求次数异常多，检查单位' });
-  if (n('durationSec') !== null && n('durationSec') > 48 * 3600) out.push({ field: 'durationSec', text: '耗时超过 48 小时，这里填的是分钟' });
+  if (n('durationSec') !== null && n('durationSec') > 48 * 3600) out.push({ field: 'durationSec', text: '生成耗时超过 48 小时，这里填的是分钟' });
   return out;
 }

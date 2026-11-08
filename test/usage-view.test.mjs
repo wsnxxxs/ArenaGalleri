@@ -9,7 +9,7 @@ import * as usage from '../site/usage.js';
 function view(pricing, { staff = false } = {}) {
   const source = readFileSync(new URL('../site/usage-view.js', import.meta.url), 'utf8')
     .replace(/^import [\s\S]*?;$/gm, '').replace(/^export /gm, '');
-  const context = { ...usage, esc: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`), store: { get: () => null },
+  const context = { ...usage, esc: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`), store: { get: () => null }, icon: () => '<svg></svg>',
     pricingInfo: () => Promise.resolve(pricing), isStaff: () => staff, locale: () => 'zh-CN' };
   vm.runInNewContext(`${source}\nglobalThis.t = { loadPricing, usageLine, cardUsage, usageBlock, revealUsage, revealCompare };`, context);
   return context.t;
@@ -23,7 +23,7 @@ test('with the switch off no amount appears anywhere, only tokens and time', asy
   await t.loadPricing();
   const a = work('a', 31_000, 61_000, { paid: { basis: 'subscription' } });
   assert.doesNotMatch(t.usageLine(a), /[¥$]/);
-  assert.match(t.usageLine(a), /1\.1M tok/);
+  assert.match(t.usageLine(a), /1\.1M token/);
   assert.doesNotMatch(t.usageBlock(a, { results: [a] }), /[¥$]|花费|实付|价格/);
   const compare = t.revealCompare(a, work('b', 10_000, 20_000), 'a');
   assert.match(compare, /你选的 A 用的 token 是 B 的 1\.0[0-9]* 倍|两边用的 token 差不多/);
@@ -41,7 +41,23 @@ test('with the switch on amounts lead, unpriced works say so, and the comparison
   assert.match(t.usageLine({ ...priced, model: 'unknown' }), /未定价/);
   const cheap = work('b', 1_000, 2_000, { cacheRead: 0 });
   assert.match(t.revealCompare(priced, cheap, 'b'), /A 花费是你选的 B 的 \d+ 倍/);
-  assert.match(t.usageBlock(priced, { results: [priced] }), /按官方标价折算/);
+  assert.match(t.usageBlock(priced, { results: [priced] }), /<h3>花费<\/h3>[\s\S]*<dt>花费<\/dt><dd>¥/);
+});
+
+test('the drawer gives each figure once, says what the tokens were, and keeps the breakdown folded', async () => {
+  const t = view({ showCost: false });
+  await t.loadPricing();
+  const a = work('a', 104_000, 61_000, { cacheRead: 3_100_000, reasoning: 23_000, requests: 41, durationSec: 1632 });
+  const block = t.usageBlock(a, { results: [a] });
+  assert.match(block, /<h3>用量<\/h3>/);
+  assert.match(block, /<dt>总 token<\/dt><dd>3\.3M<\/dd>[\s\S]*<dt>生成耗时<\/dt><dd>27 分 12 秒<\/dd>[\s\S]*<dt>请求次数<\/dt><dd>41 次<\/dd>/);
+  assert.equal(block.match(/3\.3M/g).length, 1, 'the total appears once');
+  assert.match(block, /其中 95% 是缓存读取，也就是每次请求重复读入的上下文。[\s\S]*模型写出 61k token，其中推理 23k。/);
+  assert.match(block, /<details class="usage-more-detail"><summary>构成明细/);
+  assert.doesNotMatch(block, /<details[^>]* open/);
+  assert.match(block, /输出（含推理）<small>模型写出的内容<\/small>/);
+  assert.match(block, /<dt>来源<\/dt><dd>会话日志<\/dd>/);
+  assert.match(t.usageLine(a), /^<span>3\.3M token<\/span><span class="usage-sep" aria-hidden="true">&nbsp;· <\/span><span>27 分 12 秒<\/span>$/);
 });
 
 test('administrators see the edit entry; readers see nothing for unrecorded works', async () => {

@@ -1816,16 +1816,25 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .result-usage { margin: 6px 0 0; color: var(--muted); font: 12px/1.6 var(--mono); }
 .result-usage .usage-money, .arena-usage-line .usage-money, .pane-usage .usage-money { color: var(--ink); font-weight: 600; }
 .usage-artifact, .usage-mono { font-family: var(--mono); font-size: 12.5px; }
-.usage-artifact > span { white-space: nowrap; }
+.usage-artifact > span:not(.usage-sep) { white-space: nowrap; }
 .usage-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .usage-block-head h3 { margin: 0; }
 .usage-block-head .badge { margin-left: 0; }
 .usage-block-head .btn { margin-left: auto; }
 .usage-block.is-empty .usage-block-head .fine { margin: 0; }
-.usage-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 14px 0 0; }
-.usage-total b { color: var(--ink); font: 600 26px/1.15 var(--mono); letter-spacing: -0.02em; }
-.usage-total span { color: var(--ink-2); font-size: 12.5px; }
-.usage-aside { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.usage-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px 14px; margin: 12px 0 0; }
+.usage-figures dt { color: var(--muted); font-size: 12px; }
+.usage-figures dd { margin: 2px 0 0; color: var(--ink); font: 600 19px/1.25 var(--mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.usage-figures dd small { display: block; color: var(--muted); font: 400 11.5px var(--sans); letter-spacing: 0; }
+.usage-says { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.7; }
+.usage-more-detail { margin-top: 8px; }
+.usage-more-detail summary { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); font-size: 13px; cursor: pointer; list-style: none; }
+.usage-more-detail summary::-webkit-details-marker { display: none; }
+.usage-more-detail summary .i { width: 14px; height: 14px; transform: rotate(90deg); transition: transform 0.2s var(--ease); }
+.usage-more-detail[open] summary .i { transform: rotate(-90deg); }
+.usage-more-detail .usage-table { margin-top: 6px; }
+.usage-more-detail .facts { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .usage-more-detail summary .i { transition: none; } }
 .usage-mix { display: flex; gap: 2px; height: 6px; margin: 14px 0 6px; overflow: hidden; border-radius: 3px; }
 .usage-mix i, .usage-key { display: block; min-width: 2px; background: var(--ink); }
 .usage-mix .is-cacheRead, .usage-key.is-cacheRead { background: color-mix(in srgb, var(--ink) 28%, var(--line-2)); }
@@ -1836,11 +1845,12 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .usage-table th, .usage-table td { padding: 6px 0; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
 .usage-table thead th { color: var(--muted); font-weight: 500; font-size: 11.5px; }
 .usage-table th[scope="row"], .usage-table thead th:first-child { color: var(--ink-2); font-weight: 400; text-align: left; }
-.usage-table td { color: var(--ink-2); font-family: var(--mono); }
+.usage-table th[scope="row"] small { display: block; margin: 1px 0 0 15px; color: var(--muted); font-size: 11.5px; white-space: normal; }
+.usage-table .usage-sub th[scope="row"] small { margin-left: 0; }
+.usage-table td { color: var(--ink-2); font-family: var(--mono); vertical-align: top; }
 .usage-table td + td { padding-left: 12px; }
 .usage-table .usage-sub th[scope="row"] { padding-left: 15px; color: var(--muted); }
 .usage-table .usage-sub td { color: var(--muted); }
-.usage-table tfoot th, .usage-table tfoot td { border-bottom: 0; color: var(--ink); font-weight: 600; }
 .usage-position h4 { margin: 18px 0 2px; color: var(--ink); font-size: 13px; }
 .usage-position svg { display: block; width: 100%; height: auto; overflow: visible; }
 .usage-position .fine { margin-top: 2px; }

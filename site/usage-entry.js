@@ -1,4 +1,4 @@
-// The administrators' 「生成用量」 block (token-cost design §5.6): in the upload form an administrator
+// The administrators' 「用量」 block (token-cost design §5.6): in the upload form an administrator
 // fills in, in 「管理 · 全部作品」 and from the preview drawer. Readers and ordinary members never see
 // it, and the server only takes writes from administrators.
 //
@@ -14,8 +14,8 @@ import { currencyNow, loadPricing, pricingNow } from './usage-view.js';
 
 // Fields in the order of the form; minutes for time, which is stored in seconds.
 const FIELDS = [
-  ['requests', '请求次数'], ['durationSec', '耗时（分钟）'],
-  ['input', '输入 token'], ['cacheRead', '缓存读取'], ['cacheWrite', '缓存写入'], ['output', '输出 token（含推理）'],
+  ['requests', '请求次数'], ['durationSec', '生成耗时（分钟）'],
+  ['input', '输入'], ['cacheRead', '缓存读取'], ['cacheWrite', '缓存写入'], ['output', '输出（含推理）'],
   ['reasoning', '其中推理（选填）'],
 ];
 const PAID = { '': '—', ...PAID_BASIS };
@@ -26,7 +26,7 @@ const shown = (key, value) => (!finite(value) ? '' : key === 'durationSec' ? Str
 
 export function usageEntryHtml() {
   return `<section class="usage-entry" data-usage-entry>
-    <h3 class="mini-heading">生成用量<span class="badge">仅管理员</span></h3>
+    <h3 class="mini-heading">用量<span class="badge">仅管理员</span></h3>
     <p class="field-hint">把工具结束时显示的用量统计，或 API 返回的 usage 粘贴进来，会自动识别。原文不保存，只保存识别出的数字；随这里的「保存」一起提交，不进审核队列。</p>
     <textarea class="input usage-paste" rows="3" data-usage-paste aria-label="粘贴用量统计" placeholder="Total cost: … / Token usage: … / {&quot;usage&quot;: …}"></textarea>
     <p class="usage-recognize"><button class="btn sm" type="button" data-usage-recognize>识别</button><span class="fine" role="status" data-usage-status></span></p>
@@ -37,7 +37,7 @@ export function usageEntryHtml() {
         <span class="usage-paid-row"><span class="usage-paid-money" data-usage-money></span>
         <select class="input" name="usage_paidBasis" aria-label="实付方式">${Object.entries(PAID).map(([value, text]) => `<option value="${value}">${text}</option>`).join('')}</select></span></div>
     </div>
-    <div class="field"><span class="field-label">数字来自</span><div class="seg usage-source" role="radiogroup" aria-label="数字来自">${Object.entries(SOURCES).map(([value, text]) => `<button type="button" role="radio" aria-checked="false" data-usage-source="${value}">${text}</button>`).join('')}</div></div>
+    <div class="field"><span class="field-label">来源</span><div class="seg usage-source" role="radiogroup" aria-label="来源">${Object.entries(SOURCES).map(([value, text]) => `<button type="button" role="radio" aria-checked="false" data-usage-source="${value}">${text}</button>`).join('')}</div></div>
     <div class="usage-sum" data-usage-sum></div>
     <p class="field-hint usage-error" role="alert" data-usage-error></p>
     <p class="fine" data-usage-meta>录入人与时间记进这件作品的管理记录，读者看不到。</p>
@@ -191,7 +191,7 @@ export function bindUsageEntry(block, { modelOf = () => null, draft = {} } = {})
       const fail = (text) => { problem.textContent = text; return { error: text }; };
       if (bad.length) return fail('用量里有无法识别的数字，请改正或清空');
       if (amountWithoutBasis) return fail('填写实付金额时请选择实付方式');
-      if (!empty && !source) return fail('请选择数字来自哪里');
+      if (!empty && !source) return fail('请选择数字的来源');
       const next = empty ? null : { ...usage, ...(paid ? { paid } : {}), source };
       const same = JSON.stringify(normal(next)) === JSON.stringify(normal(initial));
       return { usage: next, changed: !same };
@@ -236,7 +236,7 @@ export async function loadInto(entry, task, id) {
 export function openUsageSheet(work, { modelName } = {}) {
   void loadPricing();
   const sheet = openDialog({
-    title: '生成用量',
+    title: '用量',
     className: 'usage-sheet',
     body: `<form novalidate data-usage-form>${usageEntryHtml()}
       <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit">保存</button></div></form>`,

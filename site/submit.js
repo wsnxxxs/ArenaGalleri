@@ -122,7 +122,7 @@ export function uploadFlow(root, ctx, options) {
     draftTemplate: null, confirmedPrompt: null, fields: null, notice: null,
     // text: what was pasted for a text result, kept while the author goes back to change it.
     text: '', textFormat: 'md',
-    // usage: an administrator's 「生成用量」 entry while the form redraws; members never get the block.
+    // usage: an administrator's 「用量」 entry while the form redraws; members never get the block.
     usage: {},
   };
   let usageEntry = null;
