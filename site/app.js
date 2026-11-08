@@ -857,8 +857,7 @@ function resultCard(t, r) {
       <p class="result-model">${brandMark(m, 'brand-mark sm')}<b><span data-i18n-ignore>${esc(m.name)}</span></b>${resultBadges(r)}${aiJudged(t) ? aiScoreBadge(r) : ''}${platform.featured?.[t.id]?.models?.[modelKey(r)] === r.id ? '<span class="badge featured-badge" title="盲评票选出的代表作">代表作</span>' : ''}${statusBadge(r.status, { reason: r.reason })}</p>
       ${lead ? `<p class="lead-why">${t.cover === coverWork.id ? '管理员指定的本题封面' : platform.featured?.[t.id]?.cover === coverWork.id ? '盲评票选的代表作' : votedTask(t) ? '本题封面作品 · 盲评票数足够后改由票选决定' : '本题封面作品'}</p>` : ''}
       <h3><a href="${viewHref(t, r.id)}"><span data-i18n-ignore>${esc(r.title)}</span>${icon('arrow')}</a></h3>
-      <p class="result-by"><span data-i18n-ignore>${esc(authorName(r))}</span> <span>发布</span>${sourceLine(r) || r.tool ? ` · ${sourceLine(r) ? sourceHtml(r) : `<span data-i18n-ignore>${esc(r.tool)}</span>`}` : ''}${r.addedAt ? ` · <span data-i18n-date="${esc(r.addedAt)}">${formatDate(r.addedAt)}</span>` : ''}</p>
-      ${cardUsage(r)}
+      <p class="result-by"><span data-i18n-ignore>${esc(authorName(r))}</span> <span>发布</span>${sourceLine(r) || r.tool ? ` · ${sourceLine(r) ? sourceHtml(r) : `<span data-i18n-ignore>${esc(r.tool)}</span>`}` : ''}${r.addedAt ? ` · <span data-i18n-date="${esc(r.addedAt)}">${formatDate(r.addedAt)}</span>` : ''}</p>${cardUsage(r)}
       ${r.status === 'questioned' && r.reason ? `<p data-i18n-ignore class="result-reason">${icon('alert')}<span>${esc(r.reason)}</span></p>` : ''}
       <div class="result-foot">
         ${r.gallery.length ? `<button class="text-action" data-gallery="${esc(r.id)}">${icon('image')}截图 ${r.gallery.length}</button>` : ''}
@@ -1534,7 +1533,6 @@ function createViewer(t) {
         <select data-pane-pick="${i}" aria-label="${i === 0 ? '左' : '右'}栏的作品">${options()}</select>
         <button class="pane-close" data-close="${i}" title="关闭这一栏" aria-label="关闭这一栏">${icon('close')}</button>
       </div>
-      <p class="pane-usage" data-pane-usage hidden></p>
       <div class="pane-variants"></div>
       <div class="pane-body"></div>
     </section>`;
@@ -1575,12 +1573,11 @@ function createViewer(t) {
     }));
   }
 
-  // Side by side, each pane names its work's usage under the pane title (token-cost design §5.1).
+  // Side by side, each pane names its work's usage under the pane title (token-cost design §5.1); the
+  // line exists only then, so panes without usage stay exactly as they were.
   function drawPaneUsage(pane, r) {
-    const line = $('[data-pane-usage]', pane);
-    if (!line) return;
-    line.innerHTML = state.panes.length > 1 && r?.usage ? usageLine(r) : '';
-    line.hidden = !line.innerHTML;
+    $('.pane-usage', pane)?.remove();
+    if (state.panes.length > 1 && r?.usage) $('.pane-head', pane).insertAdjacentHTML('afterend', `<p class="pane-usage">${usageLine(r)}</p>`);
   }
 
   function renderGuide() {
@@ -1593,8 +1590,7 @@ function createViewer(t) {
         <button class="icon-btn" data-v="guide" aria-label="收起指南">${icon('close')}</button>
       </div>
       ${r.summary ? `<p class="guide-summary"><span data-i18n-ignore>${esc(r.summary)}</span></p>` : ''}
-      ${workFacts(t, r)}
-      ${usageBlock(r, t)}
+      ${workFacts(t, r)}${usageBlock(r, t)}
       ${platform.available ? `<div class="guide-block"><h3>表情</h3>${reactionBar(workKey(t, r), { locked: !interactive(r) }) || '<p class="fine">存疑作品不再接受互动。</p>'}</div>` : ''}
       ${g.presets?.length ? `<div class="guide-block"><h3>快速跳转</h3>
         <div class="presets">${g.presets.map((p) => `<button class="chip${state.queries[state.active] === p.query ? ' on' : ''}" data-preset="${esc(p.query)}"><span data-i18n-ignore>${esc(p.label)}</span></button>`).join('')}

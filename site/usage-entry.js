@@ -34,8 +34,7 @@ export function usageEntryHtml() {
     <div class="usage-grid">
       ${FIELDS.map(([key, label]) => `<label class="field" data-usage-field="${key}"><span class="field-label">${label}</span><input class="input" name="usage_${key}" inputmode="decimal" autocomplete="off"><span class="field-hint usage-warn" data-usage-warn="${key}"></span></label>`).join('')}
       <div class="field usage-paid"><span class="field-label">实付（选填）</span>
-        <span class="usage-paid-row"><input class="input" name="usage_paidAmount" inputmode="decimal" placeholder="金额" aria-label="实付金额" autocomplete="off">
-        <select class="input" name="usage_paidCurrency" aria-label="实付币种"><option value="USD">USD</option><option value="CNY">CNY</option></select>
+        <span class="usage-paid-row"><span class="usage-paid-money" data-usage-money></span>
         <select class="input" name="usage_paidBasis" aria-label="实付方式">${Object.entries(PAID).map(([value, text]) => `<option value="${value}">${text}</option>`).join('')}</select></span></div>
     </div>
     <div class="field"><span class="field-label">数字来自</span><div class="seg usage-source" role="radiogroup" aria-label="数字来自">${Object.entries(SOURCES).map(([value, text]) => `<button type="button" role="radio" aria-checked="false" data-usage-source="${value}">${text}</button>`).join('')}</div></div>
@@ -45,11 +44,38 @@ export function usageEntryHtml() {
   </section>`;
 }
 
+// What the fields say (texts: field → text). A field still showing the text a loaded or recognised value
+// was shown as (exact) keeps that value exactly; typed minutes become seconds. paid comes from the amount
+// fields when they are drawn, otherwise from the record as loaded, so a save never drops it.
+export function readFields(texts, exact, { amount: amountText = '', currency = 'USD', basis = '' } = {}) {
+  const usage = {}, bad = [];
+  for (const [key] of FIELDS) {
+    const text = texts[key] ?? '';
+    if (exact[key] && text === exact[key].text) { if (finite(exact[key].value)) usage[key] = exact[key].value; continue; }
+    const n = parseAmount(text);
+    if (n === null) bad.push(key);
+    else if (n !== undefined) usage[key] = key === 'durationSec' ? Math.round(n * 60 * 1000) / 1000 : Math.round(n);
+  }
+  const amount = parseAmount(amountText);
+  if (amount === null) bad.push('paidAmount');
+  const paid = basis ? { basis, ...(finite(amount) ? { amount, currency } : {}) } : null;
+  return { usage, paid, bad, amountWithoutBasis: finite(amount) && !basis };
+}
+
+// The amount paid and its currency are amounts too: they are drawn only while the server shows amounts.
+const MONEY = `<input class="input" name="usage_paidAmount" inputmode="decimal" placeholder="金额" aria-label="实付金额" autocomplete="off">
+  <select class="input" name="usage_paidCurrency" aria-label="实付币种"><option value="USD">USD</option><option value="CNY">CNY</option></select>`;
+
 // Binds a block drawn by usageEntryHtml. `modelOf()` gives the work's current model { id, name } for
 // the conversion; `draft` (any object) keeps what was typed across redraws of the form around it.
 // read() → { usage, changed, error }: usage null means the record is to be removed.
 export function bindUsageEntry(block, { modelOf = () => null, draft = {} } = {}) {
-  let initial = null, initialText = {}, source = draft.source ?? null, recognised = draft.recognised ?? null;
+  let initial = null, source = draft.source ?? null, recognised = draft.recognised ?? null;
+  // exact: per field, the text a stored or recognised value was shown as and that value. While the field
+  // still shows that text, the value is saved as it was: 35m 7.9s stays 2107.9 seconds, not 35.1 minutes.
+  const exact = draft.exact ??= {};
+  // money: the paid amount and currency while their fields are not drawn; a record keeps them on save.
+  let money = draft.money ?? { amount: '', currency: 'USD' };
   const input = (key) => block.querySelector(`[name="usage_${key}"]`);
   const status = $('[data-usage-status]', block), sum = $('[data-usage-sum]', block), problem = $('[data-usage-error]', block);
 
@@ -58,22 +84,29 @@ export function bindUsageEntry(block, { modelOf = () => null, draft = {} } = {})
     draft.source = value;
     $$('[data-usage-source]', block).forEach((b) => b.setAttribute('aria-checked', String(b.dataset.usageSource === value)));
   }
-  // The numbers in the fields; a field that still shows what was loaded keeps the stored value exactly.
+  function setExact(key, value) {
+    input(key).value = shown(key, value);
+    exact[key] = { text: input(key).value, value: finite(value) ? value : undefined };
+  }
   function values() {
-    const usage = {}, bad = [];
-    for (const [key] of FIELDS) {
-      const text = input(key).value;
-      if (initial && text === initialText[key]) { if (finite(initial[key])) usage[key] = initial[key]; continue; }
-      const n = parseAmount(text);
-      if (n === null) bad.push(key);
-      else if (n !== undefined) usage[key] = key === 'durationSec' ? Math.round(n * 60 * 10) / 10 : Math.round(n);
-    }
-    const amount = parseAmount(input('paidAmount').value), basis = input('paidBasis').value;
-    if (amount === null) bad.push('paidAmount');
-    const paid = basis ? { basis, ...(finite(amount) ? { amount, currency: input('paidCurrency').value } : {}) } : null;
-    return { usage, paid, bad, amountWithoutBasis: finite(amount) && !basis };
+    const shownMoney = Boolean(input('paidAmount'));
+    return readFields(Object.fromEntries(FIELDS.map(([key]) => [key, input(key).value])), exact, {
+      amount: shownMoney ? input('paidAmount').value : money.amount, currency: shownMoney ? input('paidCurrency').value : money.currency,
+      basis: input('paidBasis').value });
+  }
+  // Draws or removes the amount and currency fields with the switch, keeping what they held.
+  function syncMoney() {
+    const slot = $('[data-usage-money]', block), want = costShown(pricingNow());
+    if (want && !slot.firstChild) {
+      slot.innerHTML = MONEY;
+      input('paidAmount').value = money.amount;
+      input('paidCurrency').value = money.currency;
+    } else if (!want && slot.firstChild) slot.replaceChildren();
+    if (input('paidAmount')) money = { amount: input('paidAmount').value, currency: input('paidCurrency').value };
+    draft.money = money;
   }
   function refresh() {
+    syncMoney();
     const { usage, bad } = values();
     for (const [key] of FIELDS) {
       const note = $(`[data-usage-warn="${key}"]`, block);
@@ -89,17 +122,16 @@ export function bindUsageEntry(block, { modelOf = () => null, draft = {} } = {})
       ? `<p><span><span>按</span> <span data-i18n-ignore>${esc(model?.name ?? '')}</span> <span>官方标价折算</span></span><b>${esc(formatMoney(cost.total, currencyNow(), pricing.fx))}</b></p>
         <p class="fine"><span>${esc(`合计 ${formatTokens(tokens)} token`)}</span>${pricing.asOf ? ` · <span>${esc(`价格表 ${pricing.asOf}`)}</span>` : ''}${tool ? ` · ${tool}` : ''}</p>`
       : finite(tokens) ? `<p><span>${esc(`合计 ${formatTokens(tokens)} token`)}</span>${costShown(pricing) && model ? ' <span class="fine">未定价，只记 token</span>' : ''}</p>` : '';
-    draft.texts = Object.fromEntries([...FIELDS.map(([key]) => key), 'paidAmount', 'paidCurrency', 'paidBasis'].map((key) => [key, input(key).value]));
+    draft.texts = Object.fromEntries([...FIELDS.map(([key]) => key), 'paidBasis'].map((key) => [key, input(key).value]));
   }
   // Fills the fields from a record; loaded records become the baseline for "changed".
   function fill(usage, { baseline = false } = {}) {
-    for (const [key] of FIELDS) input(key).value = shown(key, usage?.[key]);
-    input('paidAmount').value = finite(usage?.paid?.amount) ? String(usage.paid.amount) : '';
-    input('paidCurrency').value = usage?.paid?.currency ?? 'USD';
+    for (const [key] of FIELDS) setExact(key, usage?.[key]);
+    money = { amount: finite(usage?.paid?.amount) ? String(usage.paid.amount) : '', currency: usage?.paid?.currency ?? 'USD' };
+    $('[data-usage-money]', block).replaceChildren();
     input('paidBasis').value = usage?.paid?.basis ?? '';
     if (baseline) {
       initial = usage ?? null;
-      initialText = Object.fromEntries(FIELDS.map(([key]) => [key, input(key).value]));
       setSource(usage?.source ?? null);
     }
     refresh();
@@ -118,7 +150,7 @@ export function bindUsageEntry(block, { modelOf = () => null, draft = {} } = {})
     recognised = result;
     draft.recognised = result;
     // Only what the paste contains replaces a field; numbers typed by hand for the rest stay.
-    for (const [key] of FIELDS) if (finite(result.usage[key])) input(key).value = shown(key, result.usage[key]);
+    for (const [key] of FIELDS) if (finite(result.usage[key])) setExact(key, result.usage[key]);
     if (result.usage.source && SOURCES[result.usage.source]) setSource(result.usage.source);
     else if (!source || SOURCE_OF[result.kind]) setSource(SOURCE_OF[result.kind] ?? 'log');
     // The pasted text is not kept: only the numbers move into the fields.
@@ -139,10 +171,17 @@ export function bindUsageEntry(block, { modelOf = () => null, draft = {} } = {})
   return {
     fill,
     refresh,
+    // After a failed read nothing in the block can be edited or saved, and it says why.
+    disable(text) {
+      $$('input, select, textarea, button', block).forEach((control) => { control.disabled = true; });
+      block.classList.add('is-disabled');
+      problem.textContent = text;
+    },
     showMeta(record) {
-      const who = (actor) => esc(actor?.name ?? '系统导入');
+      // An account name stays as written; the fallback for imports is interface text and translates.
+      const who = (actor) => (actor?.name ? `<span data-i18n-ignore>${esc(actor.name)}</span>` : '<span>系统导入</span>');
       $('[data-usage-meta]', block).innerHTML = record?.createdAt
-        ? `<span>录入</span> <span data-i18n-ignore>${who(record.createdBy)}</span> · <span data-i18n-time="${esc(record.createdAt)}">${formatTime(record.createdAt)}</span>${record.updatedAt && record.updatedAt !== record.createdAt ? ` · <span>修改</span> <span data-i18n-ignore>${who(record.updatedBy)}</span> · <span data-i18n-time="${esc(record.updatedAt)}">${formatTime(record.updatedAt)}</span>` : ''} · <span>读者看不到录入人与时间。</span>`
+        ? `<span>录入</span> ${who(record.createdBy)} · <span data-i18n-time="${esc(record.createdAt)}">${formatTime(record.createdAt)}</span>${record.updatedAt && record.updatedAt !== record.createdAt ? ` · <span>修改</span> ${who(record.updatedBy)} · <span data-i18n-time="${esc(record.updatedAt)}">${formatTime(record.updatedAt)}</span>` : ''} · <span>读者看不到录入人与时间。</span>`
         : '录入人与时间记进这件作品的管理记录，读者看不到。';
     },
     read() {
@@ -179,7 +218,7 @@ export async function loadInto(entry, task, id) {
   } catch (error) {
     entry.fill(null, { baseline: true });
     if (error.status === 404) return true;
-    toast(`用量没有读出：${error.message}`);
+    entry.disable(`用量没有读出（${error.message}），这次保存不会改动用量。关闭后重新打开再录入。`);
     return false;
   }
 }

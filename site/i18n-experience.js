@@ -446,7 +446,7 @@ Object.assign(messages, {
   '用量里有无法识别的数字，请改正或清空': 'Some usage fields are not numbers. Correct or clear them',
   '填写实付金额时请选择实付方式': 'Choose how it was paid when entering an amount',
   '请选择数字来自哪里': 'Choose where the numbers came from',
-  '用量没有读出：{message}': 'Usage could not be loaded: {message}',
+  '用量没有读出（{message}），这次保存不会改动用量。关闭后重新打开再录入。': 'Usage could not be loaded ({message}). This save will not change usage. Close and reopen to record it.',
   '用量已保存': 'Usage saved', '用量记录已删除': 'Usage record deleted',
   '作品已提交，用量没有保存：{message}。可在「管理 · 全部作品」里补录。': 'The work was submitted but its usage was not saved: {message}. You can add it under Manage · All works.',
   '信息、展示设置与用量没有改动': 'No changes to details, display settings or usage',

@@ -144,7 +144,7 @@ export function usageBlock(work, task) {
 // ---- blind vote, after the reveal --------------------------------------------------------
 
 // A line under a revealed work's name; empty without a record, so only recorded sides show one.
-export const revealUsage = (work) => (work?.usage ? `<div class="arena-usage" data-usage>${usageLine(work, { extra: true })}</div>` : '');
+export const revealUsage = (work) => (work?.usage ? `<div class="arena-usage-line" data-usage>${usageLine(work, { extra: true })}</div>` : '');
 
 // The two sides side by side once both are recorded: amounts while they are on, tokens otherwise.
 // `chosen` is the side the reader picked ('a', 'b' or anything else for a tie).
@@ -172,4 +172,3 @@ export function revealCompare(a, b, chosen) {
     <div class="arena-compare-bars" aria-hidden="true">${row('a', va)}${row('b', vb)}</div>
   </div>`;
 }
-

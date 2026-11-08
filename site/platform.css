@@ -1807,10 +1807,8 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .usage-dot.is-own { fill: var(--ink); stroke: var(--ink); }
 /* Side by side, each pane names its usage under the pane title. */
 .pane-usage { margin: 0; padding: 5px 12px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--muted); font: 12px/1.5 var(--mono); }
-.pane-usage[hidden] { display: none; }
 /* After a blind vote: a line under each name, and the two side by side in the result bar. */
 .arena-usage-line { padding: 5px 14px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font: 12px/1.5 var(--mono); }
-.arena-usage-line[hidden] { display: none; }
 .arena-compare { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, min(420px, 48%)); align-items: center; gap: 6px 20px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
 .arena-compare p { display: grid; gap: 2px; margin: 0; }
 .arena-compare p b { color: var(--ink); font-size: 14px; font-weight: 600; }
