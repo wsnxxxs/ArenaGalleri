@@ -99,6 +99,29 @@ test('a question with one record shows that record whole instead of a lone bar',
     assert.match(zeroBox.innerHTML, /1 件作品的体量为 0，画在最左端。/);
     assert.match(zeroBox.innerHTML, /<i style="left:0\.00%"><\/i>/, 'the zero sits at the left end');
     zeroView.destroy();
+    // Every mark of the strip stays on it, whatever the mix of zero and positive sizes.
+    const strip = async (sizes, ownIndex) => {
+      const results = sizes.map((tokens, i) => i === ownIndex
+        ? { ...work(`s${i}`, 'm1', 'Max', 1000), artifact: { files: 1, lines: 10, bytes: 100, tokens } }
+        : sized(`s${i}`, tokens));
+      const holder = box();
+      const view = mountTaskUsage(holder, viewCtx({ id: 'q4', results }, OFF));
+      await view.ready; view.destroy();
+      const dots = holder.innerHTML.match(/<div class="usage-dots"[^]*?<\/div>/)?.[0] ?? '';
+      return { html: holder.innerHTML, dots, lefts: [...dots.matchAll(/left:(-?[\d.]+)%/g)].map((m) => Number(m[1])) };
+    };
+    const half = await strip([0, 0, 1000, 2000], 2);
+    assert.match(half.html, /<span>中位数<\/span> <span>500 token<\/span>/);
+    assert.ok(half.lefts.length && half.lefts.every((x) => x >= 0 && x <= 100), `half zero: ${half.lefts}`);
+    const medianMark = Number(half.dots.match(/<s style="left:([\d.]+)%/)[1]);
+    assert.ok(medianMark >= 6 && medianMark <= 100, 'a positive median is drawn on the positive part, not pushed to 0');
+    const allZero = await strip([0, 0, 0], 0);
+    assert.equal(allZero.dots, '', 'nothing to draw on a log strip');
+    assert.match(allZero.html, /<span>交付代码 10 行、0 token<\/span>/);
+    for (const [label, sizes, ownIndex] of [['one positive', [0, 0, 1000], 2], ['median 0', [0, 0, 0, 1000], 3], ['this work at 0', [0, 1000, 2000], 0], ['no zeros', [500, 1000, 2000], 1]]) {
+      const { lefts, dots } = await strip(sizes, ownIndex);
+      assert.ok(dots && lefts.every((x) => x >= 0 && x <= 100), `${label}: ${lefts}`);
+    }
     assert.doesNotMatch(container.innerHTML, /[¥$]/);
     view.destroy();
     // Amounts on: the card keeps its currency switch.

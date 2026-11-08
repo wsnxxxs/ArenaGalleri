@@ -190,11 +190,13 @@ export function mountTaskUsage(container, ctx) {
     const place = shorter >= longer ? `，比本题 ${Math.round(shorter / lengths.length * 100)}% 的作品长。` : `，比本题 ${Math.round(longer / lengths.length * 100)}% 的作品短。`;
     const mid = median(lengths), positive = lengths.filter((v) => v > 0), zeros = lengths.length - positive.length;
     const sentence = `<p><span>${what}</span><span>${place}</span></p>`;
-    if (positive.length < 2) return `<div class="usage-size">${sentence}</div>`;
-    const lo = Math.min(...positive), hi = Math.max(...positive), span = Math.log(hi / lo) || 1;
-    // With zero sizes present, the strip keeps its left end for them and draws the rest after a gap.
+    // The log strip spans every positive mark it draws: the sizes, a positive median and this work. Zero
+    // sizes (and a zero median) sit at the left end, after which the rest start; nothing leaves 0–100%.
+    const domain = [...positive, ...(mid > 0 ? [mid] : []), ...(own.value > 0 ? [own.value] : [])];
+    if (!domain.length) return `<div class="usage-size">${sentence}</div>`;
+    const lo = Math.min(...domain), hi = Math.max(...domain), span = Math.log(hi / lo) || 1;
     const gap = zeros ? 6 : 0;
-    const at = (v) => (v > 0 ? gap + Math.log(v / lo) / span * (100 - gap) : 0).toFixed(2);
+    const at = (v) => Math.min(100, Math.max(0, v > 0 ? gap + Math.log(v / lo) / span * (100 - gap) : 0)).toFixed(2);
     const label = (text, v) => `<span><span>${text}</span> <span>${display(v, 'artifact')}</span></span>`;
     return `<div class="usage-size">${sentence}
       <div class="usage-dots" aria-hidden="true">${lengths.map((v) => `<i style="left:${at(v)}%"></i>`).join('')}<s style="left:${at(mid)}%"></s><b style="left:${at(own.value)}%"></b></div>
