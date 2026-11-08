@@ -19,7 +19,8 @@ const VERDICT = { a: '你认为 A 更好', b: '你认为 B 更好', tie: '你认
 const guidedTrial = () => globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
 // Every trial question has the same four answers (keys A S X D); a tie says whether both works were good or both bad.
 const PICKS = { a: 'A 更好', good: '都很好', bad: '都不好', b: 'B 更好' };
-// The trial's overall question. A pair from a pilot category first asks about one aspect (测评点).
+// The trial's overall question. A pair from a pilot category also asks about one aspect (测评点): after the
+// overall one when the server says `aspectOrder: 'after'`, before it otherwise.
 const OVERALL = { question: '哪个的综合效果，你更满意？', keyword: '综合效果', hint: '整体来看，你更愿意用哪一个。' };
 // The question card stays open unless the reader folds it to one line; the choice is kept on this device.
 const COMPACT = 'arena-question-compact';
@@ -43,6 +44,9 @@ const CHALLENGE = {
   guest_interval: '未登录时每评 5 组需要确认一次。登录后就不用这么频繁了。',
   rapid_choices: '最近几组选得很快。盲评需要先体验两件作品再做选择。你的选择已保留，确认后立即提交。',
 };
+// After a skip, the next pair may say why the last one was skipped. Optional, open to everyone, never scored.
+const SKIP_REASONS = { recognized: '认出了模型', broken: '有一边打不开或报错', unsure: '不会判断' };
+const SKIP_REASON_MS = 6000;
 // Said once per tab: a pick on a curated question by someone who has not passed the test.
 let curatedHinted = false;
 
@@ -197,7 +201,7 @@ function lobby(root, ctx) {
 function match(root, ctx, first, scope) {
   let task = first;
   const guided = guidedTrial();
-  const state = { random: Boolean(scope), scope: scope ?? ctx.DATA.tasks.filter(isOpen), pin: pinned(), tally: { win: 0, tie: 0, loss: 0 }, place: '', done: new Set(), unavailable: false, prefetch: null, match: null, result: null, ready: {}, seen: {}, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', round: 0, counted: 0, busy: false, prompt: false, slow: false, error: null, held: null, needVerify: null, step: 'overall', aspectPick: null, compact: store.get(COMPACT) === '1', hint: false };
+  const state = { random: Boolean(scope), scope: scope ?? ctx.DATA.tasks.filter(isOpen), pin: pinned(), tally: { win: 0, tie: 0, loss: 0 }, place: '', done: new Set(), unavailable: false, prefetch: null, match: null, result: null, ready: {}, seen: {}, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', round: 0, counted: 0, busy: false, prompt: false, slow: false, error: null, held: null, needVerify: null, step: 'overall', aspectPick: null, overallPick: null, compact: store.get(COMPACT) === '1', peek: false, hint: false };
   const mobile = () => matchMedia('(max-width: 860px)').matches;
   const timers = new Set(), frameLoads = new Map();
   // Two holds start when both works have loaded: 5 seconds before a vote, 3 before a skip.
@@ -300,7 +304,19 @@ function match(root, ctx, first, scope) {
   const canVote = () => Boolean(state.match && !state.result && !state.held && bothReady() && voteWait() <= 0 && (!mobile() || (state.seen.a && state.seen.b)));
   // A pair that will not load can always be skipped; a loaded one only after its short look.
   const canSkip = () => Boolean(state.match && !state.result && !state.busy && skipWait() <= 0);
+  // In the after order the overall pick waits on the page while the aspect is asked; both go in one vote.
+  const aspectLast = () => Boolean(state.match?.aspect) && state.match.aspectOrder === 'after';
+  // The answer button to mark: the one being sent or held for a check, or a kept overall pick on its way back.
+  // An after-order vote leaves from the aspect question, so its sending mark is the aspect answer.
+  function marked() {
+    const sending = state.pendingPick ?? state.held;
+    if (!aspectLast()) return sending;
+    return state.step === 'aspect' ? (sending ? state.aspectPick : null) : sending ?? state.overallPick;
+  }
   const live = (text) => { const node = $('[data-live]', el); if (node) node.textContent = text; };
+  // A floating card folds to one line while a mouse is over the works, so turning a model is not blocked.
+  // Not while a key has put focus on the card: folding would hide the focused control.
+  const peeking = () => guided && state.peek && !state.compact && !state.held && !state.needVerify && !mobile() && !$('[data-bar] :focus-visible', el);
 
   const stopGate = () => hold.stop();
   const resetGate = () => { readyController?.abort(); hold.reset(); shownStatus = ''; };
@@ -365,7 +381,11 @@ function match(root, ctx, first, scope) {
     const unseen = mobile() && !(state.seen.a && state.seen.b) ? (state.seen.a ? 'B' : 'A') : '';
     if (voteWait() > 0) return unseen ? `${seconds(voteWait())} 秒后可投票 · 请先切换到作品 ${unseen} 看一看` : `先体验一下，${seconds(voteWait())} 秒后可以投票`;
     if (unseen) return `请先切换到作品 ${unseen} 看一看`;
-    if (platform.user) return !guided ? '体验过两件作品后，选出你更认可的一件' : state.step === 'aspect' ? '答完这题，还有一道综合题' : '选完即揭晓两边的模型';
+    if (platform.user) {
+      if (!guided) return '体验过两件作品后，选出你更认可的一件';
+      if (aspectLast()) return state.step === 'aspect' ? `综合：${PICKS[state.overallPick]}` : '选完进入第 2 题，暂不提交';
+      return state.step === 'aspect' ? '答完这题，还有一道综合题' : '选完即揭晓两边的模型';
+    }
     return '未登录：选择计入大众榜，登录并通过资格考试后同时计入精选榜';
   }
 
@@ -377,15 +397,17 @@ function match(root, ctx, first, scope) {
     const node = $('[data-status]', bar);
     if (node && shownStatus !== text) { shownStatus = text; node.textContent = text; }
     const disabled = !(canVote() && !state.busy);
+    const mark = marked();
     $$('.vote-actions [data-vote]', bar).forEach((b) => {
       if (b.disabled !== disabled) b.disabled = disabled;
-      b.classList.toggle('is-held', b.dataset.vote === (state.pendingPick ?? state.held));
+      b.classList.toggle('is-held', b.dataset.vote === mark);
     });
+    $$('[data-a="repick"], [data-a="skip-aspect"]', bar).forEach((b) => { b.disabled = state.busy; });
     const skip = $('.vote-skip', bar);
     const label = skipLabel();
     const skipDisabled = !canSkip();
-    if (skip.disabled !== skipDisabled) skip.disabled = skipDisabled;
-    if (skip.dataset.label !== label) { skip.dataset.label = label; skip.textContent = label; }
+    if (skip && skip.disabled !== skipDisabled) skip.disabled = skipDisabled;
+    if (skip && skip.dataset.label !== label) { skip.dataset.label = label; skip.textContent = label; }
     const line = $('[data-gate]', bar);
     if (line && voteWait() <= 0) line.classList.add('is-done');
   }
@@ -409,11 +431,14 @@ function match(root, ctx, first, scope) {
       return;
     }
     const disabled = canVote() && !state.busy ? '' : ' disabled';
-    const held = (pick) => ((state.pendingPick ?? state.held) === pick ? ' is-held' : '');
+    const mark = marked();
+    const held = (pick) => (mark === pick ? ' is-held' : '');
     const counting = voteWait() > 0;
     shownStatus = status();
     const gate = counting ? `<span class="vote-gate" data-gate style="--gate: ${viewMs()}ms; animation-delay: -${Math.round(hold.waited)}ms" aria-hidden="true"></span>` : '';
-    const line = `<p class="vote-status"><span data-status>${shownStatus}</span>${!platform.user && state.match ? ' <button class="link" data-auth="login">登录</button>' : ''}${state.needVerify ? ' <button class="link" data-a="verify">继续验证</button>' : ''}</p>`;
+    // On the aspect question of the after order, the line recalls the overall pick and offers to change it.
+    const repick = guided && aspectLast() && state.step === 'aspect' ? ` <span aria-hidden="true">·</span> <button class="link" type="button" data-a="repick"${state.busy ? ' disabled' : ''}>改选</button>` : '';
+    const line = `<p class="vote-status"><span data-status>${shownStatus}</span>${repick}${!platform.user && state.match ? ' <button class="link" data-auth="login">登录</button>' : ''}${state.needVerify ? ' <button class="link" data-a="verify">继续验证</button>' : ''}</p>`;
     const skip = `<button class="link vote-skip" data-vote="skip" data-label="${skipLabel()}"${canSkip() ? '' : ' disabled'}>${skipLabel()}</button>`;
     if (!guided) {
       bar.innerHTML = `<div class="vote-in">
@@ -430,19 +455,23 @@ function match(root, ctx, first, scope) {
     }
     // The question arrives with its pair; until then only the answers show. Folded, the card keeps the
     // question and the status on one line, and the keys still answer. A held or unverified vote unfolds
-    // it, because its status line says what to do next.
+    // it, because its status line says what to do next. Peeking folds it the same way while the pointer
+    // is over the works, without remembering it.
     const aspect = state.match && state.step === 'aspect' ? state.match.aspect : null;
     const ask = state.match ? aspect ?? OVERALL : null;
     const folded = state.compact && !state.held && !state.needVerify;
-    const steps = state.match?.aspect ? (aspect ? '1 / 2' : '2 / 2') : '';
-    // A new question fades in, so the move from the aspect question to the overall one is noticed.
+    const steps = !state.match?.aspect ? '' : (Boolean(aspect) === aspectLast() ? '2 / 2' : '1 / 2');
+    // A new question fades in, so the move from one question to the other is noticed.
     const fresh = Boolean(ask) && ask.question !== shownAsk;
     shownAsk = ask?.question ?? null;
     const toggle = `<button class="q-toggle" type="button" data-a="compact" aria-expanded="${!folded}">${folded ? '展开' : '收起'}<i aria-hidden="true"></i></button>`;
     const question = ask ? `<p class="q-text${fresh ? ' is-new' : ''}">${questionText(ask)}</p><p class="q-hint" id="arena-q-hint"${state.hint ? '' : ' hidden'}><span>看哪里：</span>${esc(ask.hint)}</p>` : '';
-    const head = !ask ? '' : folded ? `<span class="q-step">${steps || '综合题'}</span>`
-      : `<div class="q-head"><span>${aspect ? '引导题' : '综合题'}${steps ? ` · ${steps}` : ''}</span><span>${aspect ? `<span>${esc(aspect.dimensionName)}</span> · ` : ''}<span>测试版，不计入榜单</span></span>${toggle}</div>`;
-    bar.innerHTML = `<div class="vote-in${ask ? ' vote-q' : ''}${folded ? ' is-compact' : ''}">
+    const step = `<span class="q-step">${steps || '综合题'}</span>`;
+    const head = !ask ? '' : folded ? step
+      : `<div class="q-head"><span>${aspect ? '测评点' : '综合题'}${steps ? ` · ${steps}` : ''}</span><span>${aspect ? `<span>${esc(aspect.dimensionName)}</span> · ` : ''}<span>测试版，不计入榜单</span></span>${toggle}</div>${step}`;
+    // The last question of the after order has no pair skip: its overall pick would be lost. 改选 leads back to it.
+    const skipAspect = aspect ? `<button class="link" type="button" data-a="skip-aspect"${state.busy ? ' disabled' : ''}>${folded ? '跳过这题' : aspectLast() ? '看不出，跳过这题并揭晓' : '看不出，跳过这题'}</button>` : '';
+    bar.innerHTML = `<div class="vote-in${ask ? ' vote-q' : ''}${folded ? ' is-compact' : ''}${ask && peeking() ? ' is-peek' : ''}">
       ${gate}
       ${head}${question}
       ${line}
@@ -452,7 +481,7 @@ function match(root, ctx, first, scope) {
         <button class="btn vote tie${held('bad')}" data-vote="bad"${disabled}><kbd>X</kbd>都不好</button>
         <button class="btn vote${held('b')}" data-vote="b" aria-label="B 更好"${disabled}><span class="ab">B</span>更好<kbd>D</kbd></button>
       </div>
-      <p class="q-links">${aspect ? `<button class="link" type="button" data-a="skip-aspect"${state.busy ? ' disabled' : ''}>${folded ? '跳过这题' : '看不出，跳过这题'}</button>` : ''}${skip}</p>
+      <p class="q-links">${skipAspect}${aspect && aspectLast() ? '' : skip}</p>
       ${folded ? toggle : ''}
     </div>`;
   }
@@ -462,15 +491,31 @@ function match(root, ctx, first, scope) {
     if (at < 0) return esc(question);
     return `${esc(question.slice(0, at))}<button class="kw" type="button" data-a="hint" aria-expanded="${state.hint}" aria-controls="arena-q-hint" title="看哪里">${esc(keyword)}</button>${esc(question.slice(at + keyword.length))}`;
   }
-  // An aspect answer stays on the page until the overall one is sent with it; skipping it skips only that question.
+  // The first of two questions only keeps its answer on the page and moves to the second; the second sends
+  // both in one vote. Skipping the aspect question (pick null) skips only that question.
   function answer(pick) {
-    if (state.step !== 'aspect') return vote(pick);
     if (state.busy || (pick !== null && !canVote())) return;
+    const onAspect = state.step === 'aspect';
+    if (!state.match?.aspect || onAspect === aspectLast()) {
+      if (onAspect) state.aspectPick = pick;
+      return vote(onAspect ? state.overallPick : pick);
+    }
     const focused = $('[data-bar]', el).contains(document.activeElement);
-    Object.assign(state, { aspectPick: pick, step: 'overall', hint: !state.compact });
+    if (state.step === 'aspect') Object.assign(state, { aspectPick: pick, step: 'overall' });
+    else Object.assign(state, { overallPick: pick, step: 'aspect' });
+    state.hint = !state.compact;
     drawBar();
     if (focused) $('.vote-actions [data-vote]', el)?.focus({ preventScroll: true });
-    live(`下一题：${OVERALL.question}`);
+    live(`下一题：${(state.step === 'aspect' ? state.match.aspect : OVERALL).question}`);
+  }
+  // 改选: back to the overall question of the after order, its pick still marked.
+  function repick() {
+    if (state.busy || state.result || !aspectLast() || state.step !== 'aspect') return;
+    const focused = $('[data-bar]', el).contains(document.activeElement);
+    Object.assign(state, { step: 'overall', aspectPick: null, needVerify: null, hint: !state.compact });
+    drawBar();
+    if (focused) $(`.vote-actions [data-vote="${state.overallPick}"]`, el)?.focus({ preventScroll: true });
+    live(`改选：${OVERALL.question}`);
   }
   function setCompact(compact) {
     Object.assign(state, { compact, hint: !compact });
@@ -715,8 +760,62 @@ function match(root, ctx, first, scope) {
     strip.className = 'arena-switched';
     strip.setAttribute('role', 'status');
     strip.innerHTML = `<span>这一组换成了</span><b data-i18n-ignore>${esc(task.title)}</b><button class="link" type="button" data-a="open-prompt">看提示词</button>`;
-    $('.arena-stage', el).append(strip);
+    notes().append(strip);
     later(() => { strip.classList.add('is-gone'); later(() => strip.remove(), 600); }, 4500);
+  }
+  // Notes over the top of the pair stack in one column: why the last pair was skipped, then a task change.
+  function notes() {
+    const stage = $('.arena-stage', el);
+    let box = $(':scope > .arena-notes', stage);
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'arena-notes';
+      stage.append(box);
+    }
+    return box;
+  }
+
+  // Skipping moves on at once; the next pair then offers the reasons for a few seconds. Nothing is recorded
+  // unless one is picked, and each skipped pair sends at most one reason.
+  let skipReason = null;
+  function askSkipReason(matchId) {
+    const strip = document.createElement('div');
+    strip.className = 'arena-why';
+    strip.setAttribute('role', 'group');
+    strip.setAttribute('aria-label', '上一组为什么跳过');
+    strip.innerHTML = `<p class="arena-why-ask"><b>上一组为什么跳过？</b><small>可选，不影响计分</small></p>
+      <span class="arena-why-picks">${Object.entries(SKIP_REASONS).map(([reason, text]) => `<button class="arena-why-pick" type="button" data-a="skip-reason" data-reason="${reason}">${text}</button>`).join('')}</span>
+      <button class="arena-why-close" type="button" data-a="skip-reason-close" title="关闭" aria-label="关闭">${icon('close')}</button>`;
+    const box = notes();
+    $$('.arena-why', box).forEach((node) => node.remove());
+    box.prepend(strip);
+    const current = skipReason = { matchId, strip, sent: false, timer: 0, version: accountVersion() };
+    // The countdown stops while the strip is pointed at or focused, and starts over when it is left.
+    const wait = () => { clearTimeout(current.timer); current.timer = setTimeout(() => { if (skipReason === current) dropSkipReason(); }, SKIP_REASON_MS); };
+    const pause = () => clearTimeout(current.timer);
+    strip.addEventListener('pointerenter', pause);
+    strip.addEventListener('focusin', pause);
+    strip.addEventListener('pointerleave', () => { if (!strip.contains(document.activeElement)) wait(); });
+    strip.addEventListener('focusout', (e) => { if (!strip.contains(e.relatedTarget) && !strip.matches(':hover')) wait(); });
+    wait();
+  }
+  function dropSkipReason(delay = 0) {
+    const current = skipReason;
+    if (!current) return;
+    skipReason = null;
+    clearTimeout(current.timer);
+    const { strip } = current;
+    const go = () => { strip.classList.add('is-gone'); later(() => strip.remove(), 400); };
+    if (delay) later(go, delay); else go();
+  }
+  function sendSkipReason(button) {
+    const current = skipReason;
+    if (!current || current.sent || !current.strip.contains(button) || current.version !== accountVersion()) return;
+    current.sent = true;
+    const reason = button.dataset.reason;
+    void api(`arena/matches/${current.matchId}/skip-reason`, { method: 'POST', body: { reason } }).catch(() => { /* optional: a lost reason is not worth a retry */ });
+    current.strip.innerHTML = `<p class="arena-why-ask" role="status">${icon('check')}<b><span>已记下：</span><span>${SKIP_REASONS[reason]}</span></b><small>谢谢</small></p>`;
+    dropSkipReason(1500);
   }
 
   function showError(error) {
@@ -876,13 +975,15 @@ function match(root, ctx, first, scope) {
     frameLoads.clear();
     resetGate();
     const previous = state.match?.id;
+    const skipped = state.result?.choice === 'skip' ? previous : null;
     const earlier = task;
     const ahead = state.prefetch;
     const prefetched = Boolean(ahead?.match);
     state.prefetch = null;
     $('.arena-switched', el)?.remove();
     // Every pair starts side by side at an even split, so the last pair's layout favours neither.
-    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, loadErrors: {}, seen: { a: true }, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', slow: false, held: null, needVerify: null, step: 'overall', aspectPick: null });
+    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, loadErrors: {}, seen: { a: true }, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', slow: false, held: null, needVerify: null, step: 'overall', aspectPick: null, overallPick: null });
+    dropSkipReason();
     if (!prefetched) {
       drawSplit();
       for (const body of $$('[data-body]', el)) {
@@ -928,7 +1029,8 @@ function match(root, ctx, first, scope) {
       }
       if (drawn.task !== task) setTask(drawn.task);
       state.match = drawn.match;
-      Object.assign(state, { step: state.match.aspect ? 'aspect' : 'overall', hint: !state.compact });
+      Object.assign(state, { step: state.match.aspect && !aspectLast() ? 'aspect' : 'overall', hint: !state.compact });
+      if (skipped) askSkipReason(skipped);
       if (state.round > 0 && task !== earlier) noteSwitch();
       state.round++;
       frame('a');
@@ -1081,7 +1183,7 @@ function match(root, ctx, first, scope) {
 
   el.addEventListener('click', (e) => {
     // Folded on a wide screen, the floating card is one line; a click anywhere on it opens it again.
-    if (!mobile() && e.target.closest('.vote-in.is-compact')) return setCompact(false);
+    if (!mobile() && e.target.closest('.vote-in.is-compact') && !e.target.closest('[data-a="repick"]')) return setCompact(false);
     const voteButton = e.target.closest('[data-vote]');
     if (voteButton && !voteButton.disabled) return voteButton.dataset.vote === 'skip' ? vote('skip') : answer(voteButton.dataset.vote);
     const layoutButton = e.target.closest('[data-layout]');
@@ -1091,6 +1193,9 @@ function match(root, ctx, first, scope) {
     const kind = action.dataset.a;
     if (kind === 'next') next();
     else if (kind === 'skip-aspect' && !action.disabled) answer(null);
+    else if (kind === 'repick' && !action.disabled) repick();
+    else if (kind === 'skip-reason' && !action.disabled) sendSkipReason(action);
+    else if (kind === 'skip-reason-close') dropSkipReason();
     else if (kind === 'hint') {
       state.hint = !state.hint;
       action.setAttribute('aria-expanded', String(state.hint));
@@ -1194,6 +1299,25 @@ function match(root, ctx, first, scope) {
   });
   addEventListener('resize', onResize);
 
+  // Frames keep their own pointer events, so the peek listens on the stage that holds them. Folding waits a
+  // moment, so a pointer crossing the works on its way to the card does not fold it.
+  let peekTimer = 0;
+  const setPeek = (peek) => {
+    clearTimeout(peekTimer);
+    if (state.peek === peek) return;
+    state.peek = peek;
+    $('.vote-in.vote-q', el)?.classList.toggle('is-peek', peeking());
+  };
+  const stage = $('.arena-stage', el);
+  if (guided) {
+    stage.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(peekTimer);
+      peekTimer = setTimeout(() => setPeek(true), 400);
+    });
+    stage.addEventListener('pointerleave', () => setPeek(false));
+  }
+
   // Someone not signed in is counted too, in the public rankings. Say so once a session, before the first
   // pair is drawn; when the server wants a first check, it sits in the same sheet so it is asked only once.
   let notice = null;
@@ -1294,6 +1418,7 @@ function match(root, ctx, first, scope) {
         resetGate();
         frameLoads.forEach((stop) => stop());
         frameLoads.clear();
+        dropSkipReason();
         state.match = state.result = state.pendingPick = state.held = state.needVerify = null;
         state.counted = 0;
         state.tally = { win: 0, tie: 0, loss: 0 };
@@ -1324,6 +1449,8 @@ function match(root, ctx, first, scope) {
       frameLoads.clear();
       notice?.close();
       timers.forEach(clearTimeout);
+      clearTimeout(peekTimer);
+      clearTimeout(skipReason?.timer);
       document.body.classList.remove('is-viewer');
     },
   };

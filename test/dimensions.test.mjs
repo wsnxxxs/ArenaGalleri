@@ -1,32 +1,64 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-test('the dimension chart draws win rates with ties as halves and rests thin axes on 50%', async () => {
+async function chart() {
   const original = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener };
   globalThis.document = Object.assign(new EventTarget(), { baseURI: 'https://gallery.test/' });
   globalThis.window = new EventTarget();
   globalThis.addEventListener = globalThis.window.addEventListener.bind(globalThis.window);
-  let chart;
-  try { chart = await import('../site/dimensions.js'); }
+  try { return await import('../site/dimensions.js'); }
   finally { Object.assign(globalThis, original); }
-  const { MIN_ANSWERS, axesOf, radarPoint, rateOf } = chart;
+}
 
-  assert.equal(rateOf({ win: 3, tie: 2, loss: 1, n: 6 }), 4 / 6);
-  assert.equal(rateOf({ win: 0, tie: 0, loss: 0, n: 0 }), null);
+test('the radar draws dimension scores on one 900–1500 scale and rests unanswered axes on the prior', async () => {
+  const { SCALE, THIN_ANSWERS, axesOf, chartedDimensions, radarPoint, rateOf, scaleOf } = await chart();
+  assert.deepEqual(SCALE, { min: 900, max: 1500 });
+  assert.equal(scaleOf(900), 0);
+  assert.equal(scaleOf(1200), 0.5);
+  assert.equal(scaleOf(1700), 1, 'scores past the scale stay on the outer ring');
+  assert.equal(scaleOf(700), 0);
+  assert.equal(rateOf({ win: 3, tie: 2, loss: 1, n: 6 }), 4 / 6, 'aspect win rates remain for the tooltip');
 
-  const dimensions = [{ id: 'aesthetic', name: '审美', aspects: [] }, { id: 'craft', name: '工程完备', aspects: [] }, { id: 'logic', name: '逻辑', aspects: [] }];
-  const entry = { dimensions: {
-    aesthetic: { win: MIN_ANSWERS, tie: 0, loss: 0, n: MIN_ANSWERS, aspects: {} },
-    craft: { win: 1, tie: 0, loss: MIN_ANSWERS - 2, n: MIN_ANSWERS - 1, aspects: {} },
+  const dimensions = chartedDimensions([
+    { id: 'aesthetic', name: '审美', aspects: [{ id: 'lighting', keyword: '光影' }] },
+    { id: 'craft', name: '工程完备', aspects: [{ id: 'floating', keyword: '悬空或断连' }] },
+    { id: 'logic', name: '逻辑', aspects: [] },
+    { id: 'fit', name: '贴题', aspects: [{ id: 'fidelity', keyword: '造型' }] },
+  ]);
+  assert.deepEqual(dimensions.map((dimension) => dimension.id), ['aesthetic', 'craft', 'fit'], 'a dimension without aspects is not drawn');
+
+  const entry = { prior: 1140, dimensions: {
+    aesthetic: { score: 1260, interval: 60, n: 24, thin: false, win: 15, tie: 4, loss: 5, aspects: {} },
+    craft: { score: 1150, interval: 90, n: THIN_ANSWERS - 1, thin: true, win: 5, tie: 0, loss: 4, aspects: {} },
   } };
   const axes = axesOf(entry, dimensions);
-  assert.deepEqual(axes.map((axis) => [axis.thin, axis.value]), [[false, 1], [true, 0.5], [true, 0.5]]);
-  assert.equal(axes[1].rate, 1 / (MIN_ANSWERS - 1), 'a thin axis keeps its rate for the tooltip and table');
-  assert.equal(axes[2].rate, null);
+  assert.deepEqual(axes.map((axis) => [axis.score, axis.thin, axis.value]), [[1260, false, 0.6], [1150, true, scaleOf(1150)], [1140, true, scaleOf(1140)]]);
+  assert.deepEqual([axes[0].low, axes[0].high], [scaleOf(1200), scaleOf(1320)], 'the whisker spans the interval');
+  assert.equal(axes[2].cell.n, 0);
+  assert.equal(axesOf({ prior: null, dimensions: {} }, dimensions)[0].score, 1000, 'without a prior an unanswered axis rests at 1000');
+  assert.equal(axesOf({ prior: 1100, dimensions: { aesthetic: { score: 1180, interval: 40, n: 12 } } }, dimensions)[0].thin, false, 'without the flag, thin follows the answer count');
 
   // Axis 0 points up from the centre and the axes run clockwise.
   const near = ([x, y], [ex, ey]) => assert.ok(Math.abs(x - ex) < 1e-9 && Math.abs(y - ey) < 1e-9, `${x},${y} vs ${ex},${ey}`);
   near(radarPoint(0, 4, 1, 70, 150, 112), [150, 42]);
   near(radarPoint(1, 4, 0.5, 70, 150, 112), [185, 112]);
   near(radarPoint(2, 4, 1, 70, 150, 112), [150, 182]);
+});
+
+test('the dimension board joins rows to their entries and the health check reads either order', async () => {
+  const { FLAGS, boardRows, healthOf } = await chart();
+  const data = {
+    entries: [{ key: 'm1', modelName: 'One' }, { key: 'm2', modelName: 'Two' }],
+    boards: { craft: [{ key: 'm2', rank: 1, score: 1210, interval: 50, n: 30, thin: false }, { key: 'gone', rank: 2, score: 1100, interval: 80, n: 4, thin: true }, { key: 'm1', rank: 3, score: 1010, interval: 70, n: 12, thin: false }] },
+  };
+  const rows = boardRows(data, 'craft');
+  assert.deepEqual(rows.map((row) => [row.rank, row.entry.modelName]), [[1, 'Two'], [3, 'One']]);
+  assert.deepEqual(boardRows(data, 'fit'), []);
+
+  const row = { n: 40, skipRate: 0.1, flags: [], byOrder: { after: { n: 25, flags: ['ties'] }, before: { n: 15, flags: [] } } };
+  assert.equal(healthOf(row, 'all'), row);
+  assert.equal(healthOf(row, 'after').n, 25);
+  assert.equal(healthOf({ n: 3 }, 'before'), null);
+  assert.deepEqual(Object.keys(FLAGS), ['same-side', 'ties', 'skips']);
+  assert.deepEqual(Object.values(FLAGS).map((flag) => flag.rate), ['sameSideRate', 'tieRate', 'skipRate']);
 });
