@@ -209,7 +209,7 @@ function match(root, ctx, first, scope) {
   const peekMotion = new Set();
   // Two holds start when both works have loaded: 5 seconds before a vote, 3 before a skip.
   const hold = createHold(() => tickGate());
-  let shownStatus = '', shownAsk = null;
+  let shownStatus = '', shownAsk = null, flashAsk = false;
   let activeDraw = null, drawGeneration = 0;
   let owner = accountVersion(), policyController = null, placeController = null, readyController = null, voteController = null;
   let readyRequest = null;
@@ -467,11 +467,13 @@ function match(root, ctx, first, scope) {
     const ask = state.match ? aspect ?? OVERALL : null;
     const folded = state.compact && !state.held && !state.needVerify;
     const steps = !state.match?.aspect ? '' : (Boolean(aspect) === aspectLast() ? '2 / 2' : '1 / 2');
-    // A new question fades in, so the move from one question to the other is noticed.
+    // A new question fades in; moving into the second question flashes the stem so voters notice the switch.
     const fresh = Boolean(ask) && ask.question !== shownAsk;
+    const flash = Boolean(ask) && flashAsk && steps === '2 / 2';
+    flashAsk = false;
     shownAsk = ask?.question ?? null;
     const toggle = `<button class="q-toggle" type="button" data-a="compact" aria-expanded="${!folded}">${folded ? '展开' : '收起'}<i aria-hidden="true"></i></button>`;
-    const question = ask ? `<p class="q-text${fresh ? ' is-new' : ''}">${questionText(ask)}</p><p class="q-hint" id="arena-q-hint"${state.hint ? '' : ' hidden'}><span>看哪里：</span>${esc(ask.hint)}</p>` : '';
+    const question = ask ? `<p class="q-text${flash ? ' is-flash' : fresh ? ' is-new' : ''}">${questionText(ask)}</p><p class="q-hint" id="arena-q-hint"${state.hint ? '' : ' hidden'}><span>看哪里：</span>${esc(ask.hint)}</p>` : '';
     const step = `<span class="q-step">${steps || '综合题'}</span>`;
     const head = !ask ? '' : folded ? step
       : `<div class="q-head"><span>${aspect ? '测评点' : '综合题'}${steps ? ` · ${steps}` : ''}</span><span>${aspect ? `<span>${esc(aspect.dimensionName)}</span> · ` : ''}<span>测试版，不计入榜单</span></span>${toggle}</div>${step}`;
@@ -510,6 +512,7 @@ function match(root, ctx, first, scope) {
     if (state.step === 'aspect') Object.assign(state, { aspectPick: pick, step: 'overall' });
     else Object.assign(state, { overallPick: pick, step: 'aspect' });
     state.hint = !state.compact;
+    flashAsk = true;
     drawBar();
     if (focused) $('.vote-actions [data-vote]', el)?.focus({ preventScroll: true });
     live(`下一题：${(state.step === 'aspect' ? state.match.aspect : OVERALL).question}`);

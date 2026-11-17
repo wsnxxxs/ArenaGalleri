@@ -1320,13 +1320,26 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .q-float .vote-in.is-peek > .q-head { display: none; }
   .q-float .vote-in.is-compact > .q-toggle { margin-left: 4px; }
 }
+.vote-q:not(.is-compact):not(.is-peek) .q-text { justify-self: center; width: fit-content; max-width: 100%; border-radius: 6px; }
 .q-text.is-new { animation: q-new 0.4s var(--ease) both; }
+.q-text.is-flash { animation: q-flash 0.95s var(--ease) both; }
 .vote-in.is-flip { animation: q-flip 0.25s var(--ease) both; }
 @keyframes q-float-in { from { opacity: 0; transform: translateY(12px); } }
 @keyframes q-new { from { opacity: 0; transform: translateY(4px); } }
+@keyframes q-flash {
+  0% { opacity: 0.25; transform: translateY(5px) scale(0.96); color: var(--accent); background-color: transparent; box-shadow: 0 0 0 5px transparent, 0 0 0 6.5px transparent; }
+  16% { opacity: 1; transform: translateY(-1px) scale(1.045); color: var(--accent); background-color: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 0 6.5px color-mix(in srgb, var(--accent) 55%, transparent); }
+  38% { opacity: 1; transform: translateY(0) scale(1.02); color: var(--accent); background-color: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 16%, transparent), 0 0 0 6.5px color-mix(in srgb, var(--accent) 35%, transparent); }
+  100% { opacity: 1; transform: translateY(0) scale(1); color: var(--ink); background-color: transparent; box-shadow: 0 0 0 5px transparent, 0 0 0 6.5px transparent; }
+}
+@keyframes q-flash-still {
+  0%, 100% { color: var(--ink); background-color: transparent; box-shadow: 0 0 0 5px transparent, 0 0 0 6.5px transparent; }
+  18%, 40% { color: var(--accent); background-color: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 0 6.5px color-mix(in srgb, var(--accent) 55%, transparent); }
+}
 @keyframes q-flip { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .arena.q-float .vote-bar, .q-text.is-new, .vote-in.is-flip { animation: none; }
+  .q-text.is-flash { animation: q-flash-still 0.9s ease both; }
 }
 
 /* ---- the human check ---- */
