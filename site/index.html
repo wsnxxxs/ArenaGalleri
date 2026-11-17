@@ -109,7 +109,7 @@
       };
       globalThis.GALLERY_BOOT = {
         data: read('data.json', { cache: 'no-cache', signal: AbortSignal.timeout(15000) }, true),
-        catalog: read(new URL('catalog', api), { credentials: 'omit', cache: 'no-cache', signal: AbortSignal.timeout(15000) }),
+        catalog: read(new URL('catalog?guided=1', api), { credentials: 'omit', cache: 'no-cache', signal: AbortSignal.timeout(15000) }),
         session: read(new URL('session', api), { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(15000) }),
       };
     })();

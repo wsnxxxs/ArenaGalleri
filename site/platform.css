@@ -1319,7 +1319,13 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .q-float .vote-in:is(.is-compact, .is-peek) > :is(.q-hint, .vote-actions, .q-links) { display: none; }
   .q-float .vote-in.is-peek > .q-head { display: none; }
   .q-float .vote-in.is-compact > .q-toggle { margin-left: 4px; }
+  .arena.q-float.is-audio .pane-body { padding-bottom: 224px; background: var(--bg); }
 }
+.music-llm-notice { margin-top: 10px; padding: 10px 14px; font-size: 13px; border-color: var(--line-2); }
+.music-llm-notice[data-selected="1"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); color: var(--ink); }
+.music-llm-notice[data-selected="1"] > .i { color: var(--accent); }
+.music-prompt-guide { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--ink-2); }
+.music-prompt-guide[hidden] { display: none; }
 .vote-q:not(.is-compact):not(.is-peek) .q-text { justify-self: center; width: fit-content; max-width: 100%; border-radius: 6px; }
 .q-text.is-new { animation: q-new 0.4s var(--ease) both; }
 .q-text.is-flash { animation: q-flash 0.95s var(--ease) both; }
@@ -1548,12 +1554,6 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
   .announcement-compose-preview { max-height: 200px; padding: 18px; border-left: 0; border-top: 1px solid var(--line); }
   .announcement-compose-actions { padding: 14px 18px; }
 }
-
-.music-llm-notice { margin-top: 10px; padding: 10px 14px; font-size: 13px; border-color: var(--line-2); }
-.music-llm-notice[data-selected="1"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); color: var(--ink); }
-.music-llm-notice[data-selected="1"] > .i { color: var(--accent); }
-.music-prompt-guide { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--ink-2); }
-.music-prompt-guide[hidden] { display: none; }
 
 /* Guided trial dimension chart (#/dimensions, staff only). One hue: each entry's shape in the accent;
    rings and spokes are hairlines on one shared 900–1500 scale, 1000 a little stronger. The dashed ring is

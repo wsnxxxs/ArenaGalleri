@@ -144,7 +144,7 @@ export function uploadFlow(root, ctx, options) {
       summary: ['必须只上传一个 <code>.mp3</code> 文件', `最大 ${formatBytes(maxBytes())}`],
       rules: [esc(MUSIC_LLM_NOTICE),
         '每次提交只能包含一个有效的 <code>.mp3</code> 音频文件，不接受压缩包、多个文件或 WAV/FLAC/MIDI 等其他格式。',
-        '平台会在试加载与作品页面中统一提供播放键、进度条与音频全程频谱，文件名和标签信息不会在对比中展示。'],
+        '平台会在试加载与双盲测试页面中统一提供播放键、进度条与音频全程频谱，文件名和标签信息不会在盲评中展示。'],
     };
     return {
       summary: ['单个 <code>.html</code> 文件', `最大 ${formatBytes(maxBytes())}`],

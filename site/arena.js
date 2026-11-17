@@ -70,7 +70,7 @@ export function mount(root, ctx) {
   const random = ctx.param === RANDOM;
   const task = random ? null : ctx.DATA.tasks.find((t) => t.id === ctx.param);
   // A random round draws from the tasks the starting page was showing, as far as they can be judged.
-  const scope = random ? ctx.DATA.tasks.filter((t) => votedTask(t) && isOpen(t) && inPin(t) && (arenaScope.get() ?? [t.id]).includes(t.id)) : [];
+  const scope = random ? ctx.DATA.tasks.filter((t) => isOpen(t) && inPin(t) && (arenaScope.get() ?? [t.id]).includes(t.id)) : [];
   if (random ? !scope.length : !task || !votedTask(task)) {
     location.replace('#/arena');
     return {};
@@ -82,10 +82,10 @@ export function mount(root, ctx) {
 // open tasks first and the ones still short of works folded away, the rules folded at the end.
 function lobby(root, ctx) {
   const tasks = ctx.DATA.tasks.filter(votedTask);
-  const tracks = tracksOf(tasks);
+  const tracks = tracksOf(tasks, { alwaysInclude: ['音乐'] });
   const view = { track: '', query: '' };
   const pool = (t) => platform.arena[t.id] ?? { works: 0, entries: 0 };
-  const ready = (t) => votedTask(t) && isOpen(t) && inPin(t);
+  const ready = (t) => isOpen(t) && inPin(t);
   const openTasks = () => ctx.DATA.tasks.filter(ready);
 
   const row = (t) => {
@@ -113,6 +113,12 @@ function lobby(root, ctx) {
   function list() {
     const { scoped, open, closed } = scope();
     if (!scoped.length) {
+      if (view.track === '音乐' && !view.query.trim()) {
+        return `<div class="board-empty">
+          <p class="board-empty-title">音乐分区还没有可盲评的题目</p>
+          <p>为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。请先发起音乐题目并收录至少两个不同模型配置的 .mp3 作品。</p>
+          ${platform.available ? `<div class="board-empty-actions"><a class="btn primary" href="#/new">发起音乐题目</a></div>` : ''}</div>`;
+      }
       return `<div class="board-empty">
         <p class="board-empty-title">没有找到相关题目</p><p>换个关键词，或切换到全部题目。</p></div>`;
     }
@@ -219,7 +225,7 @@ function match(root, ctx, first, scope) {
   document.body.classList.add('is-viewer');
   setPageTitle(['盲评', { text: task.title, original: true }]);
   // In the trial build the question card floats over the pair on wide screens (q-float in platform.css).
-  root.innerHTML = `<div class="viewer arena${guided ? ' q-float' : ''}">
+  root.innerHTML = `<div class="viewer arena${guided ? ' q-float' : ''}${task.category === '音乐' ? ' is-audio' : ''}">
     <header class="vbar">
       ${ctx.backLink('vback')}
       <div class="arena-heading"><b><span data-title data-i18n-ignore>${esc(task.title)}</span><span class="arena-scope" data-scope hidden></span></b><span data-round>正在准备</span></div>
@@ -319,7 +325,7 @@ function match(root, ctx, first, scope) {
   const live = (text) => { const node = $('[data-live]', el); if (node) node.textContent = text; };
   // A floating card folds to one line while a mouse is over the works, so turning a model is not blocked.
   // Not while a key has put focus on the card: folding would hide the focused control.
-  const peeking = () => guided && state.peek && !state.compact && !state.held && !state.needVerify && !mobile() && !$('[data-bar] :focus-visible', el);
+  const peeking = () => guided && task.category !== '音乐' && state.peek && !state.compact && !state.held && !state.needVerify && !mobile() && !$('[data-bar] :focus-visible', el);
 
   const stopGate = () => hold.stop();
   const resetGate = () => { readyController?.abort(); hold.reset(); shownStatus = ''; };
@@ -644,12 +650,29 @@ function match(root, ctx, first, scope) {
   function remember() {
     if (state.split > 0 && state.split < 1) state.lastSplit = state.split;
   }
+  const frameOrigin = (frame) => { try { return new URL(frame.src).origin; } catch { return ''; } };
+  const postFrame = (side, message) => {
+    const frame = currentFrame(side);
+    const origin = frame && frameOrigin(frame);
+    if (frame?.contentWindow && origin) frame.contentWindow.postMessage(message, origin);
+  };
+  const currentTheme = () => {
+    const t = document.documentElement.dataset.theme;
+    if (t === 'light' || t === 'dark') return t;
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  };
+  const syncAudioTheme = (side) => {
+    if (task.category === '音乐') postFrame(side, { source: 'sp-arena-theme', theme: currentTheme() });
+  };
+  const themeObserver = new MutationObserver(() => { if (task.category === '音乐') ['a', 'b'].forEach(syncAudioTheme); });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   function setLayout(kind) {
     if (state.error) return;
     if (kind === 'ab') state.split = layout() === 'ab' ? 0.5 : state.lastSplit;
     else {
       remember();
       state.split = kind === 'a' ? 1 : 0;
+      postFrame(kind === 'a' ? 'b' : 'a', { source: 'sp-arena-audio', pause: true });
     }
     drawSplit();
   }
@@ -661,10 +684,16 @@ function match(root, ctx, first, scope) {
   }
 
   const onFold = (event) => {
-    if (event.data?.source !== 'sp-fold' || !(event.data.count > 0)) return;
+    const isFold = event.data?.source === 'sp-fold' && event.data.count > 0;
+    const isAudioPlay = event.data?.source === 'sp-audio' && event.data.playing === true;
+    if (!isFold && !isAudioPlay) return;
     for (const side of ['a', 'b']) {
       const frame = currentFrame(side);
-      if (!frame || event.source !== frame.contentWindow || event.origin !== new URL(frame.src).origin) continue;
+      if (!frame || event.source !== frame.contentWindow || event.origin !== frameOrigin(frame)) continue;
+      if (isAudioPlay) {
+        postFrame(side === 'a' ? 'b' : 'a', { source: 'sp-arena-audio', pause: true });
+        break;
+      }
       if (!state.controls[side]) {
         state.controls[side] = true;
         drawControls(side);
@@ -691,6 +720,7 @@ function match(root, ctx, first, scope) {
         state.ready[side] = true;
         delete state.loadErrors[side];
         syncControls(side);
+        syncAudioTheme(side);
         later(() => $('.loader', node)?.classList.add('gone'), 300);
         if (bothReady()) startGate(side);
         else { drawHeads([side]); syncGate(); }
@@ -728,6 +758,8 @@ function match(root, ctx, first, scope) {
 
   function setTask(t) {
     task = t;
+    el.classList.toggle('is-audio', t.category === '音乐');
+    if (t.category === '音乐') state.peek = false;
     setPageTitle(['盲评', { text: t.title, original: true }]);
     $('[data-title]', el).textContent = t.title;
     $('[data-prompt-title]', el).textContent = t.title;
@@ -1276,6 +1308,7 @@ function match(root, ctx, first, scope) {
     else if (kind === 'side') {
       const couldVote = canVote();
       state.side = action.dataset.side;
+      postFrame(state.side === 'a' ? 'b' : 'a', { source: 'sp-arena-audio', pause: true });
       state.seen[state.side] = true;
       drawSide();
       syncGate();
@@ -1395,7 +1428,7 @@ function match(root, ctx, first, scope) {
   }
   const stage = $('.arena-stage', el);
   if (guided) {
-    stage.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') queuePeek(true, PEEK_FOLD_MS); });
+    stage.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && task.category !== '音乐') queuePeek(true, PEEK_FOLD_MS); });
     stage.addEventListener('pointerleave', () => queuePeek(false, PEEK_OPEN_MS));
     $('[data-bar]', el).addEventListener('focusin', openOnKeyFocus);
   }
@@ -1516,6 +1549,7 @@ function match(root, ctx, first, scope) {
       if (!state.error) update();
     },
     destroy() {
+      themeObserver.disconnect();
       document.removeEventListener('keydown', onKey);
       removeEventListener('message', onFold);
       removeEventListener('resize', onResize);

@@ -24,7 +24,7 @@ import { effortRank, representatives, standard, taskCover } from './featured.js'
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { boostOrder } from './work-boost.js';
 import { downloadReference, linkReferences, referenceSheet, useReferenceViewer } from './references.js';
-import { aiJudged, aiScoreOf, categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf, votedTask } from './categories.js';
+import { aiJudged, aiScoreOf, categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
 import { textMatches } from './match.js';
 import { modelResolver } from './models.js';
 import { popularQuestions, recommendQuestions } from './question-recommendations.js';
@@ -451,18 +451,16 @@ function renderLibrary(scopes = [], fresh = true) {
       if (!card.hidden) {
         count++;
         matching.push(task);
-        if (votedTask(task) && (platform.arena[task.id]?.entries ?? 0) >= 2) blindScope.push(task);
+        if ((platform.arena[task.id]?.entries ?? 0) >= 2) blindScope.push(task);
       }
     }
     // Random pairs come from the questions in view, as far as they can be judged.
     const blind = $('[data-home-blind]', root);
     if (blind) {
-      blind.innerHTML = homeState.category === '音乐'
-        ? act('judge', '', AB, '参与盲评', '暂未开放', '音乐分区暂未开放盲评')
-        : !platform.activityReady
-          ? act('judge', '', AB, '参与盲评', platform.activityError ? '统计暂未载入 <button class="link" type="button" data-platform-reconnect>重新连接</button>' : '统计加载中…') : blindScope.length
-          ? act('judge', `#/arena/random`, AB, '参与盲评', `可盲评 ${blindScope.reduce((sum, t) => sum + platform.arena[t.id].works, 0)} 件`)
-          : act('judge', '', AB, '参与盲评', '暂无可评的题', '当前范围内没有两个模型配置以上的盲评池');
+      blind.innerHTML = !platform.activityReady
+        ? act('judge', '', AB, '参与盲评', platform.activityError ? '统计暂未载入 <button class="link" type="button" data-platform-reconnect>重新连接</button>' : '统计加载中…') : blindScope.length
+        ? act('judge', `#/arena/random`, AB, '参与盲评', `可盲评 ${blindScope.reduce((sum, t) => sum + platform.arena[t.id].works, 0)} 件`)
+        : act('judge', '', AB, '参与盲评', '暂无可评的题', '当前范围内没有两个模型配置以上的盲评池');
     }
     // Mix within the filtered result set and keep direct search hits before prompt-only hits.
     const ranked = [...rankedTasks(matching.filter(t => !promptOnly.has(t.id)), recommendationTime),
@@ -748,7 +746,7 @@ function cancelTaskScores(forget = true) {
   updateTaskScoreStatus();
 }
 function loadTaskScores(t) {
-  if (resultSort !== 'score' || !platform.available || !votedTask(t) || scoredTask === t.id) return;
+  if (resultSort !== 'score' || !platform.available || aiJudged(t) || scoredTask === t.id) return;
   if (taskScoreRead) { updateTaskScoreStatus(); return taskScoreRead; }
   const run = ++taskScoreRun, controller = new AbortController();
   taskScoreController = controller;
@@ -855,7 +853,7 @@ function resultCard(t, r) {
     <div class="result-body">
       ${resultVariantButtons(t, r)}
       <p class="result-model">${brandMark(m, 'brand-mark sm')}<b><span data-i18n-ignore>${esc(m.name)}</span></b>${resultBadges(r)}${aiJudged(t) ? aiScoreBadge(r) : ''}${platform.featured?.[t.id]?.models?.[modelKey(r)] === r.id ? '<span class="badge featured-badge" title="盲评票选出的代表作">代表作</span>' : ''}${statusBadge(r.status, { reason: r.reason })}</p>
-      ${lead ? `<p class="lead-why">${t.cover === coverWork.id ? '管理员指定的本题封面' : platform.featured?.[t.id]?.cover === coverWork.id ? '盲评票选的代表作' : votedTask(t) ? '本题封面作品 · 盲评票数足够后改由票选决定' : '本题封面作品'}</p>` : ''}
+      ${lead ? `<p class="lead-why">${t.cover === coverWork.id ? '管理员指定的本题封面' : platform.featured?.[t.id]?.cover === coverWork.id ? '盲评票选的代表作' : '本题封面作品 · 盲评票数足够后改由票选决定'}</p>` : ''}
       <h3><a href="${viewHref(t, r.id)}"><span data-i18n-ignore>${esc(r.title)}</span>${icon('arrow')}</a></h3>
       <p class="result-by"><span data-i18n-ignore>${esc(authorName(r))}</span> <span>发布</span>${sourceLine(r) || r.tool ? ` · ${sourceLine(r) ? sourceHtml(r) : `<span data-i18n-ignore>${esc(r.tool)}</span>`}` : ''}${r.addedAt ? ` · <span data-i18n-date="${esc(r.addedAt)}">${formatDate(r.addedAt)}</span>` : ''}</p>${cardUsage(r)}
       ${r.status === 'questioned' && r.reason ? `<p data-i18n-ignore class="result-reason">${icon('alert')}<span>${esc(r.reason)}</span></p>` : ''}
@@ -986,7 +984,6 @@ function renderTask(t) {
   const pool = platform.arena[t.id];
   const actions = platform.available ? `<div class="task-acts">
     ${aiJudged(t) ? act('judge', '', icon('reason'), 'AI 评分', '暂未开放', '推理题由 AI 评分，不参与盲评和排行榜')
-      : !votedTask(t) ? act('judge', '', AB, '参与盲评', '暂未开放', '音乐分区暂未开放盲评')
       : !platform.activityReady ? act('judge', '', AB, '参与盲评', platform.activityError ? '统计暂未载入 <button class="link" type="button" data-platform-reconnect>重新连接</button>' : '统计加载中…')
       : (pool?.entries ?? 0) >= 2 ? act('judge', `#/arena/${esc(t.id)}`, AB, '参与盲评', `可盲评 ${pool.works} 件`) : act('judge', '', AB, '参与盲评', '作品不足', '至少需要两个模型配置的作品进入盲评池')}
     ${t.acceptsUploads ? act('upload', `#/submit/${esc(t.id)}`, icon('upload'), '上传作品', platform.user && !can('canSubmitWork') ? '需要 Lv1 认证成员' : '交一份你的答案') : act('upload', '', icon('upload'), '暂不接受投稿', t.promptPending ? '提示词原文尚未公开' : '这道题暂时关闭了投稿')}
@@ -1001,13 +998,13 @@ function renderTask(t) {
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}
-        ${platform.available && votedTask(t) ? `<button class="side-link" data-go="board" aria-pressed="false">${icon('rank')}排行榜</button>` : ''}${usageNav(t)}
+        ${platform.available && !aiJudged(t) ? `<button class="side-link" data-go="board" aria-pressed="false">${icon('rank')}排行榜</button>` : ''}${usageNav(t)}
         ${hasExhibition(t) ? `<p class="nav-sep">全屏查看</p>
         <a class="side-link" href="${sandtableHref(t)}">${icon('full')}三维沙盘<span class="nav-ext">${icon('arrow')}</span></a>
         <a class="side-link" href="#/${t.id}/exhibition">${icon('grid')}原作展厅<span class="nav-ext">${icon('arrow')}</span></a>` : ''}
       </nav>
       <div class="side-facts"><p>${new Set(works.map((r) => r.model)).size} 个模型 · ${new Set(works.map(vendorOf)).size} 家厂商</p>
-        ${votedTask(t) && isStaff() && platform.activityReady ? adminPoolLine(t, pool) : ''}</div>
+        ${isStaff() && platform.activityReady ? adminPoolLine(t, pool) : ''}</div>
       <section class="side-prompt" aria-labelledby="side-prompt-title">
         <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
           ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}"><span data-i18n-ignore>${esc(variant.label)}</span></button>`).join('')}</div>` : ''}
@@ -1043,7 +1040,7 @@ function renderTask(t) {
       <p class="fine">自动截图可能使用软件渲染；实际光影与帧率请以在线预览为准。</p>
     </section>` : ''}
 
-    ${platform.available && votedTask(t) ? `<section id="board" data-panel="board" class="block wrap" hidden>
+    ${platform.available && !aiJudged(t) ? `<section id="board" data-panel="board" class="block wrap" hidden>
       <div class="block-head"><h2>榜单</h2><p>这道题的盲评结果 · 按模型与推理档位分别计分</p>${(pool?.entries ?? 0) >= 2 ? `<a class="block-hint text-link" href="#/arena/${esc(t.id)}">参与这道题的盲评${icon('right')}</a>` : ''}</div>
       <div id="board-body"><p class="muted">正在载入榜单…</p></div>
     </section>` : ''}${usageSection(t)}
@@ -1439,14 +1436,13 @@ function sourceFacts(r) {
 const VIEWER_FACES = { 'arena-on': ['开启盲评', { show_arena: true }, '已开启盲评'], 'arena-off': ['移出盲评', { show_arena: false }, '已移出盲评'],
   hide: ['撤下', { show_gallery: false, show_arena: false }, '已撤下'] };
 // A work's review state, who published it and how it was made.
-function workFacts(t, r) {
+function workFacts(r) {
   const info = STATUS[r.status];
-  const canBlind = votedTask(t);
   const admin = isStaff() && platform.activityReady && r.status === 'verified';
-  const switches = admin ? [canBlind ? (r.arena?.state === 'in_pool' ? 'arena-off' : r.arena?.state === 'off' ? 'arena-on' : '') : '', 'hide'].filter(Boolean) : [];
+  const switches = admin ? [r.arena?.state === 'in_pool' ? 'arena-off' : r.arena?.state === 'off' ? 'arena-on' : '', 'hide'].filter(Boolean) : [];
   return `<div class="guide-block guide-status" data-status="${r.status}">
     <h3>核验状态</h3>
-    <p class="guide-state">${statusBadge(r.status, { always: true })}${r.status === 'verified' && !canBlind ? '<span>已公开 · 盲评暂未开放</span>' : arenaText(r.arena) ? `<span>已公开</span> · <span>${esc(arenaText(r.arena))}</span>` : `<span>${esc(info.hint)}</span>`}</p>
+    <p class="guide-state">${statusBadge(r.status, { always: true })}${arenaText(r.arena) ? `<span>已公开</span> · <span>${esc(arenaText(r.arena))}</span>` : `<span>${esc(info.hint)}</span>`}</p>
     ${switches.length ? `<div class="actions">${switches.map((action) => `<button class="btn sm" data-face="${action}">${VIEWER_FACES[action][0]}</button>`).join('')}</div>` : ''}
     ${r.reason ? `<p data-i18n-ignore class="guide-reason">${esc(r.reason)}</p>` : ''}
     <dl class="facts">
@@ -1463,33 +1459,6 @@ function createViewer(t) {
   const frameLoads = new Map();
   let blurTimer;
   const clearFrameLoads = () => { for (const stop of frameLoads.values()) stop(); frameLoads.clear(); };
-  const frameOrigin = (frame) => { try { return new URL(frame.src).origin; } catch { return ''; } };
-  const postFrame = (frame, message) => {
-    const origin = frame && frameOrigin(frame);
-    if (frame?.contentWindow && origin) frame.contentWindow.postMessage(message, origin);
-  };
-  const currentTheme = () => {
-    const theme = document.documentElement.dataset.theme;
-    if (theme === 'light' || theme === 'dark') return theme;
-    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  };
-  const syncAudioTheme = (frame) => {
-    if (t.category === '音乐') postFrame(frame, { source: 'sp-arena-theme', theme: currentTheme() });
-  };
-  const themeObserver = new MutationObserver(() => {
-    if (t.category === '音乐') $$('iframe', stage).forEach(syncAudioTheme);
-  });
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  const onAudioMessage = (event) => {
-    if (t.category !== '音乐' || event.data?.source !== 'sp-audio' || event.data.playing !== true) return;
-    const frames = $$('iframe', stage);
-    const sourceFrame = frames.find((frame) => event.source === frame.contentWindow && event.origin === frameOrigin(frame));
-    if (!sourceFrame) return;
-    for (const frame of frames) {
-      if (frame !== sourceFrame) postFrame(frame, { source: 'sp-arena-audio', pause: true });
-    }
-  };
-  addEventListener('message', onAudioMessage);
   const byId = (id) => t.results.find((r) => r.id === id);
   const options = () => sortedResults(t).map((r) => option(r.id, `${r.title} · ${label(r)}${r.promptVariant ? ` · ${variantsOf(t).find((variant) => variant.id === r.promptVariant)?.label}` : ''}`, false, r.status !== 'verified' ? ` · ${STATUS[r.status].label}` : '')).join('');
   const many = t.results.length > 1;
@@ -1575,7 +1544,7 @@ function createViewer(t) {
     if (split) controls.add(frame, { inject: hosted(r) });
     const loader = $('.loader', body);
     frameLoads.set(i, watchViewerFrame(frame, {
-      onLoaded: () => { loader.classList.add('gone'); frameLoads.delete(Number(pane.dataset.pane)); syncAudioTheme(frame); },
+      onLoaded: () => { loader.classList.add('gone'); frameLoads.delete(Number(pane.dataset.pane)); },
       onSlow: () => {
         loader.innerHTML = `<b>作品尚未完成载入</b><span>可以重新载入这一侧，或继续等待。</span><button class="btn" type="button" data-pane-reload="${pane.dataset.pane}">${icon('reload')}重新载入当前栏</button>`;
       },
@@ -1599,7 +1568,7 @@ function createViewer(t) {
         <button class="icon-btn" data-v="guide" aria-label="收起指南">${icon('close')}</button>
       </div>
       ${r.summary ? `<p class="guide-summary"><span data-i18n-ignore>${esc(r.summary)}</span></p>` : ''}
-      ${workFacts(t, r)}${usageBlock(r, t, { entry: metrics?.supported === true })}
+      ${workFacts(r)}${usageBlock(r, t, { entry: metrics?.supported === true })}
       ${platform.available ? `<div class="guide-block"><h3>表情</h3>${reactionBar(workKey(t, r), { locked: !interactive(r) }) || '<p class="fine">存疑作品不再接受互动。</p>'}</div>` : ''}
       ${g.presets?.length ? `<div class="guide-block"><h3>快速跳转</h3>
         <div class="presets">${g.presets.map((p) => `<button class="chip${state.queries[state.active] === p.query ? ' on' : ''}" data-preset="${esc(p.query)}"><span data-i18n-ignore>${esc(p.label)}</span></button>`).join('')}
@@ -1818,8 +1787,6 @@ function createViewer(t) {
       sync();
     },
     destroy() {
-      themeObserver.disconnect();
-      removeEventListener('message', onAudioMessage);
       gone = true;
       clearFrameLoads();
       clearTimeout(blurTimer);

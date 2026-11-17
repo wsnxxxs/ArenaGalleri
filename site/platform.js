@@ -7,7 +7,7 @@ import { loadTurnstile, mountTurnstile } from './turnstile.js';
 import { CONTACT } from './legal.js';
 import { openAuthDialog } from './auth-dialog.js';
 import { sticker, stickerName } from './stickers.js';
-import { votedTask } from './categories.js';
+import { aiJudged } from './categories.js';
 
 export const platform = {
   available: false,
@@ -51,8 +51,8 @@ export const onPlatformChange = (listener) => { listeners.add(listener); return 
 const emit = (reason) => listeners.forEach((listener) => listener(reason));
 
 // Older backends still expose a combined bootstrap; keep that fallback in memory only.
-export const requestBootstrap = (timeout = 15000) => fetchApi('bootstrap', { cache: 'no-store', signal: AbortSignal.timeout(timeout) });
-const requestCatalog = (timeout = 15000) => fetchApi('catalog', { credentials: 'omit', cache: 'no-cache', signal: AbortSignal.timeout(timeout) });
+export const requestBootstrap = (timeout = 15000) => fetchApi('bootstrap?guided=1', { cache: 'no-store', signal: AbortSignal.timeout(timeout) });
+const requestCatalog = (timeout = 15000) => fetchApi('catalog?guided=1', { credentials: 'omit', cache: 'no-cache', signal: AbortSignal.timeout(timeout) });
 const requestSession = (timeout = 15000) => fetchApi('session', { cache: 'no-store', signal: AbortSignal.timeout(timeout) });
 export function requestPlatform() {
   const early = { catalog: bootRead('catalog'), session: bootRead('session') };
@@ -142,8 +142,8 @@ function acceptCatalog(data, buildInfo) {
   return true;
 }
 function acceptActivity(data) {
-  const unvoted = new Set(platform.questions.filter((q) => !votedTask(q)).map((q) => q.id));
-  platform.arena = Object.fromEntries(Object.entries(data.arena ?? {}).filter(([id]) => !unvoted.has(id)));
+  const graded = new Set(platform.questions.filter(aiJudged).map((q) => q.id));
+  platform.arena = Object.fromEntries(Object.entries(data.arena ?? {}).filter(([id]) => !graded.has(id)));
   platform.arenaModels = data.arenaModels ?? [];
   platform.featured = data.featured ?? {};
   platform.totals = data.totals ?? { votes: 0, voters: 0, entries: 0 };
@@ -181,7 +181,7 @@ function loadActivity() {
       const data = await retryRead(async (timeout) => {
         // A retry budget can span a route change or a backgrounded tab.
         if (!activityNeeded || !activityVisible()) throw { kind: 'deferred' };
-        return responseData(await fetchApi('activity', { cache: 'no-store', signal: AbortSignal.timeout(timeout) }));
+        return responseData(await fetchApi('activity?guided=1', { cache: 'no-store', signal: AbortSignal.timeout(timeout) }));
       });
       if (!current()) return false;
       if (!compatibleBuild(frontendBuildInfo, data)) throw new Error('Invalid platform response');
