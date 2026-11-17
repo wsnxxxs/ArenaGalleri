@@ -16,7 +16,7 @@ export const THIN_ANSWERS = 10;
 // The health check judges a question only after this many answers in the trial.
 export const HEALTH_ANSWERS = 20;
 const UNITS = { model: '按模型', config: '按配置' };
-const CATEGORIES = { all: '全部', 建模: '三维', 静态网页: '设计' };
+const CATEGORIES = { all: '全部', 建模: '三维', 静态网页: '设计', 音乐: '音乐' };
 const VIEWS = { radar: '雷达', board: '维度榜', health: '测评点体检' };
 const ORDERS = { all: '全部', after: '先综合', before: '先测评点' };
 // The three problems the health check marks, keyed by the server's flag, and the rate each one reads.
