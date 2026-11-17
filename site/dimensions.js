@@ -24,7 +24,7 @@ export const FLAGS = {
   ties: { rate: 'tieRate', text: '平局超过 50%：分不出' },
   skips: { rate: 'skipRate', text: '跳过超过 30%：看不出' },
 };
-const RADAR = { width: 300, height: 252, cx: 150, cy: 126, radius: 84, gap: 12 };
+const RADAR = { width: 332, height: 252, cx: 158, cy: 126, radius: 80, gap: 11 };
 
 export const rateOf = (cell) => (cell?.n ? (cell.win + cell.tie / 2) / cell.n : null);
 const percent = (rate) => (rate == null ? '—' : `${Math.round(rate * 100)}%`);

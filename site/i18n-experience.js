@@ -152,6 +152,10 @@ const messages = {
   '逻辑': 'Logic',
   '贴题': 'Prompt fit',
   '发散': 'Originality',
+  '审美能力': 'Aesthetics',
+  '工程完备能力': 'Craft',
+  '逻辑能力': 'Logic',
+  '发散能力': 'Originality',
   '看哪里': 'Where to look',
   '看哪里：': 'Where to look: ',
   '看不出，跳过这题': 'Can’t tell, skip this question',
@@ -465,7 +469,7 @@ Object.assign(messages, {
   '作品信息与展示设置已保存，用量没有保存：{message}。请重试保存。': 'Details and display settings were saved, but usage was not: {message}. Please save again.',
 });
 // Each radar point's label names its dimension, so every dimension gets its own pair of templates.
-const dimensionNames = { 审美: 'Aesthetics', 工程完备: 'Craft', 逻辑: 'Logic', 贴题: 'Prompt fit', 发散: 'Originality' };
+const dimensionNames = { 审美: 'Aesthetics', 工程完备: 'Craft', 逻辑: 'Logic', 贴题: 'Prompt fit', 发散: 'Originality', 审美能力: 'Aesthetics', 工程完备能力: 'Craft', 逻辑能力: 'Logic', 发散能力: 'Originality' };
 for (const [name, english] of Object.entries(dimensionNames)) {
   messages[`${name} {score} ±{interval}，{count} 票`] = `${english} {score} ±{interval}, {count} votes`;
   messages[`${name} {score} ±{interval}，{count} 票，不足 {min} 票`] = `${english} {score} ±{interval}, {count} votes, fewer than {min}`;
