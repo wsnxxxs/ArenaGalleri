@@ -16,6 +16,7 @@ export const THIN_ANSWERS = 10;
 // The health check judges a question only after this many answers in the trial.
 export const HEALTH_ANSWERS = 20;
 const UNITS = { model: '按模型', config: '按配置' };
+const CATEGORIES = { all: '全部', 建模: '三维', 静态网页: '设计' };
 const VIEWS = { radar: '雷达', board: '维度榜', health: '测评点体检' };
 const ORDERS = { all: '全部', after: '先综合', before: '先测评点' };
 // The three problems the health check marks, keyed by the server's flag, and the rate each one reads.
@@ -138,7 +139,7 @@ function tipHtml(axis, entry) {
   const { cell, dimension } = axis;
   const lines = [`<span>${cell.n ? esc(`${cell.n} 票 · 胜 ${cell.win} · 平 ${cell.tie} · 负 ${cell.loss}`) : '还没有作答'}</span>`];
   if (axis.thin && cell.n) lines.push(`<span>不足 ${THIN_ANSWERS} 票，贴近分类分</span>`);
-  lines.push(`<span>${entry.prior == null ? '没有建模分类分，从 1000 起' : `建模分类分 ${esc(entry.prior)}`}</span>`);
+  lines.push(`<span>${entry.prior == null ? '没有基准分，从 1000 起' : `基准分 ${esc(entry.prior)}`}</span>`);
   for (const aspect of dimension.aspects) {
     const part = cell.aspects?.[aspect.id];
     lines.push(`<span><span>${esc(aspect.keyword)}</span> · <span>${part?.n ? `胜率 ${percent(rateOf(part))} · ${esc(part.n)} 票` : '未作答'}</span></span>`);
@@ -227,6 +228,7 @@ function health(rows, dimensions, order) {
 export function mount(root, ctx) {
   setPageTitle(['维度图', '盲评']);
   let unit = store.get('dimensions-unit') === 'config' ? 'config' : 'model';
+  let category = CATEGORIES[store.get('dimensions-category')] ? store.get('dimensions-category') : 'all';
   let view = VIEWS[store.get('dimensions-view')] ? store.get('dimensions-view') : 'radar';
   let picked = store.get('dimensions-board') ?? '';
   let order = 'all';
@@ -239,7 +241,7 @@ export function mount(root, ctx) {
   function page(body, meta = '') {
     root.innerHTML = `${ctx.pageStart({ title: '维度图', section: 'arena', heading: '各维度分',
       crumbs: [{ text: '盲评', href: '#/arena' }, { text: '维度图' }],
-      description: '测试版：由管理员在引导式盲评里答的测评点计算，不进任何榜单。每个维度和主榜一样按 Bradley–Terry 单独拟合，从这个条目自己的建模分类分起步：作答少时贴着分类分，作答多了才离开，离开的方向就是长板或短板。',
+      description: '测试版：由管理员在引导式盲评里答的测评点计算，不进任何榜单。每个维度和主榜一样按 Bradley–Terry 单独拟合，从这个条目自己的对应分类分（全部时取总榜分）起步：作答少时贴着基准分，作答多了才离开，离开的方向就是长板或短板。',
       meta, nav: ctx.sideNav('维度图', [['#/arena', 'blind', '盲评大厅', false], ['#/dimensions', 'rank', '维度图', true]]) })}
       <section class="block wrap dims">${body}</section>
     ${ctx.pageEnd()}`;
@@ -257,7 +259,7 @@ export function mount(root, ctx) {
   function radarView(entries, dimensions, noun) {
     const charted = entries.filter((entry) => dimensions.some((dimension) => entry.dimensions?.[dimension.id]?.n));
     const scale = scaleFor(charted, dimensions);
-    return `<p class="dims-key"><span>刻度 ${scale.min}–${scale.max}，所有卡片相同</span><span><i class="dims-swatch is-prior"></i>虚线圈：这个条目的建模分类分，伸出去的是长板</span><span><i class="dims-swatch is-whisker"></i>须线：95% 区间</span><span><i class="dims-swatch is-thin"></i>空心点、虚线：不足 ${THIN_ANSWERS} 票</span></p>
+    return `<p class="dims-key"><span>刻度 ${scale.min}–${scale.max}，所有卡片相同</span><span><i class="dims-swatch is-prior"></i>虚线圈：这个条目的基准分（分类分或总榜分），伸出去的是长板</span><span><i class="dims-swatch is-whisker"></i>须线：95% 区间</span><span><i class="dims-swatch is-thin"></i>空心点、虚线：不足 ${THIN_ANSWERS} 票</span></p>
       ${charted.length ? `<div class="dims-grid">${charted.map((entry) => card(entry, dimensions, unit, modelOf(entry), scale)).join('')}</div>`
         : `<p class="muted">还没有${noun}答过测评点。</p>`}
       <h3 class="dims-heading">明细</h3>
@@ -271,7 +273,7 @@ export function mount(root, ctx) {
     return `<div class="dims-bar">${seg('维度', 'data-dims-board', Object.fromEntries(dimensions.map((item) => [item.id, item.name])), dimension.id)}
       <p class="board-meta"><span>${rows.length} 个${unit === 'model' ? '模型' : '配置'}答过</span> · ${dimension.aspects.map((aspect) => `<span>${esc(aspect.keyword)}</span>`).join(' · ')}</p></div>
       ${board(rows, unit, modelOf, dimension)}
-      <p class="dims-foot"><span>维度分只用这个维度的测评点作答拟合，起点是建模分类分，没有分类分的从 1000 起。</span><span>不足 ${THIN_ANSWERS} 票标为单薄，分数主要还是分类分。</span></p>`;
+      <p class="dims-foot"><span>维度分只用这个维度的测评点作答拟合，起点是对应分类分（全部时取总榜分），没有的从 1000 起。</span><span>不足 ${THIN_ANSWERS} 票标为单薄，分数主要还是分类分。</span></p>`;
   }
 
   function healthView(dimensions) {
@@ -294,7 +296,7 @@ export function mount(root, ctx) {
     const meta = `<dl class="side-stats">${stat('测试对局', totals.pairs)}${stat('测评点作答', totals.answered)}${stat('参与管理员', totals.voters)}</dl>`;
     const toolbar = `<div class="dims-toolbar"><div class="dims-tabs" role="tablist" aria-label="视图">${Object.entries(VIEWS).map(([value, text]) =>
       `<button type="button" role="tab" id="dims-tab-${value}" aria-controls="dims-panel" aria-selected="${value === view}" tabindex="${value === view ? 0 : -1}" data-dims-view="${value}">${text}</button>`).join('')}</div>
-      ${view === 'health' ? '' : seg('统计单位', 'data-dims-unit', UNITS, unit)}</div>`;
+      <div class="dims-controls">${seg('题目类型', 'data-dims-cat', CATEGORIES, category)}${view === 'health' ? '' : seg('统计单位', 'data-dims-unit', UNITS, unit)}</div></div>`;
     if (!entries.length && view !== 'health') return page(`${toolbar}<div class="board-empty"><p class="board-empty-title">还没有测试票</p>
       <p>用管理员账号在引导式盲评里评几组，这里会按${noun}画出各维度分。</p>
       <div class="board-empty-actions"><a class="btn primary" href="#/arena/random">随机一组</a></div></div>`, meta);
@@ -311,7 +313,7 @@ export function mount(root, ctx) {
     $('.dims', root)?.classList.add('is-loading');
     if (!data) page('<p class="muted">正在载入维度图…</p>');
     try {
-      const next = await api(`arena/guided/dimensions?by=${unit}`);
+      const next = await api(`arena/guided/dimensions?by=${unit}${category === 'all' ? '' : `&category=${encodeURIComponent(category)}`}`);
       if (destroyed || id !== request) return;
       if (!isStaff()) return gate();
       data = next;
@@ -366,6 +368,12 @@ export function mount(root, ctx) {
     if (unitButton && unitButton.dataset.dimsUnit !== unit) {
       unit = unitButton.dataset.dimsUnit;
       store.set('dimensions-unit', unit);
+      void load();
+    }
+    const catButton = event.target.closest('[data-dims-cat]');
+    if (catButton && catButton.dataset.dimsCat !== category) {
+      category = catButton.dataset.dimsCat;
+      store.set('dimensions-category', category);
       void load();
     }
     const tab = event.target.closest('[data-dims-view]');

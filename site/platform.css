@@ -1547,7 +1547,7 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
    the entry's own category score; whiskers are 95% intervals. Thin axes are hollow, dashed and muted. */
 .dims.is-loading { opacity: 0.55; transition: opacity 0.2s; }
 .dims-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
-.dims-toolbar > .seg { margin-bottom: 8px; }
+.dims-toolbar > .seg, .dims-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .dims-tabs { display: flex; gap: 4px; margin-bottom: -1px; }
 .dims-tabs button { padding: 9px 12px 10px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: 500 14px var(--sans); cursor: pointer; transition: color 0.15s, border-color 0.15s; }
 .dims-tabs button:hover { color: var(--ink); }
@@ -1605,7 +1605,7 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .dims-foot { margin: 16px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
 @media (max-width: 640px) {
   .dims-toolbar { flex-direction: column-reverse; align-items: stretch; border-bottom: 0; }
-  .dims-toolbar > .seg { align-self: flex-start; margin-bottom: 0; }
+  .dims-toolbar > .seg, .dims-controls { align-self: flex-start; margin-bottom: 0; }
   .dims-tabs { border-bottom: 1px solid var(--line); }
   .dims-tabs button { flex: 1; padding-inline: 4px; font-size: 13.5px; white-space: nowrap; }
   .dims-health .c-dimension { display: none; }
