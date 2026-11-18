@@ -62,7 +62,7 @@ function taskSolveCornerHtml(t) {
     ? `${tr('解决状态')}：${labelText}（${tr('点击修改题目解决状态')}）`
     : `${tr('解决状态')}：${labelText}`;
   if (isStaff()) {
-    return `<button type="button" class="solve-corner is-editable" data-solve-trigger="${esc(t.id)}" data-solve-corner="${esc(t.id)}" data-solve-status="${esc(status)}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(titleText)}" title="${esc(titleText)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-corner-label">${esc(labelText)}</span></button>`;
+    return `<button type="button" class="solve-corner is-editable" data-solve-trigger="${esc(t.id)}" data-solve-corner="${esc(t.id)}" data-solve-status="${esc(status)}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(titleText)}" title="${esc(titleText)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-corner-label">${esc(labelText)}</span><span class="solve-side-caret" aria-hidden="true">▾</span></button>`;
   }
   return `<span class="solve-corner" data-solve-corner="${esc(t.id)}" data-solve-status="${esc(status)}" aria-label="${esc(titleText)}" title="${esc(titleText)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-corner-label">${esc(labelText)}</span></span>`;
 }
