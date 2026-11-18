@@ -227,6 +227,28 @@ const messages = {
   '对照题目给出的曲风、情绪和主题要求，看哪首真正做到了对味贴合。': 'Compare against the genre, mood, and theme requested in the prompt to see which track truly fits.',
   '编曲巧思': 'arrangement ingenuity',
   '听听有没有题目没明说但加得恰到好处的细节，比如转调、停顿留白或加花。': 'Listen for tasteful unprompted touches such as key changes, well-placed rests, or musical fills.',
+  "语言自然能力": "Naturalness",
+  "哪篇更符合": "Which piece better follows ",
+  "提示词的要求": "the prompt requirements",
+  "对照提示词，看体裁格式、字数篇幅、禁用词、指定文风或分段要求有没有漏项、犯规或敷衍凑数。两边都严格达标就选「都很好」。": "Compare against the prompt for genre, length, forbidden words, requested style, or section rules—watch for omissions, violations, or filler. If both strictly comply, choose “Both good”.",
+  "哪篇的": "Which piece’s ",
+  "前后逻辑": "internal logic",
+  "与细节推演更严谨自洽？": " and detail progression are more coherent?",
+  "看因果链条、人物动机、时间线与设定细节是否合乎情理，有没有前后矛盾、强行降智或硬凹反转。": "Check whether causality, character motivation, timeline, and world details hold together without contradictions or forced twists.",
+  "情节构思": "plot or conceit",
+  "更有新意、不落俗套？": " feels fresher and less cliché?",
+  "看故事走向、切入角度、意象设计或反转处理有没有让人眼前一亮的巧思，而不是一眼能猜到结尾的老套桥段。": "Look for fresh story angles, imagery, or turns rather than predictable tropes whose ending is obvious from the start.",
+  "AI 味": "AI tone",
+  "更淡、读起来更自然？": " is fainter and reads more naturally?",
+  "看有没有明显的“不是……而是……”句式堆砌、生硬翻译腔、排比金句强行升华、机械工整的段落结构或滥用破折号与引号黑话。两边都很自然就选「都很好」，都很重就选「都不好」。": "Watch for formulaic “not X, but Y” phrasing, stiff translationese, forced motivational endings, mechanical paragraph symmetry, or overused dashes and buzzwords. Choose “Both good” if both read naturally, or “Both poor” if both feel heavily AI-written.",
+  "用词把握": "word choice",
+  "更准确、更贴合语境？": " is more precise and fitting for the context?",
+  "看遣词造句的分寸感、语体色彩与人物口吻是否对味，有没有词不达意、用力过猛的辞藻堆砌，或违和的书面语/网络热词混搭。": "Check register, voice, and precision—watch for misused words, purple prose, or jarring clashes between formal diction and internet slang.",
+  "下一题：哪篇更符合提示词的要求？": "Next: which piece better follows the prompt requirements?",
+  "下一题：哪篇的前后逻辑与细节推演更严谨自洽？": "Next: which piece’s internal logic and detail progression are more coherent?",
+  "下一题：哪篇的情节构思更有新意、不落俗套？": "Next: which piece’s plot or conceit feels fresher and less cliché?",
+  "下一题：哪篇的 AI 味更淡、读起来更自然？": "Next: which piece’s AI tone is fainter and reads more naturally?",
+  "下一题：哪篇的用词把握更准确、更贴合语境？": "Next: which piece’s word choice is more precise and fitting for the context?",
   // Guided trial dimension chart (#/dimensions, staff only).
   '维度图': 'Dimensions',
   '各维度分': 'Score by dimension',
@@ -513,7 +535,7 @@ Object.assign(messages, {
   '作品信息与展示设置已保存，用量没有保存：{message}。请重试保存。': 'Details and display settings were saved, but usage was not: {message}. Please save again.',
 });
 // Each radar point's label names its dimension, so every dimension gets its own pair of templates.
-const dimensionNames = { 审美: 'Aesthetics', 工程完备: 'Craft', 逻辑: 'Logic', 贴题: 'Prompt fit', 发散: 'Originality', 审美能力: 'Aesthetics', 工程完备能力: 'Craft', 逻辑能力: 'Logic', 发散能力: 'Originality' };
+const dimensionNames = { 审美: 'Aesthetics', 工程完备: 'Craft', 逻辑: 'Logic', 贴题: 'Prompt fit', 发散: 'Originality', 审美能力: 'Aesthetics', 工程完备能力: 'Craft', 逻辑能力: 'Logic', 发散能力: 'Originality', 语言自然能力: 'Naturalness' };
 for (const [name, english] of Object.entries(dimensionNames)) {
   messages[`${name} {score} ±{interval}，{count} 票`] = `${english} {score} ±{interval}, {count} votes`;
   messages[`${name} {score} ±{interval}，{count} 票，不足 {min} 票`] = `${english} {score} ±{interval}, {count} votes, fewer than {min}`;

@@ -16,7 +16,7 @@ export const THIN_ANSWERS = 10;
 // The health check judges a question only after this many answers in the trial.
 export const HEALTH_ANSWERS = 20;
 const UNITS = { model: '按模型', config: '按配置' };
-const CATEGORIES = { all: '全部', 建模: '三维', 静态网页: '设计', 音乐: '音乐' };
+const CATEGORIES = { all: '全部', 建模: '三维', 静态网页: '设计', 文学: '语言', 音乐: '音乐' };
 const VIEWS = { radar: '雷达', board: '维度榜', health: '测评点体检' };
 const ORDERS = { all: '全部', after: '先综合', before: '先测评点' };
 // The three problems the health check marks, keyed by the server's flag, and the rate each one reads.
@@ -25,7 +25,7 @@ export const FLAGS = {
   ties: { rate: 'tieRate', text: '平局超过 50%：分不出' },
   skips: { rate: 'skipRate', text: '跳过超过 30%：看不出' },
 };
-const RADAR = { width: 332, height: 252, cx: 158, cy: 126, radius: 80, gap: 11 };
+const RADAR = { width: 348, height: 252, cx: 174, cy: 126, radius: 80, gap: 11 };
 
 export const rateOf = (cell) => (cell?.n ? (cell.win + cell.tie / 2) / cell.n : null);
 const percent = (rate) => (rate == null ? '—' : `${Math.round(rate * 100)}%`);
@@ -302,7 +302,7 @@ export function mount(root, ctx) {
       <div class="board-empty-actions"><a class="btn primary" href="#/arena/random">随机一组</a></div></div>`, meta);
     const body = view === 'board' ? boardView(dimensions) : view === 'health' ? healthView(dimensions) : radarView(entries, dimensions, noun);
     page(`${toolbar}<div class="dims-panel" id="dims-panel" role="tabpanel" aria-labelledby="dims-tab-${view}">${body}
-      <p class="dims-foot"><span>只统计带测评点的测试对局。</span><span>两边是同一${noun}的一对不计。</span>${totals.since ? `<span>数据从 ${formatDate(totals.since)} 到 ${formatDate(totals.until)}。</span>` : ''}<span><span>有测评点的题目类型：</span>${data.categories.map((category) => `<span>${esc(category)}</span>`).join(' · ')}</span></p></div>`, meta);
+      <p class="dims-foot"><span>只统计带测评点的测试对局。</span><span>两边是同一${noun}的一对不计。</span>${totals.since ? `<span>数据从 ${formatDate(totals.since)} 到 ${formatDate(totals.until)}。</span>` : ''}<span><span>有测评点的题目类型：</span>${data.categories.map((cat) => `<span>${esc(CATEGORIES[cat] ?? cat)}</span>`).join(' · ')}</span></p></div>`, meta);
   }
 
   // Every load, including one that ends at the gate, makes earlier reads stale; a read that lands is shown
