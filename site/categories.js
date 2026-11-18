@@ -57,6 +57,7 @@ export const DOMAIN_GROUPS = [
   { title: '人文与社会', domains: ['文学艺术', '哲学', '历史文化', '教育学习', '经济金融', '商业管理', '法律政务', '社会生活'] },
   { title: '空间与产品', domains: ['建筑', '自然景观', '交通与机械', '产品与品牌'] },
   { title: '生活与娱乐', domains: ['游戏娱乐', '生活服务', '餐饮美食', '旅游出行', '运动体育'] },
+  { title: '其他', domains: ['其他'] },
 ];
 export const DOMAINS = DOMAIN_GROUPS.flatMap((group) => group.domains);
 export const MAX_DOMAINS = 2;

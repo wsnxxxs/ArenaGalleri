@@ -518,4 +518,10 @@ export default {
   "语言 · 餐饮美食排行": "Language · Food & dining ranking",
   "语言 · 旅游出行排行": "Language · Travel ranking",
   "语言 · 运动体育排行": "Language · Sports ranking",
+  "其他排行": "Other ranking",
+  "语言 · 其他排行": "Language · Other ranking",
+  "设计 · 其他排行": "Design · Other ranking",
+  "三维 · 其他排行": "3D · Other ranking",
+  "推理 · 其他排行": "Reasoning · Other ranking",
+  "音乐 · 其他排行": "Music · Other ranking",
 };
