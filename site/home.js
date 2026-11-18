@@ -246,6 +246,11 @@ export function mount(root, ctx) {
       <div><h2 id="home-blind-title">先别看名字，只看作品。</h2><p>同一道题的两份解答匿名并排，选出更好的那一个，投票后揭晓模型并汇入排行榜。</p></div>
       <a class="btn" href="#/arena">开始盲评${icon('right')}</a>
     </section>
+    <section class="home-blind home-team" aria-labelledby="home-team-title">
+      <p class="home-blind-ab home-team-mark" aria-hidden="true"><i>1</i><span>+</span><i>N</i></p>
+      <div><h2 id="home-team-title">想了解我们吗？</h2><p>亿模亿样不是一个人做出的平台，点击右侧按钮，了解开发者团队。</p></div>
+      <a class="btn" href="#/team">了解团队${icon('right')}</a>
+    </section>
   </main>${ctx.footer()}`;
 
   fitPosters(root);

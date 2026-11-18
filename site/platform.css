@@ -2347,3 +2347,10 @@ html[data-theme="light"] .solve-corner {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ---- home team banner ---- */
+.home-blind + .home-blind { margin-top: 0; }
+.home-blind[hidden] + .home-blind { margin-top: 36px; }
+@media (min-width: 761px) {
+  .home-blind-ab { min-width: 76px; }
+}

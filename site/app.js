@@ -9,6 +9,7 @@ import { initI18n, languageButton, setPageTitle, t as tr } from './i18n.js';
 //   #/arena[/<task>]          blind comparison            (platform)
 //   #/leaderboard[/<task>]    leaderboard                 (platform)
 //   #/changelog[/<id>]        website changelog           (platform)
+//   #/team[/<id>]             developer team              (guided-trial)
 //   #/new                    publish a question          (platform)
 //   #/exam                   qualification test          (platform)
 //   #/submit/<task>           upload to this task         (platform)
@@ -597,7 +598,7 @@ function galleryStageHeader(t, mode) {
 }
 const footer = () => `<footer class="footer"><div class="wrap footer-in">
   <p class="footer-brand">${LOGO}<span>${esc(DATA.title)}</span><span class="muted">前端作品档案</span></p>
-  <div class="footer-links">${platform.available ? '<a href="#/changelog">更新日志</a><a href="#/new">发起题目</a><a href="#/leaderboard">榜单</a>' : ''}<a href="${esc(DATA.repo)}" target="_blank" rel="noopener">项目仓库</a><a href="${esc(DATA.repo)}#readme" target="_blank" rel="noopener">参与贡献</a><a href="#/terms">使用条款</a><a href="#/privacy">隐私政策</a><a href="mailto:${CONTACT}">联系我们</a></div>
+  <div class="footer-links">${platform.available ? '<a href="#/changelog">更新日志</a>' : ''}<a href="#/team">开发者团队</a>${platform.available ? '<a href="#/new">发起题目</a><a href="#/leaderboard">榜单</a>' : ''}<a href="${esc(DATA.repo)}" target="_blank" rel="noopener">项目仓库</a><a href="${esc(DATA.repo)}#readme" target="_blank" rel="noopener">参与贡献</a><a href="#/terms">使用条款</a><a href="#/privacy">隐私政策</a><a href="mailto:${CONTACT}">联系我们</a></div>
   <p class="footer-legal">© ${new Date().getFullYear()} ${esc(DATA.title)} · 站内作品由 AI 模型生成，仅供比较与学习参考 · 引用或转载请<a href="#/terms#cite">注明来源</a> · <a href="mailto:${CONTACT}">${CONTACT}</a>${beianLink() ? ` · ${beianLink()}` : ''}</p>
 </div></footer>`;
 
@@ -2244,9 +2245,9 @@ function notFound(msg) {
 
 // Platform pages live in their own modules and need the server; task ids never use these names.
 // dimensions is the guided trial's staff chart and exists only in GUIDED_VOTING builds (see guidedTrial).
-const PLATFORM_PAGES = { arena: './arena.js', leaderboard: './leaderboard.js', changelog: './changelog.js', new: './publish.js', exam: './exam.js', submit: './submit.js', me: './account.js', review: './account.js', dimensions: './dimensions.js' };
-const PAGE_TITLES = { arena: '盲评', leaderboard: '榜单', changelog: '更新日志', new: '发起题目', exam: '资格考试', submit: '上传作品', me: '个人中心', review: '审核', dimensions: '维度图' };
-const PAGE_SECTIONS = { arena: 'arena', leaderboard: 'leaderboard', changelog: '', new: 'new', exam: 'new', submit: 'questions', me: 'me', review: 'me', dimensions: 'arena' };
+const PLATFORM_PAGES = { arena: './arena.js', leaderboard: './leaderboard.js', changelog: './changelog.js', team: './team.js', new: './publish.js', exam: './exam.js', submit: './submit.js', me: './account.js', review: './account.js', dimensions: './dimensions.js' };
+const PAGE_TITLES = { arena: '盲评', leaderboard: '榜单', changelog: '更新日志', team: '开发者团队', new: '发起题目', exam: '资格考试', submit: '上传作品', me: '个人中心', review: '审核', dimensions: '维度图' };
+const PAGE_SECTIONS = { arena: 'arena', leaderboard: 'leaderboard', changelog: '', team: '', new: 'new', exam: 'new', submit: 'questions', me: 'me', review: 'me', dimensions: 'arena' };
 const guidedTrial = () => globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
 // A pointer resting on a link to one of these pages (or a finger landing on it) starts fetching the
 // page's code, so the click usually finds it ready.
@@ -2578,7 +2579,7 @@ async function show(version, visit, scrollBack) {
     else if (taskId === 'questions') page = renderLibrary(parts.slice(1), Boolean(visit && !visit.returning));
     else if (taskId === 'terms' || taskId === 'privacy') page = renderLegal(root, context(), taskId);
     else if (platformPage) {
-      if (!platform.available || (!['leaderboard', 'changelog'].includes(platformPage) && !platform.sessionReady) || (platformPage === 'arena' && !platform.activityReady)) page = platformOffline(platformPage);
+      if ((platformPage !== 'team' && !platform.available) || (!['leaderboard', 'changelog', 'team'].includes(platformPage) && !platform.sessionReady) || (platformPage === 'arena' && !platform.activityReady)) page = platformOffline(platformPage);
       else {
         root.innerHTML = `${header([{ text: PAGE_TITLES[platformPage] }], false, PAGE_SECTIONS[platformPage])}<main class="page wrap empty-page"><p class="muted">正在打开…</p></main>`;
         try {
