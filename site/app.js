@@ -1,4 +1,4 @@
-import { initI18n, languageButton, setPageTitle } from './i18n.js';
+import { initI18n, languageButton, setPageTitle, t as tr } from './i18n.js';
 // 亿模亿样 — single-page gallery and platform. Routes are hash based, so the archive works
 // on any static host; the platform routes need the server (npm start).
 //   #/                        home: latest questions and answers
@@ -42,6 +42,199 @@ initI18n();
 const deferredMedia = createDeferredMedia();
 const root = $('#app');
 let DATA;
+const SOLVE_STATUSES = [
+  { key: 'hard', label: '难以解决' },
+  { key: 'solving', label: '正被解决' },
+  { key: 'solved', label: '基本解决' },
+  { key: 'scarce', label: '结果较少' },
+];
+const SOLVE_STATUS_MAP = new Map(SOLVE_STATUSES.map((item) => [item.key, item]));
+const DEFAULT_SOLVE_STATUS = 'scarce';
+const normalizeSolveStatus = (value) => (SOLVE_STATUS_MAP.has(value) ? value : DEFAULT_SOLVE_STATUS);
+const solveStatusOf = (t) => normalizeSolveStatus(t?.solveStatus);
+const solveStatusMeta = (status) => SOLVE_STATUS_MAP.get(normalizeSolveStatus(status));
+
+function taskSolveCornerHtml(t) {
+  const status = solveStatusOf(t);
+  const meta = solveStatusMeta(status);
+  const labelText = tr(meta.label);
+  const titleText = isStaff()
+    ? `${tr('解决状态')}：${labelText}（${tr('点击修改题目解决状态')}）`
+    : `${tr('解决状态')}：${labelText}`;
+  if (isStaff()) {
+    return `<button type="button" class="solve-corner is-editable" data-solve-trigger="${esc(t.id)}" data-solve-corner="${esc(t.id)}" data-solve-status="${esc(status)}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(titleText)}" title="${esc(titleText)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-corner-label">${esc(labelText)}</span></button>`;
+  }
+  return `<span class="solve-corner" data-solve-corner="${esc(t.id)}" data-solve-status="${esc(status)}" aria-label="${esc(titleText)}" title="${esc(titleText)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-corner-label">${esc(labelText)}</span></span>`;
+}
+
+function taskSolveSidebarHtml(t) {
+  const status = solveStatusOf(t);
+  const meta = solveStatusMeta(status);
+  const labelText = tr(meta.label);
+  const hint = isStaff() ? tr('点击修改题目解决状态') : tr('解决状态');
+  const control = isStaff()
+    ? `<button type="button" class="solve-side is-editable" data-solve-trigger="${esc(t.id)}" data-solve-side="${esc(t.id)}" data-solve-status="${esc(status)}" aria-haspopup="menu" aria-expanded="false" title="${esc(hint)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-side-label">${esc(labelText)}</span><span class="solve-side-caret" aria-hidden="true">▾</span></button>`
+    : `<span class="solve-side" data-solve-side="${esc(t.id)}" data-solve-status="${esc(status)}" title="${esc(hint)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-side-label">${esc(labelText)}</span></span>`;
+  return `<div class="solve-side-wrap" data-solve-wrap="${esc(t.id)}">${control}</div>`;
+}
+
+function syncSolveNode(node, status) {
+  const meta = solveStatusMeta(status);
+  const normalized = meta.key;
+  const labelText = tr(meta.label);
+  node.dataset.solveStatus = normalized;
+  const labelEl = node.querySelector('.solve-corner-label, .solve-side-label');
+  if (labelEl) labelEl.textContent = labelText;
+  if (node.matches('[data-solve-corner]')) {
+    const tip = isStaff() ? `${tr('解决状态')}：${labelText}（${tr('点击修改题目解决状态')}）` : `${tr('解决状态')}：${labelText}`;
+    node.setAttribute('aria-label', tip);
+    node.setAttribute('title', tip);
+  }
+}
+
+function applyTaskSolveStatus(taskId, status) {
+  const normalized = normalizeSolveStatus(status);
+  if (Array.isArray(DATA?.tasks)) {
+    const task = DATA.tasks.find((item) => item.id === taskId);
+    if (task) task.solveStatus = normalized;
+  }
+  if (Array.isArray(platform?.questions)) {
+    const q = platform.questions.find((item) => item.id === taskId);
+    if (q) q.solveStatus = normalized;
+  }
+  for (const node of document.querySelectorAll('[data-solve-corner], [data-solve-side]')) {
+    const id = node.dataset.solveCorner || node.dataset.solveSide;
+    if (id === taskId) syncSolveNode(node, normalized);
+  }
+}
+
+let solveMenuEl = null;
+let solveMenuTrigger = null;
+let solveMenuSaving = false;
+
+function closeSolveMenu() {
+  if (solveMenuTrigger) solveMenuTrigger.setAttribute('aria-expanded', 'false');
+  solveMenuTrigger = null;
+  if (solveMenuEl) {
+    solveMenuEl.hidden = true;
+    solveMenuEl.removeAttribute('data-task-id');
+  }
+}
+
+function positionSolveMenu(trigger) {
+  if (!solveMenuEl || !trigger || !trigger.isConnected) { closeSolveMenu(); return; }
+  const rect = trigger.getBoundingClientRect();
+  const menuRect = solveMenuEl.getBoundingClientRect();
+  const margin = 8;
+  let left = rect.right - menuRect.width;
+  if (left < margin) left = Math.max(margin, rect.left);
+  if (left + menuRect.width > innerWidth - margin) left = Math.max(margin, innerWidth - menuRect.width - margin);
+  let top = rect.bottom + 6;
+  if (top + menuRect.height > innerHeight - margin) {
+    const above = rect.top - menuRect.height - 6;
+    top = above >= margin ? above : Math.max(margin, innerHeight - menuRect.height - margin);
+  }
+  solveMenuEl.style.left = `${Math.round(left)}px`;
+  solveMenuEl.style.top = `${Math.round(top)}px`;
+}
+
+function ensureSolveMenu() {
+  if (solveMenuEl) return solveMenuEl;
+  const menu = document.createElement('div');
+  menu.className = 'solve-status-menu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', tr('修改题目解决状态'));
+  menu.hidden = true;
+  menu.addEventListener('click', async (event) => {
+    const option = event.target.closest('[data-solve-option]');
+    if (!option || solveMenuSaving) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const taskId = menu.dataset.taskId;
+    const nextStatus = option.dataset.solveOption;
+    if (!taskId || !SOLVE_STATUS_MAP.has(nextStatus)) return;
+    const task = DATA?.tasks?.find((item) => item.id === taskId);
+    const currentStatus = solveStatusOf(task);
+    if (nextStatus === currentStatus) { closeSolveMenu(); return; }
+    solveMenuSaving = true;
+    for (const btn of menu.querySelectorAll('button')) btn.disabled = true;
+    menu.classList.add('is-saving');
+    try {
+      const res = await api(`admin/tasks/${encodeURIComponent(taskId)}/solve-status`, {
+        method: 'PUT',
+        body: { status: nextStatus },
+      });
+      const saved = normalizeSolveStatus(res?.solveStatus ?? nextStatus);
+      applyTaskSolveStatus(taskId, saved);
+      closeSolveMenu();
+      toast(`${tr('解决状态')}：${tr(solveStatusMeta(saved).label)}`);
+    } catch (error) {
+      toast(error?.message || tr('状态保存失败，请重试'));
+    } finally {
+      solveMenuSaving = false;
+      for (const btn of menu.querySelectorAll('button')) btn.disabled = false;
+      menu.classList.remove('is-saving');
+    }
+  });
+  document.body.appendChild(menu);
+  solveMenuEl = menu;
+  return menu;
+}
+
+function openSolveMenu(trigger) {
+  const taskId = trigger.dataset.solveTrigger;
+  if (!taskId || !isStaff()) return;
+  if (solveMenuTrigger === trigger && solveMenuEl && !solveMenuEl.hidden) {
+    closeSolveMenu();
+    return;
+  }
+  closeSolveMenu();
+  const task = DATA?.tasks?.find((item) => item.id === taskId);
+  const current = normalizeSolveStatus(trigger.dataset.solveStatus ?? solveStatusOf(task));
+  const menu = ensureSolveMenu();
+  menu.dataset.taskId = taskId;
+  menu.setAttribute('aria-label', tr('修改题目解决状态'));
+  menu.innerHTML = `<div class="solve-menu-head">${esc(tr('解决状态'))}</div>${SOLVE_STATUSES.map((item) => `
+    <button type="button" class="solve-menu-item${item.key === current ? ' is-active' : ''}" role="menuitemradio" aria-checked="${item.key === current}" data-solve-option="${esc(item.key)}" data-solve-status="${esc(item.key)}">
+      <span class="solve-dot" aria-hidden="true"></span>
+      <span class="solve-menu-name">${esc(tr(item.label))}</span>
+      <span class="solve-menu-check" aria-hidden="true">${item.key === current ? '✓' : ''}</span>
+    </button>`).join('')}`;
+  menu.hidden = false;
+  solveMenuTrigger = trigger;
+  trigger.setAttribute('aria-expanded', 'true');
+  positionSolveMenu(trigger);
+}
+
+document.addEventListener('click', (event) => {
+  const trigger = event.target.closest('[data-solve-trigger]');
+  if (trigger) {
+    event.preventDefault();
+    event.stopPropagation();
+    openSolveMenu(trigger);
+    return;
+  }
+  if (solveMenuEl && !solveMenuEl.hidden && !event.target.closest('.solve-status-menu')) closeSolveMenu();
+}, true);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && solveMenuEl && !solveMenuEl.hidden) {
+    const trigger = solveMenuTrigger;
+    closeSolveMenu();
+    trigger?.focus?.();
+  }
+});
+window.addEventListener('resize', closeSolveMenu);
+window.addEventListener('scroll', () => {
+  if (solveMenuEl && !solveMenuEl.hidden && solveMenuTrigger) positionSolveMenu(solveMenuTrigger);
+}, true);
+window.addEventListener('hashchange', closeSolveMenu);
+window.addEventListener('localechange', () => {
+  closeSolveMenu();
+  for (const node of document.querySelectorAll('[data-solve-corner], [data-solve-side]')) {
+    syncSolveNode(node, node.dataset.solveStatus);
+  }
+});
+
 let MODELS;
 let HARNESSES;
 let PROVIDERS;
@@ -328,6 +521,7 @@ function renderLibrary(scopes = [], fresh = true) {
       <a class="question-visual${shown?.previewMode === 'screenshot' ? ' screenshot-thumb' : shown?.previewModel || shown?.previewLoader ? ' model-thumb' : ''}" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的全部作品" tabindex="-1"${shown ? ` data-preview-id="${esc(shown.id)}"` : ''}>
         ${artwork}
       </a>
+      ${taskSolveCornerHtml(t)}
       <div class="task-body">
         <div class="question-byline"><ul class="tag-line"><li class="tag-recommendation" data-question-reason hidden></li>${tagLine(t)}</ul>
           <span class="avatar question-avatar${bySite(t) ? ' is-site' : ''}" role="img" aria-label="发布者：${esc(authorName(t))}" title="发布者：${esc(authorName(t))}">${authorAvatar(t)}</span>
@@ -995,6 +1189,7 @@ function renderTask(t) {
       <p class="side-intro"><span data-i18n-ignore>${esc(t.summary)}</span></p>
       <p class="side-byline"><span data-i18n-ignore>${esc(authorName(t))}</span> <span>发起</span>${t.date ? ` · <span data-i18n-date="${esc(t.date)}">${formatDate(t.date)}</span>` : ''}</p>
       <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}</ul>
+      ${taskSolveSidebarHtml(t)}
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}

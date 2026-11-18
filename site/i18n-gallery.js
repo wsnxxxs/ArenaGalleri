@@ -461,4 +461,12 @@ export default {
   '音乐排行': 'Music ranking', '音乐第 {count}': 'Music #{count}', '音乐榜单还在等第一批盲评': 'Music leaderboard is awaiting its first blind-review votes',
   '音乐题目': 'Music questions', '发起音乐题目': 'Submit a music question',
   '为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。': 'To test LLMs’ music-making capability, do not include music from generative audio models.',
+  "难以解决": "Hard to solve",
+  "正被解决": "Being solved",
+  "基本解决": "Mostly solved",
+  "结果较少": "Fewer results",
+  "解决状态": "Solve status",
+  "点击修改题目解决状态": "Click to update solve status",
+  "修改题目解决状态": "Update solve status",
+  "状态保存失败，请重试": "Failed to save status, please try again",
 };
