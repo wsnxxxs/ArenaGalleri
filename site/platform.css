@@ -2042,7 +2042,7 @@ html[data-theme="light"] .solve-corner {
 .solve-side-wrap {
   display: flex;
   align-items: center;
-  margin: 0;
+  margin: 12px 0 0;
 }
 .solve-side {
   display: inline-flex;
