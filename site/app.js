@@ -24,7 +24,7 @@ import { effortRank, representatives, standard, taskCover } from './featured.js'
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { boostOrder } from './work-boost.js';
 import { downloadReference, linkReferences, referenceSheet, useReferenceViewer } from './references.js';
-import { aiJudged, aiScoreOf, categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf } from './categories.js';
+import { CATEGORIES, aiJudged, aiScoreOf, categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, subcategoriesOf, subcategoryOf, tracksOf } from './categories.js';
 import { textMatches } from './match.js';
 import { modelResolver } from './models.js';
 import { popularQuestions, recommendQuestions } from './question-recommendations.js';
@@ -75,7 +75,7 @@ function taskSolveSidebarHtml(t) {
   const control = isStaff()
     ? `<button type="button" class="solve-side is-editable" data-solve-trigger="${esc(t.id)}" data-solve-side="${esc(t.id)}" data-solve-status="${esc(status)}" aria-haspopup="menu" aria-expanded="false" title="${esc(hint)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-side-label">${esc(labelText)}</span><span class="solve-side-caret" aria-hidden="true">▾</span></button>`
     : `<span class="solve-side" data-solve-side="${esc(t.id)}" data-solve-status="${esc(status)}" title="${esc(hint)}"><span class="solve-dot" aria-hidden="true"></span><span class="solve-side-label">${esc(labelText)}</span></span>`;
-  return `<div class="solve-side-wrap" data-solve-wrap="${esc(t.id)}">${control}</div>`;
+  return `<div class="solve-side-wrap" data-solve-wrap="${esc(t.id)}">${control}${taskSubcatSidebarHtml(t)}</div>`;
 }
 
 function syncSolveNode(node, status) {
@@ -188,6 +188,7 @@ function openSolveMenu(trigger) {
     closeSolveMenu();
     return;
   }
+  closeSubcatMenu();
   closeSolveMenu();
   const task = DATA?.tasks?.find((item) => item.id === taskId);
   const current = normalizeSolveStatus(trigger.dataset.solveStatus ?? solveStatusOf(task));
@@ -234,6 +235,194 @@ window.addEventListener('localechange', () => {
     syncSolveNode(node, node.dataset.solveStatus);
   }
 });
+function subcatLabelOf(category, subName) {
+  const found = subcategoriesOf(category).find((s) => s.name === subName);
+  return found ? tr(found.label) : (subName ? tr(subName) : tr('未设置细分'));
+}
+
+function taskSubcatSidebarHtml(t) {
+  const subs = subcategoriesOf(t.category).filter((s) => !s.disabled);
+  if (!isStaff() || !subs.length) return '';
+  const current = subcategoryOf(t);
+  const labelText = current ? subcatLabelOf(t.category, current) : tr('未设置细分');
+  return `<button type="button" class="subcat-side${current ? '' : ' is-unset'}" data-subcat-trigger="${esc(t.id)}" data-subcat-value="${esc(current)}" aria-haspopup="menu" aria-expanded="false" title="${esc(tr('点击修改细分分类'))}"><span class="subcat-side-kicker">${esc(tr('细分方向'))}</span><span class="subcat-side-label">${esc(labelText)}</span><span class="solve-side-caret" aria-hidden="true">▾</span></button>`;
+}
+
+function applyTaskSubcategory(taskId, subcategory) {
+  const tasks = Array.isArray(DATA?.tasks) ? DATA.tasks : [];
+  const task = tasks.find((item) => item.id === taskId);
+  const category = task?.category ?? '';
+  const clean = typeof subcategory === 'string' && subcategoriesOf(category).some((s) => s.name === subcategory && !s.disabled) ? subcategory : '';
+  if (task) task.subcategory = clean;
+  if (Array.isArray(platform?.questions)) {
+    const q = platform.questions.find((item) => item.id === taskId);
+    if (q) q.subcategory = clean;
+  }
+  const btn = document.querySelector(`[data-subcat-trigger="${CSS.escape(taskId)}"]`);
+  if (btn) {
+    btn.dataset.subcatValue = clean;
+    btn.classList.toggle('is-unset', !clean);
+    const lbl = btn.querySelector('.subcat-side-label');
+    if (lbl) lbl.textContent = clean ? subcatLabelOf(category, clean) : tr('未设置细分');
+  }
+  const sideTags = $('.task-side .side-tags');
+  if (sideTags && task) {
+    sideTags.querySelector('.tag-sub')?.remove();
+    if (clean) {
+      const kindEl = sideTags.querySelector('.tag-kind');
+      const liHtml = `<li class="tag-sub"><a href="${LIBRARY.href}/${encodeURIComponent(task.category)}/${encodeURIComponent(clean)}">${esc(tr(clean))}</a></li>`;
+      if (kindEl) kindEl.insertAdjacentHTML('afterend', liHtml);
+      else sideTags.insertAdjacentHTML('afterbegin', liHtml);
+    }
+  }
+  const cardTags = document.querySelector(`[data-task-card="${CSS.escape(taskId)}"] .tag-line`);
+  if (cardTags && task) {
+    cardTags.querySelector('.tag-sub')?.remove();
+    if (clean) {
+      const kindEl = cardTags.querySelector('.tag-kind');
+      const liHtml = `<li class="tag-sub">${esc(tr(clean))}</li>`;
+      if (kindEl) kindEl.insertAdjacentHTML('afterend', liHtml);
+      else cardTags.insertAdjacentHTML('afterbegin', liHtml);
+    }
+  }
+}
+
+let subcatMenuEl = null;
+let subcatMenuTrigger = null;
+let subcatMenuSaving = false;
+
+function closeSubcatMenu() {
+  if (subcatMenuTrigger) subcatMenuTrigger.setAttribute('aria-expanded', 'false');
+  subcatMenuTrigger = null;
+  if (subcatMenuEl) {
+    subcatMenuEl.hidden = true;
+    subcatMenuEl.removeAttribute('data-task-id');
+  }
+}
+
+function positionSubcatMenu(trigger) {
+  if (!subcatMenuEl || !trigger || !trigger.isConnected) { closeSubcatMenu(); return; }
+  const rect = trigger.getBoundingClientRect();
+  const menuRect = subcatMenuEl.getBoundingClientRect();
+  const margin = 8;
+  let left = rect.left;
+  if (left + menuRect.width > innerWidth - margin) left = Math.max(margin, innerWidth - menuRect.width - margin);
+  let top = rect.bottom + 6;
+  if (top + menuRect.height > innerHeight - margin) {
+    const above = rect.top - menuRect.height - 6;
+    top = above >= margin ? above : Math.max(margin, innerHeight - menuRect.height - margin);
+  }
+  subcatMenuEl.style.left = `${Math.round(left)}px`;
+  subcatMenuEl.style.top = `${Math.round(top)}px`;
+}
+
+function ensureSubcatMenu() {
+  if (subcatMenuEl) return subcatMenuEl;
+  const menu = document.createElement('div');
+  menu.className = 'solve-status-menu subcat-menu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', tr('点击修改细分分类'));
+  menu.hidden = true;
+  menu.addEventListener('click', async (event) => {
+    const option = event.target.closest('[data-subcat-option]');
+    if (!option || subcatMenuSaving || option.disabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const taskId = menu.dataset.taskId;
+    const nextSub = option.dataset.subcatOption;
+    if (!taskId) return;
+    const task = DATA?.tasks?.find((item) => item.id === taskId);
+    const currentSub = subcategoryOf(task);
+    if (nextSub === currentSub) { closeSubcatMenu(); return; }
+    subcatMenuSaving = true;
+    for (const btn of menu.querySelectorAll('button')) btn.disabled = true;
+    menu.classList.add('is-saving');
+    try {
+      const res = await api(`admin/tasks/${encodeURIComponent(taskId)}/subcategory`, {
+        method: 'PUT',
+        body: { subcategory: nextSub },
+      });
+      const saved = typeof res?.subcategory === 'string' ? res.subcategory : nextSub;
+      applyTaskSubcategory(taskId, saved);
+      closeSubcatMenu();
+      toast(`${tr('细分方向')}：${saved ? tr(saved) : tr('未设置细分')}`);
+    } catch (error) {
+      toast(error?.message || tr('状态保存失败，请重试'));
+    } finally {
+      subcatMenuSaving = false;
+      for (const btn of menu.querySelectorAll('button')) {
+        btn.disabled = btn.dataset.disabledOption === '1';
+      }
+      menu.classList.remove('is-saving');
+    }
+  });
+  document.body.appendChild(menu);
+  subcatMenuEl = menu;
+  return menu;
+}
+
+function openSubcatMenu(trigger) {
+  const taskId = trigger.dataset.subcatTrigger;
+  if (!taskId || !isStaff()) return;
+  if (subcatMenuTrigger === trigger && subcatMenuEl && !subcatMenuEl.hidden) {
+    closeSubcatMenu();
+    return;
+  }
+  closeSolveMenu();
+  closeSubcatMenu();
+  const task = DATA?.tasks?.find((item) => item.id === taskId);
+  if (!task) return;
+  const subs = subcategoriesOf(task.category);
+  const current = subcategoryOf(task);
+  const menu = ensureSubcatMenu();
+  menu.dataset.taskId = taskId;
+  menu.setAttribute('aria-label', tr('点击修改细分分类'));
+  menu.innerHTML = `<div class="solve-menu-head">${esc(tr('细分方向'))}</div>${subs.map((item) => `
+    <button type="button" class="solve-menu-item${item.name === current ? ' is-active' : ''}${item.disabled ? ' is-disabled' : ''}" role="menuitemradio" aria-checked="${item.name === current}" data-subcat-option="${esc(item.name)}" data-disabled-option="${item.disabled ? '1' : '0'}"${item.disabled ? ' disabled' : ''}>
+      <span class="solve-menu-name">${esc(tr(item.label))}</span>
+      <span class="solve-menu-check" aria-hidden="true">${item.name === current ? '✓' : ''}</span>
+    </button>`).join('')}`;
+  menu.hidden = false;
+  subcatMenuTrigger = trigger;
+  trigger.setAttribute('aria-expanded', 'true');
+  positionSubcatMenu(trigger);
+}
+
+document.addEventListener('click', (event) => {
+  const subTrigger = event.target.closest('[data-subcat-trigger]');
+  if (subTrigger) {
+    event.preventDefault();
+    event.stopPropagation();
+    openSubcatMenu(subTrigger);
+    return;
+  }
+  if (subcatMenuEl && !subcatMenuEl.hidden && !event.target.closest('.subcat-menu')) closeSubcatMenu();
+}, true);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && subcatMenuEl && !subcatMenuEl.hidden) {
+    const trigger = subcatMenuTrigger;
+    closeSubcatMenu();
+    trigger?.focus?.();
+  }
+});
+window.addEventListener('resize', closeSubcatMenu);
+window.addEventListener('scroll', () => {
+  if (subcatMenuEl && !subcatMenuEl.hidden && subcatMenuTrigger) positionSubcatMenu(subcatMenuTrigger);
+}, true);
+window.addEventListener('hashchange', closeSubcatMenu);
+window.addEventListener('localechange', () => {
+  closeSubcatMenu();
+  for (const btn of document.querySelectorAll('[data-subcat-trigger]')) {
+    const task = DATA?.tasks?.find((item) => item.id === btn.dataset.subcatTrigger);
+    const val = btn.dataset.subcatValue || '';
+    const lbl = btn.querySelector('.subcat-side-label');
+    if (lbl) lbl.textContent = val ? subcatLabelOf(task?.category ?? '', val) : tr('未设置细分');
+    const kicker = btn.querySelector('.subcat-side-kicker');
+    if (kicker) kicker.textContent = tr('细分方向');
+    btn.setAttribute('title', tr('点击修改细分分类'));
+  }
+});
+
 
 let MODELS;
 let HARNESSES;
@@ -427,7 +616,7 @@ const pageEnd = () => `${footer()}</main></div>`;
 const searchControl = (type, placeholder, value = '') => `<label class="collection-search">${icon('search')}<input type="search" data-${type}-search aria-label="${placeholder}" placeholder="${placeholder}" value="${esc(value)}"></label>`;
 const questionSorts = { random: '随机排序', popularity: '热度（高到低）', recommended: '推荐（热门与探索）', date: '发布时间（最新在前）', works: '解答数量（多到少）', title: '题目名称（A–Z）' };
 const recommendationLabels = { popular: '热门', unanswered: '等你来测', explore: '待探索', recent: '新题' };
-const homeState = { category: '', domain: '', model: '', unanswered: false, query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'random', recommendationBatch: 0, modelQuery: '', vendor: '' };
+const homeState = { category: '', subcategory: '', treeOpen: false, domain: '', model: '', unanswered: false, query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'random', recommendationBatch: 0, modelQuery: '', vendor: '' };
 // Keep one random position per question until reload, including across filters and catalog updates.
 const questionRandomOrder = new Map();
 
@@ -446,7 +635,14 @@ function libraryStart(crumbs) {
       <h1>题库</h1><p class="side-intro">${['ready', 'static'].includes(catalogState()) ? `${DATA.tasks.length} 道题目 · ${works} 件作品` : '最新题目与作品正在加载'}</p>
       <nav class="side-nav section-nav" aria-label="题库导航">
         ${control('side-link', 'data-home-view="tasks"', true, `${icon('grid')}全部题目${['ready', 'static'].includes(catalogState()) ? `<span class="nav-count">${DATA.tasks.length}</span>` : ''}`)}
-        ${tracksOf(DATA.tasks, { alwaysInclude: ['音乐'] }).map((x) => control('side-link', `data-home-category="${esc(x.name)}"`, false, `${icon(x.glyph)}${esc(x.label)}<span class="nav-count">${x.tasks.length}</span>`)).join('')}
+        ${tracksOf(DATA.tasks, { alwaysInclude: CATEGORIES.map((c) => c.name) }).map((x) => `<div class="side-tree-group" data-tree-group="${esc(x.name)}" data-expanded="false">
+          <button class="side-link side-tree-parent" type="button" data-home-category="${esc(x.name)}" aria-pressed="false" aria-expanded="false">${icon(x.glyph)}<span class="side-link-text">${esc(x.label)}</span><span class="side-tree-caret" aria-hidden="true">▸</span><span class="nav-count">${x.tasks.length}</span></button>
+          <div class="side-tree-children-wrap"><div class="side-tree-children" role="group" aria-label="${esc(x.label)}">
+            ${x.subcategories.map((sub) => sub.disabled
+              ? `<span class="side-sublink is-disabled" aria-disabled="true"><span class="side-sublink-branch" aria-hidden="true"></span><span class="side-sublink-label">${esc(sub.label)}</span></span>`
+              : `<button type="button" class="side-sublink" data-home-subcategory="${esc(sub.name)}" data-parent-category="${esc(x.name)}" aria-pressed="false"><span class="side-sublink-branch" aria-hidden="true"></span><span class="side-sublink-label">${esc(sub.label)}</span><span class="nav-count">${sub.count}</span></button>`).join('')}
+          </div></div>
+        </div>`).join('')}
         <span class="side-divider" aria-hidden="true"></span>
         ${control('side-link', 'data-home-view="models"', false, `${icon('code')}模型索引${['ready', 'static'].includes(catalogState()) ? `<span class="nav-count">${models.length}</span>` : ''}`)}
       </nav>
@@ -466,7 +662,7 @@ const act = (kind, href, glyph, title, note, hint = '') => (href
 const selectControl = (name, aria, options) => `<label class="result-sort">${aria}<select data-${name} aria-label="${aria}">${options}</select></label>`;
 const option = (value, text, selected, suffix = null) => `<option${suffix === null ? '' : ` data-i18n-ignore data-i18n-option-original="${esc(text)}" data-i18n-option-suffix="${esc(suffix)}"`} value="${esc(value)}"${selected ? ' selected' : ''}>${esc(text)}${suffix === null ? '' : esc(suffix)}</option>`;
 // A card names its form, then its domains.
-const tagLine = (t) => `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}`;
+const tagLine = (t) => `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${subcategoryOf(t) ? `<li class="tag-sub">${esc(subcategoryOf(t))}</li>` : ''}${domainsOf(t).map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}`;
 function rankedTasks(tasks = DATA.tasks, now = Date.now()) {
   if (homeState.sort === 'recommended') return recommendQuestions(tasks, { now, batch: homeState.recommendationBatch, modelKey: r => registeredOf(r) ?? modelKey(r) });
   if (homeState.sort === 'popularity') return popularQuestions(tasks, { now, modelKey: r => registeredOf(r) ?? modelKey(r) });
@@ -488,8 +684,14 @@ function rankedTasks(tasks = DATA.tasks, now = Date.now()) {
 function renderLibrary(scopes = [], fresh = true) {
   if (fresh) Object.assign(homeState, { model: '', unanswered: false, query: '', modelQuery: '', vendor: '' });
   homeState.view = scopes[0] === 'models' ? 'models' : 'tasks';
-  homeState.category = scopes.find((x) => categoryOf(x) || DATA.tasks.some((t) => t.category === x)) ?? '';
-  homeState.domain = scopes.find((x) => DATA.tasks.some((t) => domainsOf(t).includes(x))) ?? '';
+  const restScopes = homeState.view === 'tasks' ? [...scopes] : [];
+  const catIdx = restScopes.findIndex((x) => categoryOf(x) || DATA.tasks.some((t) => t.category === x));
+  homeState.category = catIdx >= 0 ? restScopes.splice(catIdx, 1)[0] : '';
+  const allowedSubs = subcategoriesOf(homeState.category).filter((s) => !s.disabled);
+  const subIdx = homeState.category ? restScopes.findIndex((x) => allowedSubs.some((s) => s.name === x)) : -1;
+  homeState.subcategory = subIdx >= 0 ? restScopes.splice(subIdx, 1)[0] : '';
+  homeState.treeOpen = Boolean(homeState.category);
+  homeState.domain = restScopes.find((x) => DATA.tasks.some((t) => domainsOf(t).includes(x))) ?? '';
   const controller = new AbortController();
   const recommendationTime = Date.now();
   let previews = null, destroyed = false, activePreviewKey = null;
@@ -636,7 +838,7 @@ function renderLibrary(scopes = [], fresh = true) {
     for (const card of $$('[data-task-card]', root)) {
       const task = tasksById.get(card.dataset.taskCard);
       const match = searchMatch(task, homeState.query);
-      card.hidden = Boolean(!match || (homeState.category && task.category !== homeState.category) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.model && (homeState.unanswered ? answeredBy(task, homeState.model) : !answeredBy(task, homeState.model))));
+      card.hidden = Boolean(!match || (homeState.category && task.category !== homeState.category) || (homeState.subcategory && subcategoryOf(task) !== homeState.subcategory) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.model && (homeState.unanswered ? answeredBy(task, homeState.model) : !answeredBy(task, homeState.model))));
       const hit = $('[data-prompt-hit]', card);
       hit.hidden = !match?.snippet;
       if (match?.snippet) {
@@ -673,13 +875,14 @@ function renderLibrary(scopes = [], fresh = true) {
       reason.textContent = text ?? '';
     }
     $('[data-question-recommendation]').hidden = homeState.sort !== 'recommended' || count === 0;
-    $('#h-tasks').innerHTML = [homeState.category ? `<span>${esc(categoryLabel(homeState.category))}</span>` : '', homeState.domain ? `<span>${esc(homeState.domain)}</span>` : '', homeState.model ? `<span data-i18n-ignore>${esc(MODELS.get(homeState.model)?.name)}</span>` : '', homeState.model && homeState.unanswered ? '<span>尚未回答</span>' : ''].filter(Boolean).join(' · ') || '全部题目';
+    $('#h-tasks').innerHTML = [homeState.category ? `<span>${esc(categoryLabel(homeState.category))}</span>` : '', homeState.subcategory ? `<span>${esc(homeState.subcategory)}</span>` : '', homeState.domain ? `<span>${esc(homeState.domain)}</span>` : '', homeState.model ? `<span data-i18n-ignore>${esc(MODELS.get(homeState.model)?.name)}</span>` : '', homeState.model && homeState.unanswered ? '<span>尚未回答</span>' : ''].filter(Boolean).join(' · ') || '全部题目';
     $('[data-home-count]').textContent = `${count} 道题目`;
     const emptyBox = $('[data-home-empty]');
     emptyBox.hidden = count > 0;
     if (!count) {
-      const emptyMusic = homeState.category === '音乐' && !homeState.query.trim() && !homeState.domain && !homeState.model;
-      $('h3', emptyBox).textContent = emptyMusic ? '音乐分区还没有题目' : '没有找到这道题';
+      const emptyMusic = homeState.category === '音乐' && !homeState.subcategory && !homeState.query.trim() && !homeState.domain && !homeState.model;
+      const emptySub = Boolean(homeState.subcategory && !homeState.query.trim() && !homeState.domain && !homeState.model);
+      $('h3', emptyBox).textContent = emptyMusic ? '音乐分区还没有题目' : emptySub ? '该细分分类还没有题目' : '没有找到这道题';
       $('p', emptyBox).textContent = emptyMusic
         ? '为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。欢迎发起第一道音乐题目。'
         : (platform.available ? '换个关键词或筛选条件，或者把它发起成一道新题。' : '换个关键词或筛选条件，或浏览全部题目。');
@@ -722,10 +925,20 @@ function renderLibrary(scopes = [], fresh = true) {
     if (homeState.view === 'tasks') filterTasks();
     else filterModels();
     $$('[data-home-panel]').forEach((el) => { el.hidden = el.dataset.homePanel !== homeState.view; });
-    $$('.side-nav [data-home-view]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.homeView === homeState.view && !(el.dataset.homeView === 'tasks' && (homeState.category || homeState.domain)))));
-    $$('[data-home-category]').forEach((el) => el.setAttribute('aria-pressed', String(homeState.view === 'tasks' && el.dataset.homeCategory === homeState.category)));
+    $$('.side-nav [data-home-view]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.homeView === homeState.view && !(el.dataset.homeView === 'tasks' && (homeState.category || homeState.subcategory || homeState.domain)))));
+    $$('[data-tree-group]').forEach((group) => {
+      const open = homeState.view === 'tasks' && homeState.treeOpen && group.dataset.treeGroup === homeState.category;
+      group.dataset.expanded = String(open);
+      group.querySelector('[data-home-category]')?.setAttribute('aria-expanded', String(open));
+    });
+    $$('[data-home-category]').forEach((el) => {
+      const isCat = homeState.view === 'tasks' && el.dataset.homeCategory === homeState.category;
+      el.setAttribute('aria-pressed', String(isCat && !homeState.subcategory));
+      el.dataset.parentActive = String(isCat);
+    });
+    $$('[data-home-subcategory]').forEach((el) => el.setAttribute('aria-pressed', String(homeState.view === 'tasks' && el.dataset.parentCategory === homeState.category && el.dataset.homeSubcategory === homeState.subcategory)));
     $$('[data-home-domain]').forEach((el) => el.setAttribute('aria-pressed', String(homeState.view === 'tasks' && el.dataset.homeDomain === homeState.domain)));
-    const scopes = homeState.view === 'tasks' ? [homeState.category, homeState.domain].filter(Boolean) : [];
+    const scopes = homeState.view === 'tasks' ? [homeState.category, homeState.subcategory, homeState.domain].filter(Boolean) : [];
     const scopeCrumbs = homeState.view === 'models' ? [{ text: '模型索引' }] : scopes.map((x) => ({ text: categoryOf(x) ? categoryLabel(x) : x }));
     $('.topbar .crumbs').innerHTML = breadcrumbTrail(scopeCrumbs.length ? [LIBRARY, ...scopeCrumbs] : [{ text: '题库' }]);
     const address = [LIBRARY.href, ...(homeState.view === 'models' ? ['models'] : scopes.map(encodeURIComponent))].join('/');
@@ -754,15 +967,36 @@ function renderLibrary(scopes = [], fresh = true) {
   root.onclick = (event) => {
     if (event.target.closest('[data-home-blind] a')) arenaScope.set(blindScope.map((t) => t.id));
     // Form and domain combine; pressing the current domain again lifts it.
-    const category = event.target.closest('[data-home-category]'), domain = event.target.closest('[data-home-domain]'), view = event.target.closest('[data-home-view]');
-    if (category) { homeState.category = category.dataset.homeCategory; homeState.view = 'tasks'; }
+    const category = event.target.closest('[data-home-category]'), subBtn = event.target.closest('[data-home-subcategory]'), domain = event.target.closest('[data-home-domain]'), view = event.target.closest('[data-home-view]');
+    if (subBtn) {
+      homeState.view = 'tasks';
+      homeState.category = subBtn.dataset.parentCategory;
+      homeState.treeOpen = true;
+      homeState.subcategory = homeState.subcategory === subBtn.dataset.homeSubcategory ? '' : subBtn.dataset.homeSubcategory;
+    }
+    if (category) {
+      const nextCat = category.dataset.homeCategory;
+      if (homeState.view === 'tasks' && homeState.category === nextCat) {
+        if (homeState.subcategory) {
+          homeState.subcategory = '';
+          homeState.treeOpen = true;
+        } else {
+          homeState.treeOpen = !homeState.treeOpen;
+        }
+      } else {
+        homeState.view = 'tasks';
+        homeState.category = nextCat;
+        homeState.subcategory = '';
+        homeState.treeOpen = true;
+      }
+    }
     if (domain) { homeState.domain = homeState.view === 'tasks' && homeState.domain === domain.dataset.homeDomain ? '' : domain.dataset.homeDomain; homeState.view = 'tasks'; }
-    if (view) { homeState.view = view.dataset.homeView; homeState.category = ''; homeState.domain = ''; }
-    if (event.target.closest('[data-home-reset]')) { homeState.category = ''; homeState.domain = ''; homeState.model = ''; homeState.unanswered = false; homeState.query = ''; $('[data-home-search]').value = ''; }
+    if (view) { homeState.view = view.dataset.homeView; homeState.category = ''; homeState.subcategory = ''; homeState.treeOpen = false; homeState.domain = ''; }
+    if (event.target.closest('[data-home-reset]')) { homeState.category = ''; homeState.subcategory = ''; homeState.treeOpen = false; homeState.domain = ''; homeState.model = ''; homeState.unanswered = false; homeState.query = ''; $('[data-home-search]').value = ''; }
     if (event.target.closest('[data-model-reset]')) { homeState.vendor = ''; homeState.modelQuery = ''; $('[data-model-search]').value = ''; }
     if (event.target.closest('[data-recommend-refresh]')) homeState.recommendationBatch++;
     if (event.target.closest('[data-home-unanswered]')) homeState.unanswered = !homeState.unanswered;
-    if (category || domain || view || event.target.closest('[data-home-reset], [data-model-reset], [data-recommend-refresh], [data-home-unanswered]')) reflow();
+    if (category || subBtn || domain || view || event.target.closest('[data-home-reset], [data-model-reset], [data-recommend-refresh], [data-home-unanswered]')) reflow();
   };
   root.addEventListener('toggle', (event) => {
     const detail = event.target;
@@ -1192,7 +1426,7 @@ function renderTask(t) {
       <h1><span data-i18n-ignore>${esc(t.title)}</span></h1>
       <p class="side-intro"><span data-i18n-ignore>${esc(t.summary)}</span></p>
       <p class="side-byline"><span data-i18n-ignore>${esc(authorName(t))}</span> <span>发起</span>${t.date ? ` · <span data-i18n-date="${esc(t.date)}">${formatDate(t.date)}</span>` : ''}</p>
-      <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}</ul>
+      <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${subcategoryOf(t) ? `<li class="tag-sub"><a href="${LIBRARY.href}/${encodeURIComponent(t.category)}/${encodeURIComponent(subcategoryOf(t))}">${esc(subcategoryOf(t))}</a></li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}</ul>
       ${taskSolveSidebarHtml(t)}
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>

@@ -10,13 +10,13 @@ import { accountVersion, api, can, confirmDialog, moderationBadge, openDialog, p
 import { resolveApiMedia } from './platform-api.js';
 import { levelGate } from './level-gate.js';
 import { contentStage, moderated, stageTrack, uploadFlow } from './submit.js';
-import { TEMPLATE_LABELS, categoryLabel, categoryOf } from './categories.js';
-import { MUSIC_LLM_NOTICE, categoryField, domainField, syncDomains } from './question-fields.js';
+import { TEMPLATE_LABELS, categoryLabel, categoryOf, subcategoriesOf } from './categories.js';
+import { MUSIC_LLM_NOTICE, categoryField, domainField, subcategoryFieldHtml, syncDomains } from './question-fields.js';
 import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { replaceReferenceNote } from './reference-files.js';
 // Drafts staged for a question that does not exist yet.
 const NEW_QUESTION = '__new__';
-const blank = () => ({ title: '', summary: '', category: '', domains: [], prompt: '', templates: [] });
+const blank = () => ({ title: '', summary: '', category: '', subcategory: '', domains: [], prompt: '', templates: [] });
 // kept: the result held while the question is edited; its steps lead back to it.
 const sideSteps = (current, kept = null) => `<ol class="side-steps">${['题目信息', '选择文件', '试加载', '结果信息'].map((label, i) => {
   const text = `<span>0${i + 1}</span>${label}`;
@@ -164,7 +164,7 @@ export function mount(root, ctx) {
           <div data-form-gate></div>`}
           <label class="field"><span class="field-label">题目标题 *${changedMark('title')}</span><input class="input" name="title" required maxlength="70" placeholder="例如：体素中国古典建筑群" value="${esc(question.title)}"></label>
           <label class="field"><span class="field-label">测试简述 *${changedMark('summary')}</span><textarea class="input" name="summary" required maxlength="400" rows="3" placeholder="需要完成什么？能测出模型的哪些能力？">${esc(question.summary)}</textarea></label>
-          ${categoryField(question.category)}
+          ${categoryField(question.category, question.subcategory)}
           ${domainField(platform, question.domains)}
           <label class="field"><span class="field-label">完整提示词 *${changedMark('prompt')}</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="${question.category === '音乐' ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。'}">${esc(question.prompt)}</textarea><p class="fine music-prompt-guide" data-music-prompt-guide${question.category === '音乐' ? '' : ' hidden'}><b>音乐题提示词要求：</b>提示词中须明确要求模型导出单个 <code>.mp3</code> 音频文件。<button class="link" type="button" data-act="insert-mp3-note">插入导出 MP3 要求</button></p><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
           ${refs ? '<div data-ref-host></div>' : ''}
@@ -191,8 +191,13 @@ export function mount(root, ctx) {
     root.oninput = (event) => { if (event.target.matches('[name="prompt"]')) refs?.advise(); markChanged(); };
     root.onchange = (event) => {
       if (event.target.matches('[name="domains"]')) { syncDomains(form); error.textContent = ''; return; }
+      if (event.target.matches('[name="subcategory"]')) { question.subcategory = event.target.value; error.textContent = ''; return; }
       if (!event.target.matches('[name="category"]')) return;
       question.category = event.target.value;
+      const enabledSubs = subcategoriesOf(question.category).filter((s) => !s.disabled);
+      if (!enabledSubs.some((s) => s.name === question.subcategory)) question.subcategory = enabledSubs[0]?.name ?? '';
+      const subHost = $('[data-subcategory-picker]', form);
+      if (subHost) subHost.innerHTML = subcategoryFieldHtml(question.category, question.subcategory);
       question.templates = [...categoryOf(question.category).templates];
       $('[data-formats]', form).innerHTML = formatField();
       const isMusic = question.category === '音乐';
@@ -239,7 +244,7 @@ export function mount(root, ctx) {
       if (!data.getAll('templates').length) { error.textContent = '请至少选择一种提交格式'; return false; }
       if (refs?.blocker()) { error.textContent = refs.blocker(); return false; }
       const before = JSON.stringify(question);
-      question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), category: String(data.get('category')), domains: data.getAll('domains'), prompt: String(data.get('prompt')).trim(),
+      question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), category: String(data.get('category')), subcategory: String(data.get('subcategory') ?? '').trim(), domains: data.getAll('domains'), prompt: String(data.get('prompt')).trim(),
         templates: data.getAll('templates'), ...(refs?.value().length ? { references: refs.value(), referenceCredit: refs.credit() } : {}) };
       if (mode === 'sample') { enterSample({ fromHistory, changed: before !== JSON.stringify(question) }); return true; }
       const kept = flow?.kept();

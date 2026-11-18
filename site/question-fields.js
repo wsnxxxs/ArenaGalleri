@@ -1,13 +1,22 @@
 // Shared question controls for publishing, reviewing and editing.
 import { $, $$, esc, icon } from './ui.js';
-import { CATEGORIES, MAX_DOMAINS, domainGroups } from './categories.js';
+import { CATEGORIES, MAX_DOMAINS, domainGroups, subcategoriesOf } from './categories.js';
 
 export const MUSIC_LLM_NOTICE = '为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。';
 
-export function categoryField(value = '') {
+export function subcategoryFieldHtml(categoryName = '', selected = '') {
+  const subs = subcategoriesOf(categoryName);
+  if (!subs.length) return '';
+  return `<div class="subcategory-row" role="radiogroup" aria-label="细分方向"><span class="subcategory-row-label">细分方向</span>${subs.map((sub) => sub.disabled
+    ? `<span class="subcategory-chip is-disabled" aria-disabled="true">${esc(sub.label)}</span>`
+    : `<label class="subcategory-chip"><input type="radio" name="subcategory" value="${esc(sub.name)}"${sub.name === selected ? ' checked' : ''}><span>${esc(sub.label)}</span></label>`).join('')}</div>`;
+}
+
+export function categoryField(value = '', subcategory = '') {
   return `<fieldset class="field"><legend class="field-label">题目类型<i>*</i></legend><div class="category-options">
     ${CATEGORIES.map((c) => `<label class="category-option"><input type="radio" name="category" value="${esc(c.name)}" required${c.name === value ? ' checked' : ''}>${icon(c.glyph)}<span><b>${esc(c.label)}</b><small>${esc(c.note)}</small></span></label>`).join('')}
     </div>
+    <div class="subcategory-picker" data-subcategory-picker>${subcategoryFieldHtml(value, subcategory)}</div>
     <div class="notice music-llm-notice" data-music-category-notice${value === '音乐' ? ' data-selected="1"' : ''}>${icon('music')}<p><strong>音乐分区说明：</strong>${esc(MUSIC_LLM_NOTICE)}</p></div>
     <p class="fine">类型决定排行榜分组与作品的提交格式。</p></fieldset>`;
 }

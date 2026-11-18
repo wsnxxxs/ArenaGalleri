@@ -2155,3 +2155,195 @@ html[data-theme="light"] .solve-corner {
   scale: 1.5;
   background: #faf9f6;
 }
+/* ---- Sidebar tree categories & subcategories (guided-trial only) ---- */
+.side-tree-group {
+  display: grid;
+}
+.side-nav .side-link.side-tree-parent {
+  gap: 8px;
+}
+.side-nav .side-link.side-tree-parent .i {
+  margin-right: 4px;
+}
+.side-nav .side-link.side-tree-parent .side-link-text {
+  min-width: 0;
+  white-space: nowrap;
+}
+.side-tree-caret {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform 0.2s ease, color 0.16s ease;
+}
+.side-tree-parent[aria-expanded="true"] .side-tree-caret {
+  transform: rotate(90deg);
+  color: var(--ink);
+}
+.side-tree-parent[data-parent-active="true"]:not([aria-pressed="true"]) {
+  color: var(--ink);
+  font-weight: 500;
+}
+.side-tree-children-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.22s ease;
+}
+.side-tree-group[data-expanded="true"] > .side-tree-children-wrap {
+  grid-template-rows: 1fr;
+}
+.side-tree-children {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  gap: 2px;
+  margin: 0 0 0 20px;
+  padding: 0 0 0 10px;
+  border-left: 1px solid var(--line-2);
+}
+.side-tree-group[data-expanded="true"] > .side-tree-children-wrap > .side-tree-children {
+  margin-top: 3px;
+  margin-bottom: 5px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.side-sublink {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 31px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-2);
+  font: 12.5px/1.4 var(--sans);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+.side-sublink-branch {
+  position: relative;
+  width: 6px;
+  height: 1px;
+  flex: none;
+  background: var(--line-2);
+  margin-left: -10px;
+  margin-right: 2px;
+}
+.side-sublink-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-sublink:hover:not(.is-disabled) {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.side-sublink[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--surface-2);
+  font-weight: 500;
+}
+.side-sublink.is-disabled {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tag-line .tag-sub,
+.side-tags .tag-sub {
+  color: var(--ink-2);
+  border-color: var(--line-2);
+}
+
+.solve-side-wrap {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.subcat-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+.subcat-side:hover,
+.subcat-side:focus-visible {
+  color: var(--ink);
+  border-color: var(--ink-2);
+  background: var(--surface-2);
+}
+.subcat-side.is-unset {
+  color: var(--muted);
+  border-style: dashed;
+}
+.subcat-side-kicker {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.solve-menu-item.is-disabled {
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.subcategory-picker {
+  margin-top: 10px;
+}
+.subcategory-picker:empty {
+  display: none;
+}
+.subcategory-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.subcategory-row-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.subcategory-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.subcategory-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.subcategory-chip:has(input:checked) {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--surface-2);
+  font-weight: 500;
+}
+.subcategory-chip.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

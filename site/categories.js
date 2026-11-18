@@ -6,11 +6,49 @@ import { translateText } from './i18n.js';
 // works will carry an AI grade (see aiScoreOf) once grading opens.
 // Domains say what a question is about (数学, 化学, 建筑…): one or two per question, for browsing only.
 export const CATEGORIES = [
-  { name: '文学', label: '写作', note: '故事、诗歌、文案与改写', slug: 'text', glyph: 'text', templates: ['text'], judging: 'vote' },
-  { name: '推理', label: '推理', note: '数学、逻辑与哲学 · AI 评分', slug: 'reasoning', glyph: 'reason', templates: ['text'], judging: 'ai' },
-  { name: '静态网页', label: '设计', note: '页面布局、交互与可视化', slug: 'page', glyph: 'desktop', templates: ['static'], judging: 'vote' },
-  { name: '建模', label: '三维', note: '三维场景、模型与模拟', slug: 'model', glyph: 'cube', templates: ['static'], judging: 'vote' },
-  { name: '音乐', label: '音乐', note: '旋律、编曲与音频合成', slug: 'music', glyph: 'music', templates: ['audio'], judging: 'vote' },
+  {
+    name: '文学', label: '语言', note: '模仿写作、网文、碎片文段与主题小说', slug: 'text', glyph: 'text', templates: ['text'], judging: 'vote',
+    subcategories: [
+      { name: '模仿写作', label: '模仿写作' },
+      { name: '网文', label: '网文' },
+      { name: '碎片文段', label: '碎片文段' },
+      { name: '主题小说', label: '主题小说' },
+    ],
+  },
+  {
+    name: '推理', label: '推理', note: '数学、物理、电路与逻辑 · AI 评分', slug: 'reasoning', glyph: 'reason', templates: ['text'], judging: 'ai',
+    subcategories: [
+      { name: '数学', label: '数学' },
+      { name: '物理', label: '物理' },
+      { name: '电路', label: '电路' },
+      { name: '逻辑', label: '逻辑' },
+    ],
+  },
+  {
+    name: '静态网页', label: '设计', note: '网页、像素画与办公排版', slug: 'page', glyph: 'desktop', templates: ['static'], judging: 'vote',
+    subcategories: [
+      { name: '网页', label: '网页' },
+      { name: '像素画', label: '像素画' },
+      { name: 'Word', label: 'Word' },
+      { name: 'PPT', label: 'PPT' },
+      { name: 'Excel', label: 'Excel' },
+    ],
+  },
+  {
+    name: '建模', label: '三维', note: '三维场景、模型与模拟', slug: 'model', glyph: 'cube', templates: ['static'], judging: 'vote',
+    subcategories: [
+      { name: 'Three.js', label: 'Three.js' },
+      { name: 'Blender', label: 'Blender（暂无）', disabled: true },
+    ],
+  },
+  {
+    name: '音乐', label: '音乐', note: '旋律、编曲与音频合成', slug: 'music', glyph: 'music', templates: ['audio'], judging: 'vote',
+    subcategories: [
+      { name: '氛围音乐', label: '氛围音乐' },
+      { name: '电音', label: '电音' },
+      { name: '词曲', label: '词曲' },
+    ],
+  },
 ];
 export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '单个 HTML 文件', audio: '单个 MP3 音频' };
 // The backend may send its own list in bootstrap (`domains`); this one stands in without it.
@@ -25,6 +63,11 @@ export const MAX_DOMAINS = 2;
 
 export const categoryOf = (name) => CATEGORIES.find((c) => c.name === name) ?? null;
 export const categoryLabel = (name) => categoryOf(name)?.label ?? name ?? '';
+export const subcategoriesOf = (name) => categoryOf(name)?.subcategories ?? [];
+export const subcategoryOf = (task) => {
+  const sub = typeof task?.subcategory === 'string' ? task.subcategory.trim() : '';
+  return sub && subcategoriesOf(task?.category).some((s) => s.name === sub && !s.disabled) ? sub : '';
+};
 // Unknown categories are judged by vote, as every category was before AI grading.
 export const aiJudged = (task) => categoryOf(task?.category)?.judging === 'ai';
 export const votedTask = (task) => !aiJudged(task);
@@ -73,7 +116,7 @@ export function searchMatch(task, query) {
   const words = query.split(/\s+/).map((word) => fold(word).folded).filter(Boolean);
   if (!words.length) return { inPrompt: false };
   // The separator survives folding, so a word cannot run from the title into the summary.
-  const own = fold([task.title, task.summary, categoryLabel(task.category), translateText(categoryLabel(task.category)), ...domainsOf(task), ...domainsOf(task).map(translateText)].join('|')).folded;
+  const own = fold([task.title, task.summary, categoryLabel(task.category), translateText(categoryLabel(task.category)), subcategoryOf(task), translateText(subcategoryOf(task)), ...domainsOf(task), ...domainsOf(task).map(translateText)].join('|')).folded;
   const prompts = [task.prompt ?? '', ...(task.promptVariants ?? []).map((variant) => variant.prompt ?? '')]
     .filter(Boolean).map((text) => ({ text, ...fold(text) }));
   const promptOnly = words.filter((word) => !own.includes(word));
@@ -94,7 +137,14 @@ export function tracksOf(tasks, { alwaysInclude = [] } = {}) {
   const present = [...new Set([...tasks.map((t) => t.category).filter(Boolean), ...alwaysInclude])];
   const known = CATEGORIES.filter(({ name }) => present.includes(name)).map(({ name, label, slug, glyph }) => ({ name, label, slug, glyph }));
   const other = present.filter((name) => !categoryOf(name)).map((name) => ({ name, label: name, slug: name, glyph: 'grid' }));
-  return [...known, ...other].map((track) => ({ ...track, tasks: tasks.filter((t) => t.category === track.name) }));
+  return [...known, ...other].map((track) => {
+    const groupTasks = tasks.filter((t) => t.category === track.name);
+    const subcategories = subcategoriesOf(track.name).map((sub) => ({
+      ...sub,
+      count: sub.disabled ? 0 : groupTasks.filter((t) => subcategoryOf(t) === sub.name).length,
+    }));
+    return { ...track, tasks: groupTasks, subcategories };
+  });
 }
 
 // Domains present in the data, in the list's order; ones off the list follow.
