@@ -10,6 +10,7 @@ import { categoryField, domainField, syncDomains } from './question-fields.js';
 import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
 import { sticker, stickerName } from './stickers.js';
+import { previewZoomKind } from './work-preview-media.js';
 import { lineDiff } from './line-diff.js';
 
 // The review queue runs one pipeline: 题目审核 → 内容审核 → 作品核验. The first group only
@@ -47,10 +48,13 @@ function accountNav(ctx, current) {
 
 function thumb(ctx, w, { link = true } = {}) {
   const src = Object.values(w.captures ?? {})[0] ?? w.cover;
+  const task = ctx.DATA?.tasks?.find((item) => item.id === w.task);
+  const zoom = previewZoomKind(task, src);
+  const zoomAttr = zoom ? ` data-preview-zoom="${zoom}"` : '';
   const inner = src ? img(src, '') : `<span class="img-empty upload-cover"><b data-i18n-ignore>${esc(w.title)}</b></span>`;
   return link
-    ? `<a class="work-thumb" href="#/${esc(w.task)}/${esc(w.id)}" tabindex="-1" aria-hidden="true">${inner}</a>`
-    : `<span class="work-thumb" aria-hidden="true">${inner}</span>`;
+    ? `<a class="work-thumb"${zoomAttr} href="#/${esc(w.task)}/${esc(w.id)}" tabindex="-1" aria-hidden="true">${inner}</a>`
+    : `<span class="work-thumb"${zoomAttr} aria-hidden="true">${inner}</span>`;
 }
 
 function reactionSummary(w) {

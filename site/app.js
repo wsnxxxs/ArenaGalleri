@@ -29,7 +29,7 @@ import { textMatches } from './match.js';
 import { modelResolver } from './models.js';
 import { popularQuestions, recommendQuestions } from './question-recommendations.js';
 import { createWorkControls, workFrameUrl } from './work-controls.js';
-import { hasModelPreview, screenshotOf } from './work-preview-media.js';
+import { hasModelPreview, previewZoomKind, screenshotOf } from './work-preview-media.js';
 import { watchViewerFrame } from './viewer-loading.js';
 import { costShown } from './usage.js';
 import { artifactRow, cardUsage, loadPricing, usageBlock, usageLine } from './usage-view.js';
@@ -516,9 +516,11 @@ function renderLibrary(scopes = [], fresh = true) {
   const taskCards = rankedTasks(DATA.tasks, recommendationTime).map(({ task: t }) => {
     const works = counted(t);
     const shown = choicesById.get(t.id).result;
+    const shownSrc = shown ? (shown.previewMode === 'screenshot' ? screenshotOf(shown) : (shown.previewModel || shown.previewLoader ? (shown.previewPoster || screenshotOf(shown)) : screenshotOf(shown))) : '';
+    const zoom = previewZoomKind(t, shownSrc);
     const artwork = artworkFor(t, shown);
     return `<article class="task-card" data-task-card="${esc(t.id)}">
-      <a class="question-visual${shown?.previewMode === 'screenshot' ? ' screenshot-thumb' : shown?.previewModel || shown?.previewLoader ? ' model-thumb' : ''}" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的全部作品" tabindex="-1"${shown ? ` data-preview-id="${esc(shown.id)}"` : ''}>
+      <a class="question-visual${shown?.previewMode === 'screenshot' ? ' screenshot-thumb' : shown?.previewModel || shown?.previewLoader ? ' model-thumb' : ''}" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的全部作品" tabindex="-1"${shown ? ` data-preview-id="${esc(shown.id)}"` : ''}${zoom ? ` data-preview-zoom="${zoom}"` : ''}>
         ${artwork}
       </a>
       ${taskSolveCornerHtml(t)}
@@ -1018,8 +1020,9 @@ function shotGrid(t) {
   if (!shots.length) return '<p class="muted empty-note">该条件下暂无截图。</p>';
   return `<div class="shot-grid${cond.mobile ? ' phones' : ''}">${shots.map((r) => {
     const src = r.captures[cond.id];
+    const zoom = cond.mobile ? '' : previewZoomKind(t, src);
     return `<figure class="shot">
-      <button class="shot-img" data-shot="${esc(r.id)}" aria-label="放大查看 ${esc(label(r))} · ${esc(cond.label)}">${img(src, `${label(r)} · ${cond.label}`)}</button>
+      <button class="shot-img" data-shot="${esc(r.id)}"${zoom ? ` data-preview-zoom="${zoom}"` : ''} aria-label="放大查看 ${esc(label(r))} · ${esc(cond.label)}">${img(src, `${label(r)} · ${cond.label}`)}</button>
       <figcaption><b><span data-i18n-ignore>${esc(r.title)}</span></b><span><span data-i18n-ignore>${esc(label(r))}</span>${r.status !== 'verified' ? ` · ${STATUS[r.status].label}` : ''}</span><a href="${viewHref(t, r.id)}">在线预览</a></figcaption>
     </figure>`;
   }).join('')}</div>`;
@@ -1038,8 +1041,9 @@ function resultCard(t, r) {
   const screenshot = screenshotOf(r);
   const coverWork = coverLead(t);
   const lead = isLead(coverWork, r);
+  const zoom = screenshotPreview ? previewZoomKind(t, screenshot) : '';
   return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-model="${esc(modelKey(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
-    <div class="result-media">
+    <div class="result-media"${zoom ? ` data-preview-zoom="${zoom}"` : ''}>
       <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview && screenshot ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r, 'result-screenshot-preview')}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
       ${lead ? '<span class="lead-seal" aria-hidden="true"><span>代表</span></span>' : ''}
       ${t.results.length > 1 ? `<button class="pick" data-pick="${esc(r.id)}" aria-pressed="false" aria-label="加入对比：${esc(r.title)}"><span class="pick-box">${icon('plus')}${icon('check')}</span><span class="pick-text">对比</span></button>` : ''}
@@ -1461,9 +1465,13 @@ function syncPicks(t) {
   // Works on the content origin have no scene extract: side by side, but not in the sandtable.
   const sandIds = picks.filter((id) => t.results.some((r) => r.id === id && hosted(r)));
   const sandNote = sandIds.length < picks.length ? ' title="网页上传的作品没有沙盘模型"' : '';
-  const slot = (r, i) => (r
-    ? `<li class="slot"><span class="slot-thumb">${img(cover(r), '', '', true)}</span><span class="slot-text"><b><span data-i18n-ignore>${esc(r.title)}</span></b><small><span data-i18n-ignore>${esc(label(r))}</span></small></span><button class="slot-x" data-unpick="${esc(r.id)}" aria-label="移出对比：${esc(r.title)}">${icon('close')}</button></li>`
+  const slot = (r, i) => {
+    const slotSrc = r ? cover(r) : '';
+    const slotZoom = r ? previewZoomKind(t, slotSrc) : '';
+    return (r
+    ? `<li class="slot"><span class="slot-thumb"${slotZoom ? ` data-preview-zoom="${slotZoom}"` : ''}>${img(slotSrc, '', '', true)}</span><span class="slot-text"><b><span data-i18n-ignore>${esc(r.title)}</span></b><small><span data-i18n-ignore>${esc(label(r))}</span></small></span><button class="slot-x" data-unpick="${esc(r.id)}" aria-label="移出对比：${esc(r.title)}">${icon('close')}</button></li>`
     : `<li class="slot empty"><span class="slot-thumb">${pad(i + 1)}</span><span class="slot-text"><b>再选一件</b><small>点击作品上的「对比」</small></span></li>`);
+  };
   tray.innerHTML = `<ol class="slots">${slot(chosen[0], 0)}<li class="vs" aria-hidden="true">${chosen.length > 2 ? `+${chosen.length - 1}` : 'vs'}</li>${chosen.length <= 2 ? slot(chosen[1], 1) : `<li class="slot"><span class="slot-text"><b>共 ${chosen.length} 件作品</b><small>在同一画布上查看原作</small></span></li>`}</ol>
     <div class="tray-actions">
       <button class="icon-btn" data-clear-picks aria-label="清空对比" title="清空">${icon('close')}</button>

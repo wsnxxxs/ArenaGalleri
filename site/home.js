@@ -1,7 +1,7 @@
 import { locale, setPageTitle, t as translate } from './i18n.js';
 import { $$, esc, icon, img, brandMark, reducedMotion } from './ui.js';
 import { catalogState, isSenior, platform } from './platform.js';
-import { screenshotOf } from './work-preview-media.js';
+import { previewZoomKind, screenshotOf } from './work-preview-media.js';
 import { latestAnnouncement, announcementShortDate } from './announcements.js';
 
 // Platform not ruled out: the news pill's row is held open even before there is anything to show.
@@ -159,10 +159,15 @@ export function mount(root, ctx) {
   const first = decks[0], firstCount = first ? answersOf(first).length : 0;
 
   // Every answer is a small browser window: the model in the title bar, its first screen below.
-  const windowCard = (task, work, attrs = '', eager = false) => `<a class="home-window" data-home-task="${esc(task.id)}" data-home-work="${esc(work.id)}"${catalogReady() && ctx.inGallery(task.id, work.id) ? ` href="${ctx.viewHref(task, work.id)}"` : ' aria-disabled="true"'} aria-label="在线预览：${esc(work.title)}，${esc(ctx.label(work))}"${attrs}>
+  const windowCard = (task, work, attrs = '', eager = false) => {
+    const shot = shotOf(work);
+    const isPoster = work.previewMode !== 'screenshot' && Boolean(work.previewPoster);
+    const zoom = isPoster ? '' : previewZoomKind(task, shot);
+    return `<a class="home-window" data-home-task="${esc(task.id)}" data-home-work="${esc(work.id)}"${catalogReady() && ctx.inGallery(task.id, work.id) ? ` href="${ctx.viewHref(task, work.id)}"` : ' aria-disabled="true"'} aria-label="在线预览：${esc(work.title)}，${esc(ctx.label(work))}"${attrs}>
       <span class="home-window-bar"><span class="home-window-dots" aria-hidden="true"><i></i><i></i><i></i></span>${brandMark(ctx.modelOf(work), 'home-window-mark')}<b data-i18n-ignore>${esc(ctx.label(work))}</b></span>
-      <span class="home-window-shot">${work.previewMode !== 'screenshot' && work.previewPoster ? img(shotOf(work), '', 'is-poster', eager).replace('<img ', '<img crossorigin="anonymous" ') : img(shotOf(work), '', '', eager)}</span>
+      <span class="home-window-shot"${zoom ? ` data-preview-zoom="${zoom}"` : ''}>${isPoster ? img(shot, '', 'is-poster', eager).replace('<img ', '<img crossorigin="anonymous" ') : img(shot, '', '', eager)}</span>
     </a>`;
+  };
   const posterFrames = new Map(), posterCanvas = document.createElement('canvas');
   const posterContext = posterCanvas.getContext('2d', { willReadFrequently: true });
   const fitPosters = (container) => $$('img.is-poster', container).forEach((image) => {

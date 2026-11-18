@@ -14,3 +14,12 @@ export function screenshotOf(work = {}) {
 export function hasModelPreview(work = {}) {
   return work.previewMode !== 'screenshot' && Boolean(work.previewModel || work.previewLoader);
 }
+
+const FIRST_CAPTURE_RE = /(?:^|\/)first(?:-[a-z0-9]{8,24})?\.jpg(?:[?#]|$)/i;
+
+export function previewZoomKind(task, src = '') {
+  if (!task || !FIRST_CAPTURE_RE.test(String(src || ''))) return '';
+  if (task.category === '文学') return 'text';
+  if (task.category === '音乐') return 'audio';
+  return '';
+}

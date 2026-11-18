@@ -2135,3 +2135,23 @@ html[data-theme="light"] .solve-corner {
   font-size: 11px;
   opacity: .85;
 }
+/* ---- 50% larger preview framing for literary & music desktop captures ---- */
+[data-preview-zoom] {
+  overflow: hidden;
+}
+[data-preview-zoom="text"] > img,
+[data-preview-zoom="text"] > a > img:not(.result-model-poster) {
+  object-fit: contain;
+  object-position: 50% 0%;
+  transform-origin: 50% 5%;
+  scale: 1.5;
+  background: #faf9f6;
+}
+[data-preview-zoom="audio"] > img,
+[data-preview-zoom="audio"] > a > img:not(.result-model-poster) {
+  object-fit: contain;
+  object-position: 50% 50%;
+  transform-origin: 50% 50%;
+  scale: 1.5;
+  background: #faf9f6;
+}
