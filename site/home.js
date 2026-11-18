@@ -1,7 +1,7 @@
 import { locale, setPageTitle, t as translate } from './i18n.js';
 import { $$, esc, icon, img, brandMark, reducedMotion } from './ui.js';
 import { catalogState, isSenior, platform } from './platform.js';
-import { previewZoomKind, screenshotOf } from './work-preview-media.js';
+import { previewScreenshotOf, previewZoomKind, screenshotOf } from './work-preview-media.js';
 import { latestAnnouncement, announcementShortDate } from './announcements.js';
 
 // Platform not ruled out: the news pill's row is held open even before there is anything to show.
@@ -127,10 +127,10 @@ function mountWaiting(root, ctx) {
 export function mount(root, ctx) {
   const catalogReady = () => ['ready', 'static'].includes(catalogState());
   // The home page shows each answer's rendered model where there is one, not a screenshot of its interface.
-  const shotOf = (r) => r.previewMode === 'screenshot'
-    ? screenshotOf(r)
-    : r.previewPoster || screenshotOf(r);
-  const answersOf = (t) => t.results.filter((r) => ctx.interactive(r) && shotOf(r))
+  const shotOf = (t, r) => r.previewMode === 'screenshot'
+    ? previewScreenshotOf(t, r)
+    : r.previewPoster || previewScreenshotOf(t, r);
+  const answersOf = (t) => t.results.filter((r) => ctx.interactive(r) && shotOf(t, r))
     .sort((a, b) => (a.status === 'verified' ? 0 : 1) - (b.status === 'verified' ? 0 : 1) || time(b) - time(a));
   // Each couplet sets a handful of old variants against the answers, so only questions with more than four lead.
   const decksOf = (tasks) => tasks.filter((t) => answersOf(t).length > 4).sort((a, b) => answersOf(b).length - answersOf(a).length);
@@ -160,7 +160,7 @@ export function mount(root, ctx) {
 
   // Every answer is a small browser window: the model in the title bar, its first screen below.
   const windowCard = (task, work, attrs = '', eager = false) => {
-    const shot = shotOf(work);
+    const shot = shotOf(task, work);
     const isPoster = work.previewMode !== 'screenshot' && Boolean(work.previewPoster);
     const zoom = isPoster ? '' : previewZoomKind(task, shot);
     return `<a class="home-window" data-home-task="${esc(task.id)}" data-home-work="${esc(work.id)}"${catalogReady() && ctx.inGallery(task.id, work.id) ? ` href="${ctx.viewHref(task, work.id)}"` : ' aria-disabled="true"'} aria-label="在线预览：${esc(work.title)}，${esc(ctx.label(work))}"${attrs}>

@@ -2139,16 +2139,16 @@ html[data-theme="light"] .solve-corner {
 [data-preview-zoom] {
   overflow: hidden;
 }
-[data-preview-zoom="text"] > img,
-[data-preview-zoom="text"] > a > img:not(.result-model-poster) {
+:is(.question-visual, .home-window-shot, .shot-img, .slot-thumb, .work-thumb)[data-preview-zoom="text"] > img:not(.is-poster),
+.result-media[data-preview-zoom="text"] > a > img:not(.result-model-poster) {
   object-fit: contain;
   object-position: 50% 0%;
   transform-origin: 50% 5%;
   scale: 1.5;
   background: #faf9f6;
 }
-[data-preview-zoom="audio"] > img,
-[data-preview-zoom="audio"] > a > img:not(.result-model-poster) {
+:is(.question-visual, .home-window-shot, .shot-img, .slot-thumb, .work-thumb)[data-preview-zoom="audio"] > img:not(.is-poster),
+.result-media[data-preview-zoom="audio"] > a > img:not(.result-model-poster) {
   object-fit: contain;
   object-position: 50% 50%;
   transform-origin: 50% 50%;

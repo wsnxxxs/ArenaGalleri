@@ -29,7 +29,7 @@ import { textMatches } from './match.js';
 import { modelResolver } from './models.js';
 import { popularQuestions, recommendQuestions } from './question-recommendations.js';
 import { createWorkControls, workFrameUrl } from './work-controls.js';
-import { hasModelPreview, previewZoomKind, screenshotOf } from './work-preview-media.js';
+import { hasModelPreview, previewScreenshotOf, previewZoomKind, screenshotOf } from './work-preview-media.js';
 import { watchViewerFrame } from './viewer-loading.js';
 import { costShown } from './usage.js';
 import { artifactRow, cardUsage, loadPricing, usageBlock, usageLine } from './usage-view.js';
@@ -303,8 +303,8 @@ function setResultSort(value) {
 // Cover: the first uniform capture (task condition order), else the author's first screenshot.
 const cover = screenshotOf;
 // Works without a screenshot yet show their title instead of an empty frame.
-function coverHtml(r, cls = '', eager = false) {
-  const src = cover(r);
+function coverHtml(r, cls = '', eager = false, task = null) {
+  const src = task ? previewScreenshotOf(task, r) : cover(r);
   if (src) return img(src, r.title, cls, eager);
   return `<div class="${cls} img-empty upload-cover"><b><span data-i18n-ignore>${esc(r.title)}</span></b><span>${platform.site?.capture ? '截图生成中' : '暂无截图'}</span></div>`;
 }
@@ -497,10 +497,10 @@ function renderLibrary(scopes = [], fresh = true) {
   const choices = DATA.tasks.map((task) => ({ task, result: taskCover(task, platform.featured?.[task.id]?.cover) }));
   const choicesById = new Map(choices.map(choice => [choice.task.id, choice]));
   const artworkFor = (t, shown, eager = false) => shown?.previewMode === 'screenshot'
-    ? img(screenshotOf(shown), shown.title, 'question-screenshot-preview', eager)
+    ? img(previewScreenshotOf(t, shown), shown.title, 'question-screenshot-preview', eager)
     : shown?.previewModel || shown?.previewLoader
-      ? (shown.previewPoster ? img(shown.previewPoster, '', 'question-model-poster', eager) : coverHtml(shown))
-      : shown ? coverHtml(shown, '', eager) : `<span class="question-placeholder">${icon('text')}<span>${counted(t).length ? '暂无预览图' : '等待第一份答案'}</span></span>`;
+      ? (shown.previewPoster ? img(shown.previewPoster, '', 'question-model-poster', eager) : coverHtml(shown, '', eager, t))
+      : shown ? coverHtml(shown, '', eager, t) : `<span class="question-placeholder">${icon('text')}<span>${counted(t).length ? '暂无预览图' : '等待第一份答案'}</span></span>`;
   const results = DATA.tasks.flatMap((t) => counted(t).map((r) => ({ t, r })));
   // Build the answer lookup once per catalog, including aliases and unverified answers exactly
   // as the question filter did. A selected model then needs one Set lookup per question.
@@ -516,7 +516,7 @@ function renderLibrary(scopes = [], fresh = true) {
   const taskCards = rankedTasks(DATA.tasks, recommendationTime).map(({ task: t }) => {
     const works = counted(t);
     const shown = choicesById.get(t.id).result;
-    const shownSrc = shown ? (shown.previewMode === 'screenshot' ? screenshotOf(shown) : (shown.previewModel || shown.previewLoader ? (shown.previewPoster || screenshotOf(shown)) : screenshotOf(shown))) : '';
+    const shownSrc = shown ? (shown.previewMode === 'screenshot' ? previewScreenshotOf(t, shown) : (shown.previewModel || shown.previewLoader ? (shown.previewPoster || previewScreenshotOf(t, shown)) : previewScreenshotOf(t, shown))) : '';
     const zoom = previewZoomKind(t, shownSrc);
     const artwork = artworkFor(t, shown);
     return `<article class="task-card" data-task-card="${esc(t.id)}">
@@ -1038,13 +1038,13 @@ function adminPoolLine(t, pool) {
 function resultCard(t, r) {
   const m = modelOf(r);
   const screenshotPreview = !hasModelPreview(r);
-  const screenshot = screenshotOf(r);
+  const screenshot = previewScreenshotOf(t, r);
   const coverWork = coverLead(t);
   const lead = isLead(coverWork, r);
   const zoom = screenshotPreview ? previewZoomKind(t, screenshot) : '';
   return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-model="${esc(modelKey(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media"${zoom ? ` data-preview-zoom="${zoom}"` : ''}>
-      <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview && screenshot ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r, 'result-screenshot-preview')}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
+      <a href="${viewHref(t, r.id)}" aria-label="在线预览：${esc(r.title)}，${esc(label(r))}">${screenshotPreview && screenshot ? img(screenshot, r.title, 'result-screenshot-preview') : coverHtml(r, 'result-screenshot-preview', false, t)}${!screenshotPreview && r.previewPoster ? img(r.previewPoster, '', 'result-model-poster') : ''}<span class="play">${icon('arrow')}在线预览</span></a>
       ${lead ? '<span class="lead-seal" aria-hidden="true"><span>代表</span></span>' : ''}
       ${t.results.length > 1 ? `<button class="pick" data-pick="${esc(r.id)}" aria-pressed="false" aria-label="加入对比：${esc(r.title)}"><span class="pick-box">${icon('plus')}${icon('check')}</span><span class="pick-text">对比</span></button>` : ''}
     </div>
@@ -1466,7 +1466,7 @@ function syncPicks(t) {
   const sandIds = picks.filter((id) => t.results.some((r) => r.id === id && hosted(r)));
   const sandNote = sandIds.length < picks.length ? ' title="网页上传的作品没有沙盘模型"' : '';
   const slot = (r, i) => {
-    const slotSrc = r ? cover(r) : '';
+    const slotSrc = r ? previewScreenshotOf(t, r) : '';
     const slotZoom = r ? previewZoomKind(t, slotSrc) : '';
     return (r
     ? `<li class="slot"><span class="slot-thumb"${slotZoom ? ` data-preview-zoom="${slotZoom}"` : ''}>${img(slotSrc, '', '', true)}</span><span class="slot-text"><b><span data-i18n-ignore>${esc(r.title)}</span></b><small><span data-i18n-ignore>${esc(label(r))}</span></small></span><button class="slot-x" data-unpick="${esc(r.id)}" aria-label="移出对比：${esc(r.title)}">${icon('close')}</button></li>`
