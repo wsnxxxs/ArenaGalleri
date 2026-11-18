@@ -1046,7 +1046,7 @@ function renderLibrary(scopes = [], fresh = true) {
 }
 
 // ---- task -----------------------------------------------------------------------------
-const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, variants: new Map(), open: new Set(), view: store.get('task-view') === 'family' ? 'family' : 'featured' };
+const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, promptOpen: false, variants: new Map(), open: new Set(), view: store.get('task-view') === 'family' ? 'family' : 'featured' };
 const selectedVariant = (t) => variantsOf(t).find((variant) => variant.id === taskState.promptVariant);
 const selectedPrompt = (t) => selectedVariant(t)?.prompt ?? t.prompt;
 // Each model leads with one work (per review group); its other works follow, folded until opened.
@@ -1398,7 +1398,8 @@ function showCardUsage(t) {
 }
 function renderTask(t) {
   if (taskState.task !== t.id) {
-    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, variants: new Map(), open: new Set() });
+    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, promptOpen: false, variants: new Map(), open: new Set() });
+    document.body.classList.remove('has-prompt-modal');
     taskScores = new Map();
   }
   taskState.cond = t.conditions.some((c) => c.id === taskState.cond) ? taskState.cond : t.conditions[0]?.id;
@@ -1415,12 +1416,15 @@ function renderTask(t) {
   const captureNotes = t.results.filter((r) => r.captureNote).map((r) => `<span data-i18n-ignore>${esc(r.title)}</span>：<span data-i18n-ignore>${esc(r.captureNote)}</span>`);
   const works = counted(t);
   const pool = platform.arena[t.id];
-  const actions = platform.available ? `<div class="task-acts">
-    ${aiJudged(t) ? act('judge', '', icon('reason'), 'AI 评分', '暂未开放', '推理题由 AI 评分，不参与盲评和排行榜')
+  const promptNote = t.promptPending ? '提示词暂未公开' : t.references?.length ? `查看题面 · 附参考图 ${t.references.length}` : '查看完整题面';
+  const promptBtn = `<button type="button" class="task-act is-prompt" data-open-prompt aria-haspopup="dialog" aria-expanded="${Boolean(taskState.promptOpen)}"><span class="task-act-mark" aria-hidden="true">${icon('file')}</span><span><b>提示词</b><small>${promptNote}</small></span></button>`;
+  const actions = `<div class="task-acts">
+    ${promptBtn}
+    ${platform.available ? `${aiJudged(t) ? act('judge', '', icon('reason'), 'AI 评分', '暂未开放', '推理题由 AI 评分，不参与盲评和排行榜')
       : !platform.activityReady ? act('judge', '', AB, '参与盲评', platform.activityError ? '统计暂未载入 <button class="link" type="button" data-platform-reconnect>重新连接</button>' : '统计加载中…')
       : (pool?.entries ?? 0) >= 2 ? act('judge', `#/arena/${esc(t.id)}`, AB, '参与盲评', `可盲评 ${pool.works} 件`) : act('judge', '', AB, '参与盲评', '作品不足', '至少需要两个模型配置的作品进入盲评池')}
-    ${t.acceptsUploads ? act('upload', `#/submit/${esc(t.id)}`, icon('upload'), '上传作品', platform.user && !can('canSubmitWork') ? '需要 Lv1 认证成员' : '交一份你的答案') : act('upload', '', icon('upload'), '暂不接受投稿', t.promptPending ? '提示词原文尚未公开' : '这道题暂时关闭了投稿')}
-  </div>` : '';
+    ${t.acceptsUploads ? act('upload', `#/submit/${esc(t.id)}`, icon('upload'), '上传作品', platform.user && !can('canSubmitWork') ? '需要 Lv1 认证成员' : '交一份你的答案') : act('upload', '', icon('upload'), '暂不接受投稿', t.promptPending ? '提示词原文尚未公开' : '这道题暂时关闭了投稿')}` : ''}
+  </div>`;
 
   root.innerHTML = `${header([LIBRARY, { text: t.title, original: true }], false, 'questions')}<div class="app-layout task-layout">
     <aside class="app-sidebar">
@@ -1441,8 +1445,8 @@ function renderTask(t) {
         ${isStaff() && platform.activityReady ? adminPoolLine(t, pool) : ''}</div>
       <section class="side-prompt" aria-labelledby="side-prompt-title">
         <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
-          ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}"><span data-i18n-ignore>${esc(variant.label)}</span></button>`).join('')}</div>` : ''}
-          <button class="text-action side-prompt-more" data-prompt-more aria-expanded="false">展开</button><button class="text-action" data-copy>复制</button></div>
+          ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button type="button" data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}"><span data-i18n-ignore>${esc(variant.label)}</span></button>`).join('')}</div>` : ''}
+          <button class="text-action side-prompt-open" type="button" data-open-prompt>浮窗查看</button><button class="text-action side-prompt-more" type="button" data-prompt-more aria-expanded="false">展开</button><button class="text-action" type="button" data-copy="short"><span data-copy-label>复制</span></button></div>
         ${referenceSheet(t.references, { key: t.id, credit: t.referenceCredit })}
         <pre data-i18n-ignore data-prompt-text>${linkReferences(selectedPrompt(t), t.references, t.id)}</pre>
       </section>
@@ -1479,7 +1483,46 @@ function renderTask(t) {
       <div id="board-body"><p class="muted">正在载入榜单…</p></div>
     </section>` : ''}${usageSection(t)}
     ${footer()}</main></div>
-  <div class="tray" role="region" aria-label="对比栏" hidden></div>`;
+  <div class="tray" role="region" aria-label="对比栏" hidden></div>
+  <div class="prompt-overlay" data-prompt-modal role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title"${taskState.promptOpen ? '' : ' hidden'}>
+    <div class="prompt-sheet">
+      <div class="prompt-sheet-head">
+        <div class="prompt-sheet-title"><h2 id="prompt-modal-title">提示词</h2><p class="prompt-sheet-sub" data-i18n-ignore>${esc(t.title)}</p></div>
+        <div class="prompt-sheet-tools">
+          ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button type="button" data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}"><span data-i18n-ignore>${esc(variant.label)}</span></button>`).join('')}</div>` : ''}
+          <button type="button" class="btn sm" data-copy><span data-copy-label>复制提示词</span></button>
+          <button type="button" class="icon-btn prompt-sheet-close" data-close-prompt aria-label="关闭提示词" title="关闭（Esc）">${icon('close')}</button>
+        </div>
+      </div>
+      <div class="prompt-sheet-body">
+        ${referenceSheet(t.references, { key: t.id, credit: t.referenceCredit })}
+        <pre class="prompt-sheet-text" data-i18n-ignore data-prompt-text>${linkReferences(selectedPrompt(t), t.references, t.id)}</pre>
+      </div>
+    </div>
+  </div>`;
+  const promptModal = $('[data-prompt-modal]', root);
+  const openPromptBtn = $('.task-acts [data-open-prompt]', root);
+  let promptReturnFocus = null;
+  const setPromptOpen = (open, { restoreFocus = false, opener = null } = {}) => {
+    taskState.promptOpen = Boolean(open);
+    if (promptModal) promptModal.hidden = !taskState.promptOpen;
+    openPromptBtn?.setAttribute('aria-expanded', String(taskState.promptOpen));
+    document.body.classList.toggle('has-prompt-modal', taskState.promptOpen);
+    if (taskState.promptOpen) {
+      if (opener) promptReturnFocus = opener;
+      if (promptModal) deferredMedia.refresh(promptModal);
+      $('[data-close-prompt]', root)?.focus?.({ preventScroll: true });
+    } else if (restoreFocus) {
+      (promptReturnFocus ?? openPromptBtn)?.focus?.({ preventScroll: true });
+      promptReturnFocus = null;
+    }
+  };
+  let promptBackdropDown = false;
+  promptModal?.addEventListener('pointerdown', (event) => {
+    promptBackdropDown = event.target === promptModal;
+  });
+  document.body.classList.toggle('has-prompt-modal', Boolean(taskState.promptOpen));
+  if (taskState.promptOpen && promptModal) deferredMedia.refresh(promptModal);
   setPageTitle([{ text: t.title, original: true }, DATA.title]);
   void loadMetrics().then((info) => { showTaskUsage(t); if (info.supported) showCardUsage(t); });
   syncTaskView(t);
@@ -1508,9 +1551,19 @@ function renderTask(t) {
     const promptVariant = e.target.closest('[data-prompt-variant]');
     if (promptVariant) {
       taskState.promptVariant = promptVariant.dataset.promptVariant;
-      $$('[data-prompt-variant]').forEach((button) => button.setAttribute('aria-pressed', String(button === promptVariant)));
-      $('[data-prompt-text]').innerHTML = linkReferences(selectedPrompt(t), t.references, t.id);
+      $$('[data-prompt-variant]', root).forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.promptVariant === taskState.promptVariant)));
+      const promptHtml = linkReferences(selectedPrompt(t), t.references, t.id);
+      $$('[data-prompt-text]', root).forEach((node) => { node.innerHTML = promptHtml; });
     }
+    const opener = e.target.closest('[data-open-prompt]');
+    if (opener) { setPromptOpen(true, { opener }); return; }
+    if (e.target.closest('[data-close-prompt]')) { setPromptOpen(false, { restoreFocus: true }); return; }
+    if (promptModal && taskState.promptOpen && e.target === promptModal && promptBackdropDown) {
+      promptBackdropDown = false;
+      setPromptOpen(false, { restoreFocus: true });
+      return;
+    }
+    promptBackdropDown = false;
     // On narrow screens the sidebar sits above the works, so the prompt opens on request.
     const more = e.target.closest('[data-prompt-more]');
     if (more) {
@@ -1576,10 +1629,14 @@ function renderTask(t) {
     }
     const copy = e.target.closest('[data-copy]');
     if (copy) {
+      const lbl = $('[data-copy-label]', copy) ?? copy;
+      const idleLabel = copy.dataset.copy === 'short' ? tr('复制') : tr('复制提示词');
+      clearTimeout(copy._copyTimer);
       navigator.clipboard?.writeText(selectedPrompt(t)).then(() => {
-        copy.textContent = '已复制';
-        setTimeout(() => { copy.textContent = '复制'; }, 1500);
-      }, () => { copy.textContent = '复制失败'; });
+        lbl.textContent = tr('已复制');
+        toast(tr('已复制提示词'));
+        copy._copyTimer = setTimeout(() => { lbl.textContent = idleLabel; }, 1500);
+      }, () => { lbl.textContent = tr('复制失败'); });
     }
   };
   const requestCardPreview = (event) => {
@@ -1599,11 +1656,28 @@ function renderTask(t) {
 function taskPage(t) {
   renderTask(t);
   activatePanel(/\/(?:usage|cost)$/.test(location.hash.split('#')[1]) ? 'cost' : location.hash.split('#')[2], false);
+  const onPromptKey = (event) => {
+    if (event.key !== 'Escape' || !taskState.promptOpen) return;
+    if ($('#lightbox') && !$('#lightbox').hidden) return;
+    taskState.promptOpen = false;
+    const modal = $('[data-prompt-modal]', root);
+    if (modal) modal.hidden = true;
+    const btn = $('[data-open-prompt]', root);
+    btn?.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('has-prompt-modal');
+    btn?.focus?.({ preventScroll: true });
+  };
+  document.addEventListener('keydown', onPromptKey);
   return {
     scoreTask: t.id,
     ready: updateResultPreviews(t),
     destroy({ keepTaskScores = false } = {}) {
-      if (!keepTaskScores) cancelTaskScores();
+      document.removeEventListener('keydown', onPromptKey);
+      if (!keepTaskScores) {
+        taskState.promptOpen = false;
+        document.body.classList.remove('has-prompt-modal');
+        cancelTaskScores();
+      }
       taskBoard?.destroy?.();
       taskBoard = null;
       usageView?.destroy();

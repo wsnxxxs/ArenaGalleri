@@ -539,4 +539,10 @@ export default {
   "产品与工程": "Product & Engineering",
   "题库与评测": "Benchmarks & Review",
   "社区与共建": "Community & Contributors",
+  "查看完整题面": "Read full prompt",
+  "查看题面 · 附参考图 {count}": "Read prompt · {count} ref images",
+  "提示词暂未公开": "Prompt not yet public",
+  "已复制提示词": "Prompt copied",
+  "关闭提示词": "Close prompt",
+  "浮窗查看": "Open in modal",
 };
