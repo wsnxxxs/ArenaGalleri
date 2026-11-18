@@ -545,4 +545,10 @@ export default {
   "已复制提示词": "Prompt copied",
   "关闭提示词": "Close prompt",
   "浮窗查看": "Open in modal",
+  "按解决状态筛选": "Filter by solve status",
+  "全部解决状态": "All solve statuses",
+  "难以解决（{count} 题）": "Hard to solve ({count} questions)",
+  "正被解决（{count} 题）": "Being solved ({count} questions)",
+  "基本解决（{count} 题）": "Mostly solved ({count} questions)",
+  "结果较少（{count} 题）": "Few results ({count} questions)",
 };

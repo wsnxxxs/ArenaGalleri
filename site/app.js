@@ -107,6 +107,7 @@ function applyTaskSolveStatus(taskId, status) {
     const id = node.dataset.solveCorner || node.dataset.solveSide;
     if (id === taskId) syncSolveNode(node, normalized);
   }
+  window.dispatchEvent(new CustomEvent('solvestatuschange', { detail: { taskId, status: normalized } }));
 }
 
 let solveMenuEl = null;
@@ -617,7 +618,7 @@ const pageEnd = () => `${footer()}</main></div>`;
 const searchControl = (type, placeholder, value = '') => `<label class="collection-search">${icon('search')}<input type="search" data-${type}-search aria-label="${placeholder}" placeholder="${placeholder}" value="${esc(value)}"></label>`;
 const questionSorts = { random: '随机排序', popularity: '热度（高到低）', recommended: '推荐（热门与探索）', date: '发布时间（最新在前）', works: '解答数量（多到少）', title: '题目名称（A–Z）' };
 const recommendationLabels = { popular: '热门', unanswered: '等你来测', explore: '待探索', recent: '新题' };
-const homeState = { category: '', subcategory: '', treeOpen: false, domain: '', model: '', unanswered: false, query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'random', recommendationBatch: 0, modelQuery: '', vendor: '' };
+const homeState = { category: '', subcategory: '', treeOpen: false, domain: '', solveStatus: '', model: '', unanswered: false, query: '', view: 'tasks', sort: Object.hasOwn(questionSorts, store.get('question-sort')) ? store.get('question-sort') : 'random', recommendationBatch: 0, modelQuery: '', vendor: '' };
 // Keep one random position per question until reload, including across filters and catalog updates.
 const questionRandomOrder = new Map();
 
@@ -683,7 +684,8 @@ function rankedTasks(tasks = DATA.tasks, now = Date.now()) {
 // as does the model index (#/questions/models), so a return or a shared link keeps them. Search
 // and the selects only survive a return; a fresh visit opens the whole library.
 function renderLibrary(scopes = [], fresh = true) {
-  if (fresh) Object.assign(homeState, { model: '', unanswered: false, query: '', modelQuery: '', vendor: '' });
+  if (fresh) Object.assign(homeState, { solveStatus: '', model: '', unanswered: false, query: '', modelQuery: '', vendor: '' });
+  if (!SOLVE_STATUS_MAP.has(homeState.solveStatus)) homeState.solveStatus = '';
   homeState.view = scopes[0] === 'models' ? 'models' : 'tasks';
   const restScopes = homeState.view === 'tasks' ? [...scopes] : [];
   const catIdx = restScopes.findIndex((x) => categoryOf(x) || DATA.tasks.some((t) => t.category === x));
@@ -776,8 +778,15 @@ function renderLibrary(scopes = [], fresh = true) {
   // Only models with an answer can narrow the question list.
   const answering = vendors.map((vendor) => [vendor, modelsByVendor.get(vendor).filter((m) => answersByModel.has(m.id))]).filter(([, models]) => models.length);
   if (!answering.some(([, models]) => models.some((m) => m.id === homeState.model))) { homeState.model = ''; homeState.unanswered = false; }
+  const solveStatusOptions = () => {
+    const counts = new Map(SOLVE_STATUSES.map((s) => [s.key, 0]));
+    for (const t of DATA.tasks) counts.set(solveStatusOf(t), (counts.get(solveStatusOf(t)) ?? 0) + 1);
+    return option('', '全部解决状态', !homeState.solveStatus)
+      + SOLVE_STATUSES.map((s) => option(s.key, `${s.label}（${counts.get(s.key) ?? 0} 题）`, s.key === homeState.solveStatus)).join('');
+  };
   // Search leads every list's toolbar; the heading keeps the page's own actions or a quiet note.
   const taskToolbar = `<div class="collection-toolbar">${searchControl('home', '搜索题目或提示词', homeState.query)}<div class="toolbar-actions">
+    ${selectControl('home-solve', '按解决状态筛选', solveStatusOptions())}
     ${selectControl('home-model', '按作答模型筛选', option('', '全部作答模型', !homeState.model) + answering.map(([vendor, models]) => `<optgroup label="${esc(vendor)}">${models.map((m) => option(m.id, m.name, m.id === homeState.model, `（${answersByModel.get(m.id).size} 题）`)).join('')}</optgroup>`).join(''))}
     <button class="btn sm ghost model-answer-filter" type="button" data-home-unanswered aria-pressed="${homeState.unanswered}"${homeState.model ? '' : ' hidden'}>尚未回答</button>
     ${selectControl('home-sort', '题目排序', Object.entries(questionSorts).map(([value, text]) => option(value, text, value === homeState.sort)).join(''))}
@@ -839,7 +848,7 @@ function renderLibrary(scopes = [], fresh = true) {
     for (const card of $$('[data-task-card]', root)) {
       const task = tasksById.get(card.dataset.taskCard);
       const match = searchMatch(task, homeState.query);
-      card.hidden = Boolean(!match || (homeState.category && task.category !== homeState.category) || (homeState.subcategory && subcategoryOf(task) !== homeState.subcategory) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.model && (homeState.unanswered ? answeredBy(task, homeState.model) : !answeredBy(task, homeState.model))));
+      card.hidden = Boolean(!match || (homeState.category && task.category !== homeState.category) || (homeState.subcategory && subcategoryOf(task) !== homeState.subcategory) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.solveStatus && solveStatusOf(task) !== homeState.solveStatus) || (homeState.model && (homeState.unanswered ? answeredBy(task, homeState.model) : !answeredBy(task, homeState.model))));
       const hit = $('[data-prompt-hit]', card);
       hit.hidden = !match?.snippet;
       if (match?.snippet) {
@@ -876,19 +885,20 @@ function renderLibrary(scopes = [], fresh = true) {
       reason.textContent = text ?? '';
     }
     $('[data-question-recommendation]').hidden = homeState.sort !== 'recommended' || count === 0;
-    $('#h-tasks').innerHTML = [homeState.category ? `<span>${esc(categoryLabel(homeState.category))}</span>` : '', homeState.subcategory ? `<span>${esc(homeState.subcategory)}</span>` : '', homeState.domain ? `<span>${esc(homeState.domain)}</span>` : '', homeState.model ? `<span data-i18n-ignore>${esc(MODELS.get(homeState.model)?.name)}</span>` : '', homeState.model && homeState.unanswered ? '<span>尚未回答</span>' : ''].filter(Boolean).join(' · ') || '全部题目';
+    $('#h-tasks').innerHTML = [homeState.category ? `<span>${esc(categoryLabel(homeState.category))}</span>` : '', homeState.subcategory ? `<span>${esc(homeState.subcategory)}</span>` : '', homeState.domain ? `<span>${esc(homeState.domain)}</span>` : '', homeState.solveStatus ? `<span>${esc(solveStatusMeta(homeState.solveStatus).label)}</span>` : '', homeState.model ? `<span data-i18n-ignore>${esc(MODELS.get(homeState.model)?.name)}</span>` : '', homeState.model && homeState.unanswered ? '<span>尚未回答</span>' : ''].filter(Boolean).join(' · ') || '全部题目';
     $('[data-home-count]').textContent = `${count} 道题目`;
     const emptyBox = $('[data-home-empty]');
     emptyBox.hidden = count > 0;
     if (!count) {
-      const emptyMusic = homeState.category === '音乐' && !homeState.subcategory && !homeState.query.trim() && !homeState.domain && !homeState.model;
-      const emptySub = Boolean(homeState.subcategory && !homeState.query.trim() && !homeState.domain && !homeState.model);
+      const emptyMusic = homeState.category === '音乐' && !homeState.subcategory && !homeState.query.trim() && !homeState.domain && !homeState.solveStatus && !homeState.model;
+      const emptySub = Boolean(homeState.subcategory && !homeState.query.trim() && !homeState.domain && !homeState.solveStatus && !homeState.model);
       $('h3', emptyBox).textContent = emptyMusic ? '音乐分区还没有题目' : emptySub ? '该细分分类还没有题目' : '没有找到这道题';
       $('p', emptyBox).textContent = emptyMusic
         ? '为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。欢迎发起第一道音乐题目。'
         : (platform.available ? '换个关键词或筛选条件，或者把它发起成一道新题。' : '换个关键词或筛选条件，或浏览全部题目。');
     }
     $('[data-task-new]')?.toggleAttribute('hidden', count === 0);
+    $('[data-home-solve]').value = homeState.solveStatus;
     $('[data-home-model]').value = homeState.model;
     const unanswered = $('[data-home-unanswered]', root);
     unanswered.hidden = !homeState.model;
@@ -957,7 +967,8 @@ function renderLibrary(scopes = [], fresh = true) {
   };
   root.onchange = (event) => {
     const el = event.target;
-    if (el.matches('[data-home-model]')) { homeState.model = el.value; if (!homeState.model) homeState.unanswered = false; }
+    if (el.matches('[data-home-solve]')) homeState.solveStatus = SOLVE_STATUS_MAP.has(el.value) ? el.value : '';
+    else if (el.matches('[data-home-model]')) { homeState.model = el.value; if (!homeState.model) homeState.unanswered = false; }
     else if (el.matches('[data-model-vendor]')) homeState.vendor = el.value;
     else if (el.matches('[data-home-sort]')) {
       homeState.sort = el.value;
@@ -993,7 +1004,7 @@ function renderLibrary(scopes = [], fresh = true) {
     }
     if (domain) { homeState.domain = homeState.view === 'tasks' && homeState.domain === domain.dataset.homeDomain ? '' : domain.dataset.homeDomain; homeState.view = 'tasks'; }
     if (view) { homeState.view = view.dataset.homeView; homeState.category = ''; homeState.subcategory = ''; homeState.treeOpen = false; homeState.domain = ''; }
-    if (event.target.closest('[data-home-reset]')) { homeState.category = ''; homeState.subcategory = ''; homeState.treeOpen = false; homeState.domain = ''; homeState.model = ''; homeState.unanswered = false; homeState.query = ''; $('[data-home-search]').value = ''; }
+    if (event.target.closest('[data-home-reset]')) { homeState.category = ''; homeState.subcategory = ''; homeState.treeOpen = false; homeState.domain = ''; homeState.solveStatus = ''; homeState.model = ''; homeState.unanswered = false; homeState.query = ''; $('[data-home-search]').value = ''; }
     if (event.target.closest('[data-model-reset]')) { homeState.vendor = ''; homeState.modelQuery = ''; $('[data-model-search]').value = ''; }
     if (event.target.closest('[data-recommend-refresh]')) homeState.recommendationBatch++;
     if (event.target.closest('[data-home-unanswered]')) homeState.unanswered = !homeState.unanswered;
@@ -1010,6 +1021,14 @@ function renderLibrary(scopes = [], fresh = true) {
   }, { capture: true, signal: controller.signal });
   filter();
   window.addEventListener('localechange', filter, { signal: controller.signal });
+  window.addEventListener('solvestatuschange', () => {
+    const select = $('[data-home-solve]', root);
+    if (select) {
+      select.innerHTML = solveStatusOptions();
+      select.value = homeState.solveStatus;
+    }
+    if (homeState.view === 'tasks') reflow();
+  }, { signal: controller.signal });
   setPageTitle(['题库', DATA.title]);
   async function loadPreviews(choice) {
     const result = choice?.result;
