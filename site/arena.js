@@ -65,7 +65,7 @@ export function mount(root, ctx) {
   const random = ctx.param === RANDOM;
   const task = random ? null : ctx.DATA.tasks.find((t) => t.id === ctx.param);
   // A random round draws from the tasks the starting page was showing, as far as they can be judged.
-  const scope = random ? ctx.DATA.tasks.filter((t) => isOpen(t) && inPin(t) && (arenaScope.get() ?? [t.id]).includes(t.id)) : [];
+  const scope = random ? ctx.DATA.tasks.filter((t) => votedTask(t) && isOpen(t) && inPin(t) && (arenaScope.get() ?? [t.id]).includes(t.id)) : [];
   if (random ? !scope.length : !task || !votedTask(task)) {
     location.replace('#/arena');
     return {};
@@ -80,7 +80,7 @@ function lobby(root, ctx) {
   const tracks = tracksOf(tasks);
   const view = { track: '', query: '' };
   const pool = (t) => platform.arena[t.id] ?? { works: 0, entries: 0 };
-  const ready = (t) => isOpen(t) && inPin(t);
+  const ready = (t) => votedTask(t) && isOpen(t) && inPin(t);
   const openTasks = () => ctx.DATA.tasks.filter(ready);
 
   const row = (t) => {

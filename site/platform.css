@@ -1465,6 +1465,12 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
   .announcement-compose-actions { padding: 14px 18px; }
 }
 
+.music-llm-notice { margin-top: 10px; padding: 10px 14px; font-size: 13px; border-color: var(--line-2); }
+.music-llm-notice[data-selected="1"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); color: var(--ink); }
+.music-llm-notice[data-selected="1"] > .i { color: var(--accent); }
+.music-prompt-guide { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--ink-2); }
+.music-prompt-guide[hidden] { display: none; }
+
 /* Guided trial dimension chart (#/dimensions, staff only). One hue: each model's shape in the accent;
    rings and spokes are hairlines, the 50% ring a little stronger. Thin axes are hollow and muted. */
 .dims.is-loading { opacity: 0.55; transition: opacity 0.2s; }

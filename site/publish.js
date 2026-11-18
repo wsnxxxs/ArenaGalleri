@@ -11,7 +11,7 @@ import { resolveApiMedia } from './platform-api.js';
 import { levelGate } from './level-gate.js';
 import { contentStage, moderated, stageTrack, uploadFlow } from './submit.js';
 import { TEMPLATE_LABELS, categoryLabel, categoryOf } from './categories.js';
-import { categoryField, domainField, syncDomains } from './question-fields.js';
+import { MUSIC_LLM_NOTICE, categoryField, domainField, syncDomains } from './question-fields.js';
 import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { replaceReferenceNote } from './reference-files.js';
 // Drafts staged for a question that does not exist yet.
@@ -69,7 +69,7 @@ export function mount(root, ctx) {
     const category = categoryOf(question.category);
     if (!category) return '<span class="field-label">允许的提交格式 *</span><p class="fine">选择题目类型后显示可用格式。</p>';
     const [only] = category.templates;
-    if (category.templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '直接粘贴原文，或上传 .txt / .md 文件，站内按统一版式展示；Markdown 支持表格与 LaTeX 公式。' : '上传单个 .html 文件，资源需写进页面。'}</p>`;
+    if (category.templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '直接粘贴原文，或上传 .txt / .md 文件，站内按统一版式展示；Markdown 支持表格与 LaTeX 公式。' : only === 'audio' ? '必须只上传一个 .mp3 音频文件（不接受压缩包或其他音频格式）；站内将使用统一播放器展示播放键、进度条与全程频谱。' : '上传单个 .html 文件，资源需写进页面。'}</p>`;
     return `<span class="field-label">允许的提交格式 *</span><div class="format-options">
       ${category.templates.map((value) => `<label><input type="checkbox" name="templates" value="${value}"${question.templates.includes(value) ? ' checked' : ''}>${TEMPLATE_LABELS[value]}</label>`).join('')}
     </div>`;
@@ -166,7 +166,7 @@ export function mount(root, ctx) {
           <label class="field"><span class="field-label">测试简述 *${changedMark('summary')}</span><textarea class="input" name="summary" required maxlength="400" rows="3" placeholder="需要完成什么？能测出模型的哪些能力？">${esc(question.summary)}</textarea></label>
           ${categoryField(question.category)}
           ${domainField(platform, question.domains)}
-          <label class="field"><span class="field-label">完整提示词 *${changedMark('prompt')}</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="粘贴所有参与模型需要使用的同一份完整提示词。">${esc(question.prompt)}</textarea><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
+          <label class="field"><span class="field-label">完整提示词 *${changedMark('prompt')}</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="${question.category === '音乐' ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。'}">${esc(question.prompt)}</textarea><p class="fine music-prompt-guide" data-music-prompt-guide${question.category === '音乐' ? '' : ' hidden'}><b>音乐题提示词要求：</b>提示词中须明确要求模型导出单个 <code>.mp3</code> 音频文件。<button class="link" type="button" data-act="insert-mp3-note">插入导出 MP3 要求</button></p><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
           ${refs ? '<div data-ref-host></div>' : ''}
           <div class="field" data-formats>${formatField()}</div>
           ${original ? sampleField() : ''}
@@ -195,9 +195,21 @@ export function mount(root, ctx) {
       question.category = event.target.value;
       question.templates = [...categoryOf(question.category).templates];
       $('[data-formats]', form).innerHTML = formatField();
+      const isMusic = question.category === '音乐';
+      const musicNotice = $('[data-music-category-notice]', form);
+      if (musicNotice) musicNotice.toggleAttribute('data-selected', isMusic);
+      const guide = $('[data-music-prompt-guide]', form);
+      if (guide) guide.hidden = !isMusic;
+      const area = $('[name="prompt"]', form);
+      if (area) area.placeholder = isMusic ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。';
       error.textContent = '';
     };
     root.onclick = (event) => {
+      if (event.target.closest('[data-act="insert-mp3-note"]')) {
+        insertNote('请通过代码制作完整音乐，并导出为单个标准的 .mp3 音频文件。');
+        error.textContent = '';
+        return;
+      }
       if (event.target.closest('[data-act="to-sample"]')) form.requestSubmit($('button[value="sample"]', form));
       if (event.target.closest('[data-act="toggle-samples"]')) { removeSamples = !removeSamples; $('[data-samples]', form).outerHTML = sampleField(); }
     };
@@ -218,6 +230,11 @@ export function mount(root, ctx) {
         if (!String(data.get(name)).trim()) { error.textContent = `请填写${label}`; $(`[name="${name}"]`, form).focus(); return false; }
       }
       if (!categoryOf(data.get('category'))) { error.textContent = '请选择题目类型'; $('[name="category"]', form).focus(); return false; }
+      if (String(data.get('category')) === '音乐' && !/mp3/i.test(String(data.get('prompt')))) {
+        error.textContent = '音乐题的完整提示词中须明确要求导出 MP3（请包含 .mp3 或 MP3 导出说明）';
+        $('[name="prompt"]', form).focus();
+        return false;
+      }
       if (!data.getAll('domains').length) { error.textContent = '请选择所属领域'; $('[name="domains"]', form).focus(); return false; }
       if (!data.getAll('templates').length) { error.textContent = '请至少选择一种提交格式'; return false; }
       if (refs?.blocker()) { error.textContent = refs.blocker(); return false; }
@@ -293,7 +310,7 @@ export function mount(root, ctx) {
     if (!fromHistory) history.pushState({ ...history.state, publish: 'sample' }, '');
     showing = 'upload';
     if (!flow) { showUpload(); scrollTo({ top: 0 }); return; }
-    Object.assign(flowTask, { title: question.title, prompt: question.prompt, templates: question.templates });
+    Object.assign(flowTask, { title: question.title, category: question.category, prompt: question.prompt, templates: question.templates });
     if (flow.resume()) { $('[data-sample-notice]', root)?.scrollIntoView({ block: 'center' }); return; }
     scrollTo({ top: 0 });
     if (changed) toast('题目信息已更新，示例结果已保留');
@@ -418,7 +435,7 @@ export function mount(root, ctx) {
   }
 
   function showUpload() {
-    flowTask = { id: NEW_QUESTION, title: question.title, prompt: question.prompt, templates: question.templates, promptVariants: [] };
+    flowTask = { id: NEW_QUESTION, title: question.title, category: question.category, prompt: question.prompt, templates: question.templates, promptVariants: [] };
     flow = uploadFlow(root, ctx, {
       task: flowTask,
       draftTask: NEW_QUESTION,

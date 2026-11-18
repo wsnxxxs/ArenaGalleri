@@ -455,4 +455,13 @@ export default {
   '比较少于 {count} 次': 'Fewer than {count} comparisons', '正在载入榜单…': 'Loading leaderboard…',
   '由真实盲评投票计算。分数反映作品在同题比较中被偏好的程度，区间越窄，结论越可靠。': 'Calculated from real blind-review votes. Scores reflect preference between works on the same question. Narrower intervals mean more reliable estimates.',
   '按题目查看': 'View by question', '按领域查看': 'View by domain', '综合排行': 'Overall ranking',
+  '音乐': 'Music',
+  '旋律、编曲与音频合成': 'Melody, arrangement and audio synthesis',
+  '单个 MP3 音频': 'Single MP3 audio',
+  '音乐分区还没有题目': 'No questions in Music yet',
+  '为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。欢迎发起第一道音乐题目。': 'To test LLMs’ music-making capability, do not include music from generative audio models. Be the first to create a music question.',
+  '为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。': 'To test LLMs’ music-making capability, do not include music from generative audio models.',
+  '音乐分区暂未开放盲评': 'Blind review is not yet open for Music',
+  '已公开 · 盲评暂未开放': 'Published · Blind review not open yet',
+  '本题封面作品': 'Question cover',
 };

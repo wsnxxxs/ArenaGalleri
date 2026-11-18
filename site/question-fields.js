@@ -2,10 +2,14 @@
 import { $, $$, esc, icon } from './ui.js';
 import { CATEGORIES, MAX_DOMAINS, domainGroups } from './categories.js';
 
+export const MUSIC_LLM_NOTICE = '为测试LLM制作音乐的能力，不要将生成模型的音乐纳入。';
+
 export function categoryField(value = '') {
   return `<fieldset class="field"><legend class="field-label">题目类型<i>*</i></legend><div class="category-options">
     ${CATEGORIES.map((c) => `<label class="category-option"><input type="radio" name="category" value="${esc(c.name)}" required${c.name === value ? ' checked' : ''}>${icon(c.glyph)}<span><b>${esc(c.label)}</b><small>${esc(c.note)}</small></span></label>`).join('')}
-    </div><p class="fine">类型决定排行榜分组与作品的提交格式。</p></fieldset>`;
+    </div>
+    <div class="notice music-llm-notice" data-music-category-notice${value === '音乐' ? ' data-selected="1"' : ''}>${icon('music')}<p><strong>音乐分区说明：</strong>${esc(MUSIC_LLM_NOTICE)}</p></div>
+    <p class="fine">类型决定排行榜分组与作品的提交格式。</p></fieldset>`;
 }
 
 export function domainField(platform, selected = []) {

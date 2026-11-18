@@ -7,7 +7,7 @@ import { loadTurnstile, mountTurnstile } from './turnstile.js';
 import { CONTACT } from './legal.js';
 import { openAuthDialog } from './auth-dialog.js';
 import { sticker, stickerName } from './stickers.js';
-import { aiJudged } from './categories.js';
+import { votedTask } from './categories.js';
 
 export const platform = {
   available: false,
@@ -142,8 +142,8 @@ function acceptCatalog(data, buildInfo) {
   return true;
 }
 function acceptActivity(data) {
-  const graded = new Set(platform.questions.filter(aiJudged).map((q) => q.id));
-  platform.arena = Object.fromEntries(Object.entries(data.arena ?? {}).filter(([id]) => !graded.has(id)));
+  const unvoted = new Set(platform.questions.filter((q) => !votedTask(q)).map((q) => q.id));
+  platform.arena = Object.fromEntries(Object.entries(data.arena ?? {}).filter(([id]) => !unvoted.has(id)));
   platform.arenaModels = data.arenaModels ?? [];
   platform.featured = data.featured ?? {};
   platform.totals = data.totals ?? { votes: 0, voters: 0, entries: 0 };

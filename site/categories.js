@@ -10,8 +10,9 @@ export const CATEGORIES = [
   { name: '推理', label: '推理', note: '数学、逻辑与哲学 · AI 评分', slug: 'reasoning', glyph: 'reason', templates: ['text'], judging: 'ai' },
   { name: '静态网页', label: '设计', note: '页面布局、交互与可视化', slug: 'page', glyph: 'desktop', templates: ['static'], judging: 'vote' },
   { name: '建模', label: '三维', note: '三维场景、模型与模拟', slug: 'model', glyph: 'cube', templates: ['static'], judging: 'vote' },
+  { name: '音乐', label: '音乐', note: '旋律、编曲与音频合成', slug: 'music', glyph: 'music', templates: ['audio'], judging: 'off' },
 ];
-export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '单个 HTML 文件' };
+export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '单个 HTML 文件', audio: '单个 MP3 音频' };
 // The backend may send its own list in bootstrap (`domains`); this one stands in without it.
 export const DOMAIN_GROUPS = [
   { title: '理工与健康', domains: ['数学', '物理', '化学', '生物', '天文', '计算机技术', '工程技术', '医学健康', '地理环境'] },
@@ -26,7 +27,7 @@ export const categoryOf = (name) => CATEGORIES.find((c) => c.name === name) ?? n
 export const categoryLabel = (name) => categoryOf(name)?.label ?? name ?? '';
 // Unknown categories are judged by vote, as every category was before AI grading.
 export const aiJudged = (task) => categoryOf(task?.category)?.judging === 'ai';
-export const votedTask = (task) => !aiJudged(task);
+export const votedTask = (task) => (categoryOf(task?.category)?.judging ?? 'vote') === 'vote';
 // Reserved for AI grading: { score, max, judge, rationale } on a work, null until a grade arrives.
 export function aiScoreOf(work) {
   const grade = work?.aiScore;
@@ -89,8 +90,8 @@ export function searchMatch(task, query) {
 export const matchesQuery = (task, query) => searchMatch(task, query) !== null;
 
 // Categories present in the data, known ones first; an unknown category still gets a view.
-export function tracksOf(tasks) {
-  const present = [...new Set(tasks.map((t) => t.category).filter(Boolean))];
+export function tracksOf(tasks, { alwaysInclude = [] } = {}) {
+  const present = [...new Set([...tasks.map((t) => t.category).filter(Boolean), ...alwaysInclude])];
   const known = CATEGORIES.filter(({ name }) => present.includes(name)).map(({ name, label, slug, glyph }) => ({ name, label, slug, glyph }));
   const other = present.filter((name) => !categoryOf(name)).map((name) => ({ name, label: name, slug: name, glyph: 'grid' }));
   return [...known, ...other].map((track) => ({ ...track, tasks: tasks.filter((t) => t.category === track.name) }));
