@@ -3,7 +3,8 @@ import { routeParts } from './route-path.js';
 // Leaderboard: the full page (#/leaderboard[/<category>|/<task>][/<domain>], or #/leaderboard/<domain>)
 // and the panel on each task page.
 import { $, brandMark, esc, formatDate, formatTime, icon, pad, store, vendorLine } from './ui.js';
-import { apiRemembered, arenaScope, levelOf, platform, pricingInfo, recall } from './platform.js';
+import { api, apiRemembered, arenaScope, isStaff, levelOf, platform, pricingInfo, recall } from './platform.js';
+import { axesOf, chartedDimensions, compactRadar, scaleFor, THIN_ANSWERS } from './dimensions.js';
 import { curatedInfo, curatedKnown } from './curated.js';
 import { categoryLabel, domainsIn, domainList, domainsOf, tracksOf, votedTask } from './categories.js';
 import { textMatches } from './match.js';
@@ -134,6 +135,94 @@ export function mountBoard(container, ctx) {
   const filters = { harness: '', provider: '' };
   const filterable = !ctx.embedded;
   const filterActive = () => Boolean(filters.harness || filters.provider);
+
+  const hasRadars = nextBoard && !ctx.embedded;
+  const radarCategory = ctx.category ?? ctx.task?.category ?? null;
+  let radarState = { status: 'loading' }, radarRequest = null, radarDialog = null;
+  const radarIdentity = () => `${platform.user?.id ?? ''}|${platform.user?.role ?? ''}`;
+  const currentRadars = () => isStaff() && radarState.identity === radarIdentity() && radarState.by === unit;
+  const closeRadar = () => { radarDialog?.close(); radarDialog?.remove(); radarDialog = null; };
+  const radarContent = (key) => {
+    if (!isStaff() || radarState.status === 'gated') return '<span class="board-radar-status">仅管理员可见</span>';
+    if (!currentRadars() || currentData?.by !== unit || radarState.status === 'loading') return '<span class="board-radar-status" role="status">维度加载中…</span>';
+    if (radarState.status === 'error') return '<button class="board-radar-retry" type="button" data-board-radar-retry>重试维度图</button>';
+    const entry = radarState.entries.get(key);
+    return `<button class="board-radar-trigger" type="button" data-board-radar="${esc(key)}" aria-label="查看维度详情" aria-haspopup="dialog">${compactRadar(entry, radarState.dimensions, radarState.scale)}</button>`;
+  };
+  const radarCell = (row) => hasRadars ? `<td class="c-radar" data-board-radar-key="${esc(row.key)}">${radarContent(row.key)}</td>` : '';
+  const radarNote = () => {
+    if (!hasRadars) return '';
+    return `<div class="board-radar-note" data-board-radar-note><span><i aria-hidden="true"></i>雷达图来自引导式盲评，不改变右侧评分与排名。</span><span>点击查看各维度分；未作答的轴留空，虚线与空心点表示样本不足。</span>${ctx.task || ctx.domain || filterActive() ? '<span>雷达图按当前类型汇总，不随题目、领域或来源筛选变化。</span>' : ''}<a href="#/dimensions" data-board-dimensions-link>完整维度图${icon('next')}</a></div>`;
+  };
+  function paintRadars() {
+    if (destroyed) return;
+    for (const cell of container.querySelectorAll('[data-board-radar-key]')) cell.innerHTML = radarContent(cell.dataset.boardRadarKey);
+  }
+  async function loadRadars(force = false) {
+    if (!hasRadars || destroyed) return;
+    const identity = radarIdentity();
+    if (!isStaff()) {
+      radarRequest?.controller.abort();
+      radarRequest = null;
+      radarState = { status: 'gated', identity, by: unit };
+      closeRadar(); paintRadars(); return;
+    }
+    const params = new URLSearchParams({ by: unit, ...(radarCategory ? { category: radarCategory } : {}) });
+    const path = `arena/guided/dimensions?${params}`;
+    if (!force && ((radarRequest?.path === path && radarRequest.identity === identity) || (currentRadars() && radarState.path === path && radarState.status === 'ready'))) return;
+    radarRequest?.controller.abort();
+    closeRadar();
+    const controller = new AbortController();
+    const reading = { path, identity, controller };
+    radarRequest = reading;
+    radarState = { status: 'loading', identity, by: unit, path };
+    paintRadars();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const data = await api(path, { signal: controller.signal });
+      if (destroyed || radarRequest !== reading || identity !== radarIdentity() || !isStaff()) return;
+      if (data.by !== unit || !Array.isArray(data.entries) || !Array.isArray(data.dimensions)) throw new Error('Invalid dimensions');
+      const dimensions = chartedDimensions(data.dimensions);
+      radarState = { status: 'ready', identity, by: unit, path, dimensions, entries: new Map(data.entries.map(entry => [entry.key, entry])), scale: scaleFor(data.entries, dimensions) };
+    } catch (error) {
+      if (destroyed || radarRequest !== reading || identity !== radarIdentity()) return;
+      radarState = { status: [401, 403].includes(error.status) ? 'gated' : 'error', identity, by: unit, path };
+    } finally {
+      clearTimeout(timer);
+      if (radarRequest === reading) { radarRequest = null; paintRadars(); }
+    }
+  }
+  function openRadar(key) {
+    if (!currentRadars() || currentData?.by !== unit || radarState.status !== 'ready') return;
+    const rows = [...(currentData?.rows ?? []), ...(currentData?.partial ?? []), ...(currentData?.watch ?? [])];
+    const row = rows.find(item => item.key === key);
+    if (!row) return;
+    closeRadar();
+    const entry = radarState.entries.get(key);
+    const axes = axesOf(entry ?? { dimensions: {} }, radarState.dimensions, radarState.scale);
+    const dialog = document.createElement('dialog');
+    dialog.className = 'board-radar-dialog';
+    dialog.setAttribute('aria-labelledby', `radar-title-${board}`);
+    dialog.innerHTML = `<header><div><p>能力维度</p><h2 id="radar-title-${board}" data-i18n-ignore>${esc(row.modelName)}${unit === 'config' && row.effort ? ` · ${esc(row.effort)}` : ''}</h2></div><button type="button" class="board-radar-close" data-radar-close aria-label="关闭">${icon('close')}</button></header>
+      <p class="board-radar-scope"><span>${esc(radarCategory ? categoryLabel(radarCategory) : '全部类型')}</span> · <span>${UNITS[unit]}</span></p>
+      ${compactRadar(entry, radarState.dimensions, radarState.scale)}
+      <dl>${axes.map(axis => `<div><dt>${esc(axis.dimension.name)}</dt><dd>${axis.cell.n ? `<b>${esc(axis.score)} <small>±${esc(axis.interval)}</small></b><span><span>${axis.cell.n} 票</span>${axis.thin ? ` · <span>不足 ${THIN_ANSWERS} 票</span>` : ''}</span>` : '<span>尚未作答</span>'}</dd></div>`).join('')}</dl>
+      <p class="board-radar-caption"><span>${esc(`统一刻度 ${radarState.scale.min}–${radarState.scale.max}`)}</span><br><span>维度分独立计算，不改变综合排名。</span></p>
+      <a class="btn" href="#/dimensions" data-board-dimensions-link>完整维度图${icon('next')}</a>`;
+    dialog.addEventListener('click', event => {
+      if (event.target.closest('[data-radar-close]') || event.target === dialog) closeRadar();
+      if (event.target.closest('[data-board-dimensions-link]')) { rememberRadarScope(); closeRadar(); }
+    });
+    dialog.addEventListener('close', () => { dialog.remove(); if (radarDialog === dialog) radarDialog = null; });
+    document.body.append(dialog);
+    radarDialog = dialog;
+    dialog.showModal();
+  }
+  function rememberRadarScope() {
+    store.set('dimensions-unit', unit);
+    store.set('dimensions-category', radarCategory ?? 'all');
+    store.set('dimensions-view', 'radar');
+  }
 
   const modelOf = (row) => ctx.modelOf({ model: row.model, modelName: row.modelName, vendor: row.vendor });
   const filterSelect = (field, label, registry) => `<label class="result-sort">${label}<select data-board-filter="${field}" aria-label="按${label}筛选榜单">
@@ -352,7 +441,7 @@ export function mountBoard(container, ctx) {
     const cats = overall ? Object.keys(s.composite ?? {}) : [];
     const composite = cats.length > 0;
     const cost = costColumn(rows);
-    const columns = (composite ? 7 + cats.length : 8) + (cost ? 1 : 0);
+    const columns = (composite ? 7 + cats.length : 8) + (cost ? 1 : 0) + (hasRadars ? 1 : 0);
     const at = axis(rows);
     // Numbers stay with their words (no-break spaces); platform.css lets a Chinese reason break only after its comma.
     const nb = (text) => text.replaceAll(' ', '\u00a0');
@@ -396,6 +485,7 @@ export function mountBoard(container, ctx) {
       return `<tr class="${[`is-${group}`, row.provisional ? 'is-provisional' : ''].filter(Boolean).join(' ')}" data-board-row="${searchText(row, m)}" data-board-in="${group}">
       ${rank}
       ${line(row, m, group === 'watch' ? reasons : partsLine(row))}
+      ${radarCell(row)}
       ${scoreCell(row, group)}
       <td class="c-range" aria-hidden="true">${group === 'ranked' ? rangeBar(row, at) : ''}</td>${costCell(cost, row)}
       ${middle}
@@ -411,8 +501,8 @@ export function mountBoard(container, ctx) {
     </tbody>`;
     };
     const noun = unit === 'model' ? '模型' : '配置';
-    return `${top}<p class="board-meta board-found" data-board-found hidden></p><div class="board-wrap"><table class="board is-v3${composite ? ' is-composite' : ''}${cost ? ' has-cost' : ''}">
-      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cost ? COST_HEAD : ''}${cats.map((c) => `<th class="c-part" scope="col">${esc(categoryLabel(c))}</th>`).join('')}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">实际胜率</th>${composite ? '' : '<th class="c-works" scope="col">作品</th>'}</tr></thead>
+    return `${top}${radarNote()}<p class="board-meta board-found" data-board-found hidden></p><div class="board-wrap"><table class="board is-v3${composite ? ' is-composite' : ''}${cost ? ' has-cost' : ''}${hasRadars ? ' has-radars' : ''}">
+      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th>${hasRadars ? '<th class="c-radar" scope="col">能力维度</th>' : ''}<th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cost ? COST_HEAD : ''}${cats.map((c) => `<th class="c-part" scope="col">${esc(categoryLabel(c))}</th>`).join('')}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">实际胜率</th>${composite ? '' : '<th class="c-works" scope="col">作品</th>'}</tr></thead>
       <tbody data-board-group="ranked">${rows.length ? rows.map(render('ranked')).join('') : `<tr class="board-group-empty"><td colspan="${columns}">还没有达标的${noun}，已有成绩的列在下方。</td></tr>`}</tbody>
       ${fold('partial', '有各类名次，缺类的不进综合排名', partial)}
       ${fold('watch', '有分数，暂不排名', watch)}
@@ -480,12 +570,14 @@ export function mountBoard(container, ctx) {
     if (togglingSamples) $('[data-board-small]', container)?.focus();
     applyQuery();
     currentData = data;
+    paintRadars();
     ctx.onData?.(data, { visibleRows: visible.rows.length });
     drawn = true;
   }
   // A board seen before draws at once from memory; the fresh one replaces it only if it differs.
   function load() {
     if (destroyed) return Promise.resolve();
+    void loadRadars(true);
     const params = new URLSearchParams({ by: unit, ...(ctx.curated ? { audience: 'curated', ...(ctx.sectionId ? { sectionId: ctx.sectionId } : {}) } : ctx.task ? { task: ctx.task.id } : { ...(ctx.category ? { category: ctx.category } : {}), ...(ctx.domain ? { domain: ctx.domain } : {}) }) });
     if (filterable) for (const [field, value] of Object.entries(filters)) if (value) params.set(field, value);
     const path = `leaderboard${nextBoard ? '/next' : ''}?${params}`;
@@ -558,6 +650,10 @@ export function mountBoard(container, ctx) {
   const onFocusOut = (e) => { if (e.target.matches?.('[data-score-tip]')) e.target.parentElement.classList.remove('is-open'); };
   const onKey = (e) => { if (e.key === 'Escape') closeTips(); };
   const onClick = (e) => {
+    const radar = e.target.closest('[data-board-radar]');
+    if (radar) return void openRadar(radar.dataset.boardRadar);
+    if (e.target.closest('[data-board-radar-retry]')) return void loadRadars(true);
+    if (e.target.closest('[data-board-dimensions-link]')) rememberRadarScope();
     if (e.target.closest('.score-tip-text')) return;
     const tip = e.target.closest('[data-score-tip]')?.parentElement;
     if (tip?.classList.contains('is-open') && e.pointerType !== 'mouse') return void tip.classList.remove('is-open');
@@ -636,6 +732,7 @@ export function mountBoard(container, ctx) {
   return {
     ready: drawn ? null : loading,
     reload: load,
+    refreshIdentity() { return loadRadars(); },
     search(value) {
       text = value;
       query = value.trim().toLowerCase();
@@ -644,6 +741,8 @@ export function mountBoard(container, ctx) {
     destroy() {
       destroyed = true;
       request?.controller.abort();
+      radarRequest?.controller.abort();
+      closeRadar();
       container.removeEventListener('click', onClick);
       container.removeEventListener('change', onChange);
       container.ownerDocument?.removeEventListener('keydown', onKey);
@@ -810,6 +909,7 @@ export function mount(root, ctx) {
   return {
     ready,
     onPlatformChange: (reason) => {
+      if (reason === 'identity' || reason === 'session-ready') void board?.refreshIdentity();
       if (reason === 'activity' || reason === 'identity') {
         const select = $('[data-board-task]', root);
         if (select) select.innerHTML = boardTaskOptions(listed, select.value, platform.activityReady, platform.arena);

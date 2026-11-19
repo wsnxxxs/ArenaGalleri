@@ -78,6 +78,30 @@ export function axesOf(entry, dimensions, scale = SCALE) {
   });
 }
 
+export function compactRadar(entry, dimensions, scale) {
+  const cx = 90, cy = 65, radius = 43;
+  const axes = axesOf(entry ?? { dimensions: {} }, dimensions, scale);
+  const at = (i, value) => radarPoint(i, axes.length, value, radius, cx, cy).map(fixed);
+  const answered = axes.filter(axis => axis.cell.n > 0);
+  const rings = [0.33, 0.66, 1].map(value => `<circle class="board-radar-ring" cx="${cx}" cy="${cy}" r="${fixed(radius * value)}"/>`).join('');
+  const spokes = axes.map((axis, i) => {
+    const [x, y] = at(i, 1), [lx, ly] = at(i, 1.25);
+    return `<line class="board-radar-spoke" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/><text class="board-radar-label${axis.cell.n ? '' : ' is-empty'}" x="${lx}" y="${ly}" text-anchor="${Number(lx) > cx + 12 ? 'start' : Number(lx) < cx - 12 ? 'end' : 'middle'}" dominant-baseline="middle">${esc(axis.dimension.name.replace('能力', ''))}</text>`;
+  }).join('');
+  const complete = axes.length > 0 && answered.length === axes.length;
+  const edges = axes.map((axis, i) => {
+    const next = (i + 1) % axes.length;
+    return axis.cell.n && axes[next].cell.n ? `M${at(i, axis.value).join(',')}L${at(next, axes[next].value).join(',')}` : '';
+  }).join('');
+  const shape = complete ? `<polygon class="board-radar-area${axes.some(axis => axis.thin) ? ' is-thin' : ''}" points="${axes.map((axis, i) => at(i, axis.value).join(',')).join(' ')}"/>` : edges ? `<path class="board-radar-partial" d="${edges}"/>` : '';
+  const marks = axes.map((axis, i) => {
+    if (!axis.cell.n) return '';
+    const [x, y] = at(i, axis.value);
+    return `<circle class="board-radar-dot${axis.thin ? ' is-thin' : ''}" cx="${x}" cy="${y}" r="2.8"/>`;
+  }).join('');
+  return `<svg class="board-radar-chart${answered.length ? '' : ' is-empty'}" viewBox="0 0 180 130" aria-hidden="true">${rings}${spokes}${shape}${marks}${answered.length ? '' : `<text class="board-radar-empty" x="${cx}" y="${cy + 3}" text-anchor="middle">待积累</text>`}</svg>`;
+}
+
 // A board row joined to its entry for names; rows whose entry is gone are dropped.
 export function boardRows(data, dimensionId) {
   const entries = new Map(data.entries.map((entry) => [entry.key, entry]));
