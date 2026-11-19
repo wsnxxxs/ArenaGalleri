@@ -104,7 +104,8 @@ let boards = 0;
 export function mountBoard(container, ctx) {
   const limitWorks = !ctx.task;
   // The guided trial build previews the next scoring; curated boards keep the current one.
-  const nextBoard = globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true && !ctx.curated;
+  const guided = globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
+  const nextBoard = guided && !ctx.curated;
   // Only the board without task, category or domain is the composite (contract: contracts/leaderboard-v3.md).
   const overall = !ctx.task && !ctx.category && !ctx.domain && !ctx.curated;
   // v3 defaults to models on the overall board and configurations elsewhere, each remembered on its own.
@@ -136,8 +137,10 @@ export function mountBoard(container, ctx) {
   const filterable = !ctx.embedded;
   const filterActive = () => Boolean(filters.harness || filters.provider);
 
-  const hasRadars = nextBoard && !ctx.embedded;
-  const radarCategory = ctx.category ?? ctx.task?.category ?? null;
+  const curatedSection = ctx.curated && ctx.sectionId ? ctx.info?.sections?.find((section) => section.id === ctx.sectionId) : null;
+  const musicCurated = ctx.curated && curatedSection?.category === '音乐';
+  const hasRadars = guided && !ctx.embedded;
+  const radarCategory = ctx.curated ? curatedSection?.category ?? null : ctx.category ?? ctx.task?.category ?? null;
   let radarState = { status: 'loading' }, radarRequest = null, radarDialog = null;
   const radarIdentity = () => `${platform.user?.id ?? ''}|${platform.user?.role ?? ''}`;
   const currentRadars = () => isStaff() && radarState.identity === radarIdentity() && radarState.by === unit;
@@ -152,7 +155,9 @@ export function mountBoard(container, ctx) {
   const radarCell = (row) => hasRadars ? `<td class="c-radar" data-board-radar-key="${esc(row.key)}">${radarContent(row.key)}</td>` : '';
   const radarNote = () => {
     if (!hasRadars) return '';
-    return `<div class="board-radar-note" data-board-radar-note><span><i aria-hidden="true"></i>雷达图来自引导式盲评，不改变右侧评分与排名。</span><span>点击查看各维度分；未作答的轴留空，虚线与空心点表示样本不足。</span>${ctx.task || ctx.domain || filterActive() ? '<span>雷达图按当前类型汇总，不随题目、领域或来源筛选变化。</span>' : ''}<a href="#/dimensions" data-board-dimensions-link>完整维度图${icon('next')}</a></div>`;
+    const scope = ctx.curated ? '<span>雷达图参考全库的引导式测评：分区按类型汇总，总榜汇总全部类型，不仅限于精选题，也不随来源筛选变化。</span>'
+      : ctx.task || ctx.domain || filterActive() ? '<span>雷达图按当前类型汇总，不随题目、领域或来源筛选变化。</span>' : '';
+    return `<div class="board-radar-note" data-board-radar-note><span><i aria-hidden="true"></i>雷达图来自引导式盲评，不改变右侧评分与排名。</span><span>点击查看各维度分；未作答的轴留空，虚线与空心点表示样本不足。</span>${scope}<a href="#/dimensions" data-board-dimensions-link>完整维度图${icon('next')}</a></div>`;
   };
   function paintRadars() {
     if (destroyed) return;
@@ -236,7 +241,8 @@ export function mountBoard(container, ctx) {
 
   // Curated empty states explain the comparison threshold and how to contribute.
   function curatedEmpty(data) {
-    const taskIds = data.scope?.taskIds ?? [];
+    const taskIds = data.scope?.taskIds ?? curatedSection?.taskIds ?? [];
+    if (musicCurated) return `<div class="board-empty"><p class="board-empty-title">音乐精选榜暂未开放计分</p>${curatedSection?.selectedQuestionCount ? `<p>已挑选 ${curatedSection.selectedQuestionCount} 道题，等待开放计分。</p>` : '<p>尚未挑选精选题</p>'}<p>管理员可在题目详情页挑选音乐精选题；入选后仍不计分。</p><div class="board-empty-actions"><a class="btn sm" href="#/leaderboard/curated">查看精选总榜</a></div></div>`;
     const votes = data.totals?.votes ?? 0;
     const staffHistory = data.scope?.includesStaffHistory ?? ctx.info?.includesStaffHistory;
     const since = data.scope?.countingStartedAt ?? ctx.info?.countingStartedAt;
@@ -246,7 +252,7 @@ export function mountBoard(container, ctx) {
         : '<button class="btn primary sm" type="button" data-auth="login">登录</button><a class="btn sm" href="#/leaderboard">查看大众榜</a>';
     if (!taskIds.length) {
       return ctx.sectionId
-        ? '<div class="board-empty"><p class="board-empty-title">这个分区还没有题目</p><p>管理员把题目放进这个分区后才开始计票。</p><div class="board-empty-actions"><a class="btn sm" href="#/leaderboard/curated">查看精选总榜</a></div></div>'
+        ? '<div class="board-empty"><p class="board-empty-title">尚未挑选精选题</p><p>管理员可在题目详情页挑选本类型的精选题。</p><div class="board-empty-actions"><a class="btn sm" href="#/leaderboard/curated">查看精选总榜</a></div></div>'
         : '<div class="board-empty"><p class="board-empty-title">还没有精选题目</p><p>管理员挑选题目后，精选榜才开始计票。</p><div class="board-empty-actions"><a class="btn sm" href="#/leaderboard">查看大众榜</a></div></div>';
     }
     const counts = `${taskIds.length} 道精选题 · ${votes} 次有效比较${staffHistory ? ' · 含管理员历史票' : since ? ` · ${formatDate(since)} 起` : ''}`;
@@ -285,6 +291,7 @@ export function mountBoard(container, ctx) {
 
   // Nothing to list: say why, by filter, curated state or the first votes.
   function empty(data, top, unranked) {
+    if (ctx.curated && !(data.scope?.taskIds ?? curatedSection?.taskIds ?? []).length) return `${top}${curatedEmpty(data)}`;
     if (data.filters) {
       return `${top}<div class="board-empty">
         <p class="board-empty-title">这个筛选下还没有可计分的比较</p>
@@ -401,6 +408,8 @@ export function mountBoard(container, ctx) {
   }
 
   function table(data, { rows, unranked }) {
+    // Music can be curated before scoring opens; never present it as a ranked or collecting board.
+    if (musicCurated) return curatedEmpty(data);
     if (isV3(data)) return tableV3(data, unranked);
     const hiddenCount = limitWorks && !showSmallSamples ? visibleBoardEntries(data, true).rows.length - rows.length : 0;
     const top = head(data, rows.length, hiddenCount);
@@ -416,14 +425,15 @@ export function mountBoard(container, ctx) {
       return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${searchText(row, m)}">
       <td class="c-rank${rank <= 3 ? ' is-top' : ''}">${pad(rank)}</td>
       <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name">${nameParts(data, row)}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
+      ${radarCell(row)}
       <td class="c-score"><b><span data-i18n-number="${row.score}">${row.score}</span></b><small>±<span data-i18n-number="${row.interval}">${row.interval}</span></small></td>
       <td class="c-range" aria-hidden="true">${rangeBar(row, at)}</td>${costCell(cost, row)}
       ${recordCells(row)}
       <td class="c-works"><span data-i18n-number="${row.works}">${row.works}</span></td>
     </tr>`;
     }).join('');
-    return `${top}<div class="board-wrap"><table class="board">
-      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th><th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cost ? COST_HEAD : ''}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">胜率</th><th class="c-works" scope="col">作品</th></tr></thead>
+    return `${top}${radarNote()}<div class="board-wrap"><table class="board${hasRadars ? ' has-radars' : ''}">
+      <thead><tr><th class="c-rank" scope="col">名次</th><th class="c-model" scope="col">${unit === 'model' ? '模型' : '模型 · 档位'}</th>${hasRadars ? '<th class="c-radar" scope="col">能力维度</th>' : ''}<th class="c-score" scope="col">评分</th><th class="c-range" scope="col"><span class="sr">区间</span></th>${cost ? COST_HEAD : ''}<th class="c-games" scope="col">比较</th><th class="c-record" scope="col">胜 · 平 · 负</th><th class="c-rate" scope="col">胜率</th><th class="c-works" scope="col">作品</th></tr></thead>
       <tbody>${body}</tbody>
     </table></div>${cost ? COST_NOTE : ''}
     <p class="muted filter-empty" data-board-none hidden>没有匹配的模型，请换个关键词。</p>
@@ -759,6 +769,7 @@ export function mountBoard(container, ctx) {
 // The curated rankings sit beside them: #/leaderboard/curated (overall) and .../curated/<sectionId>.
 // AI-graded questions are not ranked here.
 export function mount(root, ctx) {
+  const guided = globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
   const tasks = ctx.DATA.tasks.filter(votedTask);
   const tracks = tracksOf(tasks);
   const parts = (routeParts(location.hash) ?? []).slice(1);
@@ -795,15 +806,17 @@ export function mount(root, ctx) {
       ${domains.map((d) => `<option value="${esc(d.name)}"${d.name === domain ? ' selected' : ''}>${esc(d.name)}（${d.tasks.length} 题）</option>`).join('')}
     </select></label>` : '';
 
-  // The curated group is drawn from what the server says; sections without questions stay out of public view.
+  // Empty sections use their category label, not a name-based guess; existing names stay server-owned.
+  const sectionName = (section) => !section?.questionCount && section?.category ? categoryLabel(section.category) : section?.name ?? '';
+  // The guided build includes empty sections; the production navigation still hides them.
   const curatedNav = (info) => {
-    const sections = (info?.sections ?? []).filter((section) => section.questionCount > 0);
+    const sections = (info?.sections ?? []).filter((section) => guided || section.questionCount > 0);
     const total = (info?.sections ?? []).reduce((sum, section) => sum + (section.questionCount ?? 0), 0);
-    const link = (href, glyph, text, current, count) => `<a class="side-link" href="${esc(href)}"${current ? ' aria-current="page"' : ''}>${icon(glyph)}<span data-i18n-ignore>${esc(text)}</span><span class="nav-count">${count}</span></a>`;
-    if (info && !total) return `<nav class="side-nav section-nav" aria-label="精选榜"><button class="side-link" type="button" disabled>${icon('rank')}总榜 · 暂无精选题</button></nav>`;
+    const link = (href, glyph, text, current, count, original) => `<a class="side-link" href="${esc(href)}"${current ? ' aria-current="page"' : ''}>${icon(glyph)}<span${original ? ' data-i18n-ignore' : ''}>${esc(text)}</span><span class="nav-count">${count}</span></a>`;
+    if (info && !total && !guided) return `<nav class="side-nav section-nav" aria-label="精选榜"><button class="side-link" type="button" disabled>${icon('rank')}总榜 · 暂无精选题</button></nav>`;
     return `<nav class="side-nav section-nav" aria-label="精选榜">${info ? [
       `<a class="side-link" href="#/leaderboard/curated"${curated && !sectionId ? ' aria-current="page"' : ''}>${icon('rank')}总榜<span class="nav-count">${total}</span></a>`,
-      ...sections.map((section) => link(`#/leaderboard/curated/${encodeURIComponent(section.id)}`, 'bookmark', section.name, section.id === sectionId, section.questionCount)),
+      ...sections.map((section) => link(`#/leaderboard/curated/${encodeURIComponent(section.id)}`, 'bookmark', sectionName(section), section.id === sectionId, section.questionCount, Boolean(section.questionCount || !section.category))),
     ].join('') : `<a class="side-link" href="#/leaderboard/curated"${curated && !sectionId ? ' aria-current="page"' : ''}>${icon('rank')}总榜</a>`}</nav>`;
   };
   const stat = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
@@ -826,18 +839,20 @@ export function mount(root, ctx) {
     live?.destroy();
     board?.destroy();
     const section = sectionId ? info?.sections.find((x) => x.id === sectionId) ?? null : null;
-    const scopeTitle = curated ? (sectionId ? `精选 · ${section?.name ?? ''}` : '精选总榜')
+    const musicSection = curated && section?.category === '音乐';
+    const scopeTitle = curated ? (sectionId ? `精选 · ${sectionName(section)}` : '精选总榜')
       : task?.title ?? (domain ? `${track ? `${track.label} · ` : ''}${domain}排行` : track ? `${track.label}排行` : '综合排行');
     const crumbs = [{ text: '排行榜', ...(task || track || domain || curated ? { href: '#/leaderboard' } : {}) }];
-    if (curated) crumbs.push(sectionId ? { text: '精选榜', href: '#/leaderboard/curated' } : { text: '精选榜' }, ...(sectionId ? [{ text: section?.name ?? '', original: true }] : []));
+    if (curated) crumbs.push(sectionId ? { text: '精选榜', href: '#/leaderboard/curated' } : { text: '精选榜' }, ...(sectionId ? [{ text: sectionName(section), original: Boolean(section?.questionCount || !section?.category) }] : []));
     if (track) crumbs.push(task || domain ? { text: track.label, href: base } : { text: track.label });
     if (domain) crumbs.push({ text: domain });
     if (task) crumbs.push({ text: task.title, original: true });
     const since = info?.countingStartedAt;
     const description = !curated ? '由全部计票的盲评选择计算。分数反映作品在同题比较中被偏好的程度，区间越窄，结论越可靠。'
-      : sectionId ? `精选总榜中「${section?.name ?? ''}」分区的 ${section?.questionCount ?? 0} 道题，单独计算名次。`
-        : !info?.includesStaffHistory ? `只统计 Lv1 及以上成员（通过资格考试）在精选题上的选择，题目由管理员挑选。和大众榜分开计票${since ? `，${formatDate(since)} 起从零累计` : ''}。`
-        : `统计认证成员${since ? `自 ${formatDate(since)} 起` : ''}在精选题上的选择，并纳入普通管理员和高级管理员的历史有效票。题目由管理员挑选，和大众榜分开计票。`;
+      : musicSection ? '音乐精选榜暂未开放计分'
+        : sectionId ? (section?.questionCount ? `精选总榜中「${sectionName(section)}」分区的 ${section.questionCount} 道题，单独计算名次。` : '尚未挑选精选题')
+          : !info?.includesStaffHistory ? `只统计 Lv1 及以上成员（通过资格考试）在精选题上的选择，题目由管理员挑选。和大众榜分开计票${since ? `，${formatDate(since)} 起从零累计` : ''}。`
+            : `统计认证成员${since ? `自 ${formatDate(since)} 起` : ''}在精选题上的选择，并纳入普通管理员和高级管理员的历史有效票。题目由管理员挑选，和大众榜分开计票。`;
     root.innerHTML = `${ctx.pageStart({ title: '排行榜', section: 'leaderboard', heading: scopeTitle, headingOriginal: Boolean(task), crumbs, description,
       meta: `<dl class="side-stats" data-stats>
           ${stat('有效比较', !curated && platform.activityReady ? pad(platform.totals.votes) : '—')}
@@ -856,7 +871,7 @@ export function mount(root, ctx) {
     </div>` })}
     <section class="block wrap">
       <div data-board><p class="muted">正在载入榜单…</p></div>
-      ${boardNotes(false, curated ? { since, threshold: 30 } : null, !task)}
+      ${musicSection ? '' : boardNotes(false, curated ? { since, threshold: 30 } : null, !task)}
     </section>
   ${ctx.pageEnd()}`;
     drawn = info;
@@ -883,7 +898,7 @@ export function mount(root, ctx) {
           notes.outerHTML = boardNotes(notes.open, curated ? { since: info?.countingStartedAt, threshold: 30 } : null, !task, data.scoring);
         }
         const stats = $('[data-stats]', root);
-        if (stats) stats.innerHTML = stat('有效比较', pad(data.totals.votes)) + stat('参与者', pad(data.totals.voters)) + stat(data.by === 'model' ? '上榜模型' : '上榜配置', pad(visibleRows));
+        if (stats) stats.innerHTML = stat('有效比较', musicSection ? '—' : pad(data.totals.votes)) + stat('参与者', musicSection ? '—' : pad(data.totals.voters)) + stat(data.by === 'model' ? '上榜模型' : '上榜配置', musicSection ? '—' : pad(visibleRows));
       },
     });
     live = watchBoardRefresh(() => board.reload());

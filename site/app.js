@@ -20,6 +20,7 @@ import { STATUS, accountControl, api, arenaScope, arenaText, avatarFace, bySite,
 import { bootRead } from './platform-api.js';
 import { mount as renderLanding } from './home.js';
 import { startAnnouncements } from './announcements.js';
+import { curatedInfo, invalidateCurated } from './curated.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { effortRank, representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
@@ -108,6 +109,54 @@ function applyTaskSolveStatus(taskId, status) {
     if (id === taskId) syncSolveNode(node, normalized);
   }
   window.dispatchEvent(new CustomEvent('solvestatuschange', { detail: { taskId, status: normalized } }));
+}
+
+const curatedSaving = new Set();
+const isCuratedTask = task => Boolean(task?.curatedSectionId);
+function taskCuratedStarHtml(task) {
+  return `<span class="task-curated-star" data-curated-star="${esc(task.id)}" role="img" aria-label="精选题" title="精选题"${isCuratedTask(task) ? '' : ' hidden'}>🌟</span>`;
+}
+function taskCuratedSidebarHtml(task) {
+  if (globalThis.SAME_PROMPT_CONFIG?.guidedVoting !== true) return '';
+  if (!isStaff()) return isCuratedTask(task) ? '<p class="curated-side-badge"><span aria-hidden="true">🌟</span> 精选题</p>' : '';
+  const supported = CATEGORIES.some(category => category.name === task.category && category.judging === 'vote');
+  const saving = curatedSaving.has(task.id);
+  return `<div class="curated-side"><label><input type="checkbox" data-task-curated="${esc(task.id)}"${isCuratedTask(task) ? ' checked' : ''}${saving || !supported ? ' disabled' : ''}><span>是否是精选题</span><span class="curated-side-star" aria-hidden="true">🌟</span></label><p>${saving ? '正在保存…' : !supported ? '该题目类型暂不支持精选' : task.category === '音乐' ? '音乐可先标为精选，榜单暂不计分。' : '精选题会优先展示，并在题库标星。'}</p></div>`;
+}
+function applyTaskCurated(taskId, sectionId) {
+  for (const list of [DATA?.tasks, platform.questions]) {
+    const task = list?.find(item => item.id === taskId);
+    if (task) task.curatedSectionId = sectionId;
+  }
+  for (const star of document.querySelectorAll('[data-curated-star]')) if (star.dataset.curatedStar === taskId) star.hidden = !sectionId;
+  for (const input of document.querySelectorAll('[data-task-curated]')) if (input.dataset.taskCurated === taskId) input.checked = Boolean(sectionId);
+  window.dispatchEvent(new CustomEvent('curatedselectionchange', { detail: { taskId } }));
+}
+async function saveTaskCurated(input) {
+  const taskId = input.dataset.taskCurated;
+  if (!isStaff() || curatedSaving.has(taskId)) return;
+  const selected = input.checked, actorId = platform.user.id;
+  curatedSaving.add(taskId);
+  input.disabled = true;
+  try {
+    const info = await curatedInfo({ fresh: true });
+    if (platform.user?.id !== actorId || !isStaff()) throw new Error(tr('登录状态已变化，请重新载入'));
+    const saved = await api(`admin/curated/questions/${encodeURIComponent(taskId)}`, { method: 'PUT', body: { selected, revision: info.revision } });
+    invalidateCurated();
+    applyTaskCurated(taskId, saved.sectionId);
+    toast(tr(saved.selected ? '已加入精选题' : '已移出精选题'));
+  } catch (error) {
+    input.checked = isCuratedTask(DATA.tasks.find(task => task.id === taskId));
+    toast(error.message || tr('精选状态保存失败，请重试'));
+    invalidateCurated();
+  } finally {
+    await refreshPlatform('curated');
+    curatedSaving.delete(taskId);
+    const task = DATA.tasks.find(task => task.id === taskId);
+    if (task) for (const control of document.querySelectorAll('[data-task-curated]')) {
+      if (control.dataset.taskCurated === taskId) control.closest('.curated-side').outerHTML = taskCuratedSidebarHtml(task);
+    }
+  }
 }
 
 let solveMenuEl = null;
@@ -728,7 +777,7 @@ function renderLibrary(scopes = [], fresh = true) {
       <a class="question-visual${shown?.previewMode === 'screenshot' ? ' screenshot-thumb' : shown?.previewModel || shown?.previewLoader ? ' model-thumb' : ''}" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的全部作品" tabindex="-1"${shown ? ` data-preview-id="${esc(shown.id)}"` : ''}${zoom ? ` data-preview-zoom="${zoom}"` : ''}>
         ${artwork}
       </a>
-      ${taskSolveCornerHtml(t)}
+      ${taskSolveCornerHtml(t)}${taskCuratedStarHtml(t)}
       <div class="task-body">
         <div class="question-byline"><ul class="tag-line"><li class="tag-recommendation" data-question-reason hidden></li>${tagLine(t)}</ul>
           <span class="avatar question-avatar${bySite(t) ? ' is-site' : ''}" role="img" aria-label="发布者：${esc(authorName(t))}" title="发布者：${esc(authorName(t))}">${authorAvatar(t)}</span>
@@ -872,7 +921,8 @@ function renderLibrary(scopes = [], fresh = true) {
     }
     // Mix within the filtered result set and keep direct search hits before prompt-only hits.
     const ranked = [...rankedTasks(matching.filter(t => !promptOnly.has(t.id)), recommendationTime),
-      ...rankedTasks(matching.filter(t => promptOnly.has(t.id)), recommendationTime)];
+      ...rankedTasks(matching.filter(t => promptOnly.has(t.id)), recommendationTime)]
+      .sort((a, b) => Number(isCuratedTask(b.task)) - Number(isCuratedTask(a.task)));
     const reasons = new Map(ranked.map(({ task, reason }) => [task.id, reason]));
     const shown = new Set(matching.map(t => t.id));
     const order = [...ranked.map(row => row.task), ...DATA.tasks.filter(t => !shown.has(t.id))];
@@ -1021,6 +1071,7 @@ function renderLibrary(scopes = [], fresh = true) {
   }, { capture: true, signal: controller.signal });
   filter();
   window.addEventListener('localechange', filter, { signal: controller.signal });
+  window.addEventListener('curatedselectionchange', () => { if (homeState.view === 'tasks') reflow(); }, { signal: controller.signal });
   window.addEventListener('solvestatuschange', () => {
     const select = $('[data-home-solve]', root);
     if (select) {
@@ -1451,7 +1502,7 @@ function renderTask(t) {
       <p class="side-intro"><span data-i18n-ignore>${esc(t.summary)}</span></p>
       <p class="side-byline"><span data-i18n-ignore>${esc(authorName(t))}</span> <span>发起</span>${t.date ? ` · <span data-i18n-date="${esc(t.date)}">${formatDate(t.date)}</span>` : ''}</p>
       <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${subcategoryOf(t) ? `<li class="tag-sub"><a href="${LIBRARY.href}/${encodeURIComponent(t.category)}/${encodeURIComponent(subcategoryOf(t))}">${esc(subcategoryOf(t))}</a></li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}</ul>
-      ${taskSolveSidebarHtml(t)}
+      ${taskSolveSidebarHtml(t)}${taskCuratedSidebarHtml(t)}
       <nav class="side-nav task-nav" aria-label="本页">
         <button class="side-link" data-go="results" aria-pressed="true">${icon('grid')}作品<span class="nav-count">${t.results.length}</span></button>
         ${t.conditions.length ? `<button class="side-link" data-go="shots" aria-pressed="false">${icon('image')}截图对照</button>` : ''}
@@ -1556,6 +1607,7 @@ function renderTask(t) {
   };
 
   root.onchange = (e) => {
+    if (e.target.matches('[data-task-curated]')) return void saveTaskCurated(e.target);
     if (e.target.matches('[data-vendor-filter]')) { taskState.vendor = e.target.value; flip(root, () => filterResults(t)); updateResultPreviews(t); }
     if (e.target.matches('[data-harness-filter]')) { taskState.harness = e.target.value; flip(root, () => filterResults(t)); updateResultPreviews(t); }
     if (e.target.matches('[data-provider-filter]')) { taskState.provider = e.target.value; flip(root, () => filterResults(t)); updateResultPreviews(t); }

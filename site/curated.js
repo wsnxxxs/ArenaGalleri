@@ -4,14 +4,25 @@ import { api } from './platform.js';
 
 let cache = null;
 let task = null;
+let generation = 0;
+
+export function invalidateCurated() {
+  generation += 1;
+  cache = null;
+  task = null;
+}
 
 export function curatedInfo({ fresh = false } = {}) {
   if (!fresh && cache && Date.now() - cache.at < 60_000) return Promise.resolve(cache.data);
-  task ??= api('curated').then((data) => {
-    const sections = (data.sections ?? []).slice().sort((a, b) => a.order - b.order);
-    cache = { at: Date.now(), data: { ...data, sections, taskIds: new Set(sections.flatMap((section) => section.taskIds ?? [])) } };
-    return cache.data;
-  }).finally(() => { task = null; });
+  if (!task) {
+    const reading = generation;
+    task = api('curated').then((data) => {
+      const sections = (data.sections ?? []).slice().sort((a, b) => a.order - b.order);
+      const info = { ...data, sections, taskIds: new Set(sections.flatMap((section) => section.taskIds ?? [])) };
+      if (reading === generation) cache = { at: Date.now(), data: info };
+      return info;
+    }).finally(() => { if (reading === generation) task = null; });
+  }
   return task;
 }
 // What has been read so far, for drawing before the read finishes.

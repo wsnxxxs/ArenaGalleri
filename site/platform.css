@@ -2060,6 +2060,16 @@ html[data-theme="light"] [data-solve-status="scarce"] {
 .task-card {
   position: relative;
 }
+.task-curated-star { position: absolute; top: 10px; left: 10px; z-index: 6; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: var(--bg); box-shadow: 0 2px 8px #0001; font-size: 19px; pointer-events: none; }
+.task-curated-star[hidden] { display: none; }
+.curated-side { margin: 18px 0 0; padding: 13px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.curated-side label { display: flex; align-items: center; gap: 9px; color: var(--ink); font: 500 13px var(--sans); cursor: pointer; }
+.curated-side input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.curated-side input:disabled { cursor: not-allowed; }
+.curated-side-star { margin-left: auto; opacity: .45; }
+.curated-side:has(input:checked) .curated-side-star { opacity: 1; }
+.curated-side p { margin: 8px 0 0; color: var(--muted); font: 11.5px/1.7 var(--sans); }
+.curated-side-badge { display: flex; align-items: center; gap: 7px; margin: 15px 0 0; color: var(--ink-2); font: 12px var(--sans); }
 
 .solve-dot {
   flex: none;
