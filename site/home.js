@@ -78,98 +78,259 @@ const pick = (list, recent = []) => {
 };
 
 
-// Set to e.g. 'assets/support-qr.png' once the actual WeChat reward QR image is uploaded.
-const SUPPORT_QR_SRC = '';
+// Spiral thumbs-up poster art (adapted from spiral-thumb.html) + WeChat reward QR card.
+const SUPPORT_QR_SRC = 'assets/support-qr.jpg';
+const SUPPORT_SPIRAL_FALLBACK = 'assets/support-spiral-fallback.png';
+const SPIRAL_ART = {
+  width: 760,
+  height: 700,
+  field: { left: 38, right: 722, top: 38, bottom: 662, rows: 24 },
+  hand: { centerX: 380, centerY: 350, height: 652, maxWidth: 592, angle: -15 },
+  wire: {
+    pitch: 15.1, radiusX: 8.5, radiusY: 12.2,
+    baseWidth: 1.7, coilWidth: 2.45, baseColor: '#b7ab84', coilRGB: '244,223,137',
+  },
+};
+let cachedSpiralScanlines;
+
+function buildSpiralScanlines() {
+  if (cachedSpiralScanlines !== undefined) return cachedSpiralScanlines;
+  try {
+    const bitmap = document.createElement('canvas');
+    const pen = bitmap.getContext('2d', { willReadFrequently: true });
+    if (!pen) return (cachedSpiralScanlines = null);
+    const font = '560px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", emoji, sans-serif';
+    pen.font = font;
+    const m = pen.measureText('👍');
+    const glyphW = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+    const glyphH = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+    const size = Math.ceil(Math.hypot(glyphW, glyphH)) + 12;
+    if (!Number.isFinite(size) || size < 64) return (cachedSpiralScanlines = null);
+    bitmap.width = bitmap.height = size;
+    pen.font = font;
+    pen.textBaseline = 'alphabetic';
+    pen.fillStyle = '#ffcc44';
+    pen.translate(size / 2, size / 2);
+    pen.rotate(SPIRAL_ART.hand.angle * Math.PI / 180);
+    pen.fillText('👍', (m.actualBoundingBoxLeft - m.actualBoundingBoxRight) / 2,
+      (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+    const { width, height, data } = pen.getImageData(0, 0, size, size);
+    const inside = new Uint8Array(width * height);
+    const tones = new Uint8Array(inside.length);
+    const histogram = new Uint32Array(256);
+    let opaque = 0, left = width, right = 0, top = height, bottom = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x, p = i * 4, alpha = data[p + 3];
+        if (alpha < 48) continue;
+        inside[i] = 1;
+        tones[i] = Math.round(0.213 * data[p] + 0.715 * data[p + 1] + 0.072 * data[p + 2]);
+        if (alpha > 240) { histogram[tones[i]]++; opaque++; }
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+      }
+    }
+    if (opaque < 400 || right <= left || bottom <= top) return (cachedSpiralScanlines = null);
+    const distanceInside = (mask) => {
+      const field = new Float32Array(mask.length);
+      const diag = Math.SQRT2;
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const i = y * width + x;
+          if (!mask[i]) continue;
+          field[i] = Math.min(field[i - 1] + 1, field[i - width] + 1,
+            field[i - width - 1] + diag, field[i - width + 1] + diag);
+        }
+      }
+      for (let y = height - 2; y > 0; y--) {
+        for (let x = width - 2; x > 0; x--) {
+          const i = y * width + x;
+          if (!mask[i]) continue;
+          field[i] = Math.min(field[i], field[i + 1] + 1, field[i + width] + 1,
+            field[i + width - 1] + diag, field[i + width + 1] + diag);
+        }
+      }
+      return field;
+    };
+    const percentile = (fraction) => {
+      const target = opaque * fraction;
+      let sum = 0;
+      for (let tone = 0; tone < 256; tone++) {
+        sum += histogram[tone];
+        if (sum >= target) return tone;
+      }
+      return 255;
+    };
+    const shadow = percentile(0.04), light = percentile(0.90), toneRange = light - shadow;
+    const gHeight = bottom - top + 1, gWidth = right - left + 1;
+    const raised = inside.slice();
+    const probe = Math.max(2, Math.round(gHeight * 0.005));
+    const colorStep = (a, b) => {
+      if (!inside[a] || !inside[b]) return 0;
+      const p = a * 4, q = b * 4;
+      return Math.max(Math.abs(data[p] - data[q]), Math.abs(data[p + 1] - data[q + 1]), Math.abs(data[p + 2] - data[q + 2]));
+    };
+    for (let y = top; y <= bottom; y++) {
+      for (let x = left; x <= right; x++) {
+        const i = y * width + x;
+        if (!inside[i]) continue;
+        if (Math.max(colorStep(i - probe, i + probe), colorStep(i - probe * width, i + probe * width)) > 15) raised[i] = 0;
+      }
+    }
+    const contour = distanceInside(inside);
+    const details = distanceInside(raised);
+    const heightMap = new Float32Array(inside.length);
+    for (let i = 0; i < inside.length; i++) {
+      if (!inside[i]) continue;
+      const edge = Math.sin(Math.min(1, contour[i] / (gHeight * 0.030)) * Math.PI / 2);
+      const pad = 1 - Math.exp(-details[i] / (gHeight * 0.017));
+      const value = toneRange < 12 ? 1 : Math.max(0, Math.min(1, (tones[i] - shadow) / toneRange));
+      heightMap[i] = edge * (0.22 + 0.78 * pad) * (0.76 + 0.24 * value);
+    }
+    const scale = Math.min(SPIRAL_ART.hand.height / gHeight, SPIRAL_ART.hand.maxWidth / gWidth);
+    const midX = (left + right) / 2, midY = (top + bottom) / 2;
+    const sampleHand = (x, y) => {
+      const u = (x - SPIRAL_ART.hand.centerX) / scale + midX;
+      const v = (y - SPIRAL_ART.hand.centerY) / scale + midY;
+      if (u < left || u > right || v < top || v > bottom) return 0;
+      const ix = Math.floor(u), iy = Math.floor(v), i = iy * width + ix;
+      const du = u - ix, dv = v - iy;
+      const above = heightMap[i] * (1 - du) + heightMap[i + 1] * du;
+      const below = heightMap[i + width] * (1 - du) + heightMap[i + width + 1] * du;
+      return above * (1 - dv) + below * dv;
+    };
+    const { left: fLeft, right: fRight, top: fTop, bottom: fBottom, rows } = SPIRAL_ART.field;
+    const wire = SPIRAL_ART.wire;
+    const count = Math.ceil((fRight - fLeft) / 0.55);
+    cachedSpiralScanlines = Array.from({ length: rows }, (_, row) => {
+      const y = fTop + row * (fBottom - fTop) / (rows - 1);
+      const path = new Path2D();
+      const stops = [];
+      path.moveTo(fLeft, y);
+      for (let i = 0; i <= count; i++) {
+        const progress = i / count;
+        const x = fLeft + progress * (fRight - fLeft);
+        const relief = sampleHand(x, y);
+        const phase = (x - fLeft) * 2 * Math.PI / wire.pitch + row * 0.46;
+        const depth = relief * Math.cos(phase);
+        path.lineTo(x + wire.radiusX * relief * Math.sin(phase) - 0.9 * depth, y - wire.radiusY * depth);
+        if (i % 7 === 0 || i === count) stops.push([progress, Math.min(1, 1.25 * relief)]);
+      }
+      return { path, stops };
+    });
+    return cachedSpiralScanlines;
+  } catch {
+    return (cachedSpiralScanlines = null);
+  }
+}
+
+function mountSpiralCanvas(canvas) {
+  if (!canvas) return () => {};
+  const ctx = canvas.getContext('2d', { alpha: false });
+  if (!ctx) return () => {};
+  let disposed = false, painted = false, fallbackImg = null;
+  const drawFallback = () => {
+    if (disposed || !fallbackImg?.complete || !fallbackImg.naturalWidth) return;
+    const box = canvas.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    const dpr = Math.max(window.devicePixelRatio || 1, 1.5);
+    canvas.width = Math.max(1, Math.round(box.width * dpr));
+    canvas.height = Math.max(1, Math.round(box.height * dpr));
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
+  };
+  const render = () => {
+    if (disposed) return;
+    const box = canvas.getBoundingClientRect();
+    if (box.width < 20 || box.height < 20) return;
+    const scanlines = buildSpiralScanlines();
+    if (!scanlines) {
+      if (!fallbackImg) {
+        fallbackImg = new Image();
+        fallbackImg.onload = drawFallback;
+        fallbackImg.src = SUPPORT_SPIRAL_FALLBACK;
+      } else drawFallback();
+      return;
+    }
+    const ratio = Math.max(window.devicePixelRatio || 1, Math.min(2, SPIRAL_ART.width / box.width));
+    const width = Math.max(1, Math.round(box.width * ratio));
+    const height = Math.max(1, Math.round(box.height * ratio));
+    if (painted && canvas.width === width && canvas.height === height) return;
+    canvas.width = width;
+    canvas.height = height;
+    ctx.setTransform(width / SPIRAL_ART.width, 0, 0, height / SPIRAL_ART.height, 0, 0);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, SPIRAL_ART.width, SPIRAL_ART.height);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'butt';
+    for (const { path, stops } of scanlines) {
+      ctx.lineWidth = SPIRAL_ART.wire.baseWidth;
+      ctx.strokeStyle = SPIRAL_ART.wire.baseColor;
+      ctx.stroke(path);
+      const grad = ctx.createLinearGradient(SPIRAL_ART.field.left, 0, SPIRAL_ART.field.right, 0);
+      for (const [t, alpha] of stops) grad.addColorStop(t, `rgba(${SPIRAL_ART.wire.coilRGB},${alpha})`);
+      ctx.lineWidth = SPIRAL_ART.wire.coilWidth;
+      ctx.strokeStyle = grad;
+      ctx.stroke(path);
+    }
+    painted = true;
+  };
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(render) : null;
+  observer?.observe(canvas);
+  const idle = typeof requestIdleCallback === 'function'
+    ? requestIdleCallback(render, { timeout: 600 })
+    : setTimeout(render, 120);
+  return {
+    paint: render,
+    destroy() {
+      disposed = true;
+      observer?.disconnect();
+      if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idle);
+      else clearTimeout(idle);
+    },
+  };
+}
 
 const supportTitleHtml = () => (locale() === 'en'
-  ? '<span class="home-support-title-a">ArenaGalleri is self-funded by our team.</span><span class="home-support-title-b">If it helps you, <em>keep the servers running</em><span class="home-stop">.</span></span>'
-  : '<span class="home-support-title-a">亿模亿样由我们自费维持，</span><span class="home-support-title-b">如果对你有帮助，欢迎<em>支持站点运行</em><span class="home-stop">。</span></span>');
+  ? '<span class="home-support-title-a">ArenaGalleri is self-funded by our team.</span><span class="home-support-title-b">If it helps, <em>keep the servers running</em><span class="home-support-stop">.</span></span>'
+  : '<span class="home-support-title-a">亿模亿样由团队自费维持，</span><span class="home-support-title-b">觉得有用，欢迎<em>支持站点运行</em><span class="home-support-stop">。</span></span>');
 
 const supportCardMarkup = () => `<section class="home-support home-hero-slide" data-hero-slide="1" aria-labelledby="home-support-title" aria-hidden="true" inert>
-  <div class="home-support-main">
-    <div class="home-support-copy">
-      <div class="home-support-kicker">
-        <span class="home-support-dot" aria-hidden="true"></span>
-        <span>自费运营 · 自愿赞赏</span>
-      </div>
-      <h2 id="home-support-title" class="home-support-title" data-i18n-ignore>${supportTitleHtml()}</h2>
-      <p class="home-support-lede">目前服务器、带宽、媒体存储与模型 API 评测开销均由团队自费承担，长期维持已面临较大经济压力。你的每一份自愿赞赏，都会直接用于维持站点正常运转与持续收录更多模型。</p>
-      <ul class="home-support-promises">
-        <li>
-          <span class="home-support-icon" aria-hidden="true">${icon('check')}</span>
-          <div>
-            <strong>免费用户零限制</strong>
-            <p>全部浏览、对比、盲评与榜单功能继续免费开放，绝不限制未赞赏用户使用。</p>
-          </div>
-        </li>
-        <li>
-          <span class="home-support-icon" aria-hidden="true">${icon('shield')}</span>
-          <div>
-            <strong>不绑定任何功能与特权</strong>
-            <p>赞赏不换取会员、标识或隐藏权限，不构成商品或服务交易。</p>
-          </div>
-        </li>
-        <li>
-          <span class="home-support-icon" aria-hidden="true">${icon('rank')}</span>
-          <div>
-            <strong>评测与榜单完全独立</strong>
-            <p>赞赏与题目收录、盲评计票及排行算法完全隔离，不影响任何模型结果。</p>
-          </div>
-        </li>
-      </ul>
+  <div class="home-support-poster">
+    <div class="home-support-art">
+      <canvas class="home-support-canvas" width="760" height="700" role="img" aria-label="金黄螺线构成的点赞手势"></canvas>
     </div>
-    <div class="home-support-qr-col">
-      <div class="home-support-qr-card">
-        <div class="home-support-qr-head">
-          <span class="home-support-qr-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <b>运维赞赏支持</b>
-          <span class="home-support-qr-tag">自愿无偿</span>
-        </div>
-        <div class="home-support-qr-body">
-          <div class="home-support-qr-stage">
-            <span class="qr-corner is-tl" aria-hidden="true"></span>
-            <span class="qr-corner is-tr" aria-hidden="true"></span>
-            <span class="qr-corner is-bl" aria-hidden="true"></span>
-            <span class="qr-corner is-br" aria-hidden="true"></span>
-            ${SUPPORT_QR_SRC
-              ? `<img class="home-support-qr-img" src="${esc(SUPPORT_QR_SRC)}" alt="亿模亿样自愿赞赏二维码" loading="lazy" decoding="async" />`
-              : `<div class="home-support-qr-placeholder" role="img" aria-label="赞赏二维码待放入">
-                  <svg class="home-support-qr-grid" viewBox="0 0 120 120" aria-hidden="true" fill="none">
-                    <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="4"/>
-                    <rect x="17" y="17" width="14" height="14" rx="2" fill="currentColor"/>
-                    <rect x="80" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="4"/>
-                    <rect x="89" y="17" width="14" height="14" rx="2" fill="currentColor"/>
-                    <rect x="8" y="80" width="32" height="32" rx="4" stroke="currentColor" stroke-width="4"/>
-                    <rect x="17" y="89" width="14" height="14" rx="2" fill="currentColor"/>
-                    <rect x="52" y="12" width="8" height="8" rx="1.5" fill="currentColor" opacity=".38"/>
-                    <rect x="64" y="24" width="8" height="8" rx="1.5" fill="currentColor" opacity=".28"/>
-                    <rect x="52" y="36" width="8" height="8" rx="1.5" fill="currentColor" opacity=".38"/>
-                    <rect x="12" y="52" width="8" height="8" rx="1.5" fill="currentColor" opacity=".32"/>
-                    <rect x="26" y="64" width="8" height="8" rx="1.5" fill="currentColor" opacity=".28"/>
-                    <rect x="84" y="52" width="8" height="8" rx="1.5" fill="currentColor" opacity=".34"/>
-                    <rect x="98" y="64" width="8" height="8" rx="1.5" fill="currentColor" opacity=".3"/>
-                    <rect x="52" y="84" width="8" height="8" rx="1.5" fill="currentColor" opacity=".34"/>
-                    <rect x="68" y="96" width="8" height="8" rx="1.5" fill="currentColor" opacity=".28"/>
-                    <rect x="86" y="86" width="22" height="22" rx="4" stroke="currentColor" stroke-width="3" stroke-dasharray="4 4" opacity=".45"/>
-                  </svg>
-                  <span class="home-support-qr-badge">赞赏码待放入</span>
-                  <small>建议使用微信赞赏码</small>
-                </div>`}
+    <div class="home-support-content">
+      <p class="home-support-eyebrow"><span class="home-support-dot" aria-hidden="true"></span><span>自费运营 · 自愿赞赏</span></p>
+      <h2 id="home-support-title" class="home-support-title" data-i18n-ignore>${supportTitleHtml()}</h2>
+      <p class="home-support-lede">服务器、带宽、媒体存储与模型 API 评测开销均由我们自费承担，长期维持面临较大经济压力。每一份自愿赞赏都将直接用于站点日常运转。</p>
+      <div class="home-support-lower">
+        <figure class="home-support-qr-wrap">
+          <div class="home-support-qr-disc">
+            <img class="home-support-qr-img" src="${SUPPORT_QR_SRC}" alt="亿模亿样微信自愿赞赏码" loading="lazy" decoding="async" />
           </div>
-          <p class="home-support-qr-note">扫码自愿赞赏 · 金额随意 · 请量力而行</p>
-          <p class="home-support-qr-contact"><span>联系与反馈：</span><a data-i18n-ignore href="mailto:${CONTACT}">${CONTACT}</a></p>
+          <figcaption class="home-support-qr-cap">微信扫码赞赏 · 金额随意</figcaption>
+        </figure>
+        <div class="home-support-side">
+          <ul class="home-support-points">
+            <li><span class="home-support-num" aria-hidden="true">01</span><div><strong>免费用户零限制</strong><p>全部浏览、对比、盲评与榜单继续免费开放，绝不设限。</p></div></li>
+            <li><span class="home-support-num" aria-hidden="true">02</span><div><strong>不绑定任何功能</strong><p>赞赏不换取会员或特权，不构成商品与服务交易。</p></div></li>
+            <li><span class="home-support-num" aria-hidden="true">03</span><div><strong>评测结果完全独立</strong><p>与题目收录、盲评计票及排行算法彻底隔离。</p></div></li>
+          </ul>
+          <p class="home-support-contact"><span>联系反馈：</span><a data-i18n-ignore href="mailto:${CONTACT}">${CONTACT}</a></p>
         </div>
       </div>
     </div>
   </div>
-  <div class="home-support-foot">
-    <p class="home-support-legal">
-      <span aria-hidden="true">${icon('guide')}</span>
-      <span>合规说明：本页支持属于用户向个人/运营团队的自愿无偿赠与，非公开募捐或慈善捐赠，不绑定任何站内功能与权益，无法开具发票或公益捐赠票据；赞赏完成后原则上不予退还，未成年人请在监护人同意下操作。</span>
-    </p>
-    <div class="home-support-foot-acts">
-      <a class="home-link" href="#/terms">使用条款${icon('right')}</a>
-      <button type="button" class="home-motion" data-hero-card="0">返回作品展 <span aria-hidden="true">←</span></button>
+  <div class="home-support-band">
+    <p class="home-support-legal">合规说明：本支持属自愿无偿赠与，非公开募捐或慈善捐赠，不绑定任何站内功能与权益，无法开具发票或公益捐赠票据；赞赏原则上不退还，请量力而行，未成年人须经监护人同意。</p>
+    <div class="home-support-band-acts">
+      <a class="home-support-band-link" href="#/terms">使用条款${icon('right')}</a>
+      <button type="button" class="home-support-band-back" data-hero-card="0"><span aria-hidden="true">←</span> 返回作品展</button>
     </div>
   </div>
 </section>`;
@@ -188,6 +349,7 @@ function bindHeroCarousel(root) {
   const frame = shell?.querySelector('.home-hero-frame');
   const track = shell?.querySelector('[data-hero-track]');
   const slides = shell ? $$('[data-hero-slide]', shell) : [];
+  const spiral = mountSpiralCanvas(shell?.querySelector('.home-support-canvas'));
   let index = 0;
   const apply = (next) => {
     if (!track || !slides.length) return;
@@ -198,6 +360,7 @@ function bindHeroCarousel(root) {
       slide.setAttribute('aria-hidden', String(!active));
       slide.inert = !active;
     });
+    if (index === 1) spiral?.paint?.();
     $$('[role="tab"][data-hero-card]', shell).forEach((tab) => {
       tab.setAttribute('aria-selected', String(+tab.dataset.heroCard === index));
     });
@@ -246,6 +409,7 @@ function bindHeroCarousel(root) {
     index: () => index,
     go: apply,
     destroy() {
+      spiral?.destroy?.();
       window.removeEventListener('localechange', syncTitle);
     },
   };
