@@ -81,10 +81,10 @@ const pick = (list, recent = []) => {
 const SUPPORT_QR_SRC = 'assets/support-qr.jpg';
 const SUPPORT_SPIRAL_FALLBACK = 'assets/support-spiral-fallback.png';
 const SPIRAL_ART = {
-  width: 760,
-  height: 700,
-  field: { left: 38, right: 722, top: 38, bottom: 662, rows: 24 },
-  hand: { centerX: 380, centerY: 350, height: 652, maxWidth: 592, angle: -15 },
+  width: 780,
+  height: 680,
+  field: { left: 0, right: 750, top: 28, bottom: 652, rows: 24 },
+  hand: { centerX: 410, centerY: 340, height: 652, maxWidth: 592, angle: -15 },
   wire: {
     pitch: 15.1, radiusX: 8.5, radiusY: 12.2,
     baseWidth: 1.7, coilWidth: 2.45, baseColor: '#b7ab84', coilRGB: '244,223,137',
@@ -301,7 +301,7 @@ const supportTitleHtml = () => (locale() === 'en'
 const supportCardMarkup = () => `<section class="home-support home-hero-slide" data-hero-slide="1" aria-labelledby="home-support-title" aria-hidden="true" inert>
   <div class="home-support-poster">
     <div class="home-support-art">
-      <canvas class="home-support-canvas" width="760" height="700" role="img" aria-label="金黄螺线构成的点赞手势"></canvas>
+      <canvas class="home-support-canvas" width="780" height="680" role="img" aria-label="金黄螺线构成的点赞手势"></canvas>
     </div>
     <div class="home-support-content">
       <h2 id="home-support-title" class="home-support-title" data-i18n-ignore>${supportTitleHtml()}</h2>
