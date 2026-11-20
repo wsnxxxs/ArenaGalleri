@@ -3,6 +3,7 @@ import { $$, esc, icon, img, brandMark, reducedMotion } from './ui.js';
 import { catalogState, isSenior, platform } from './platform.js';
 import { previewScreenshotOf, previewZoomKind, screenshotOf } from './work-preview-media.js';
 import { latestAnnouncement, announcementShortDate } from './announcements.js';
+import { CONTACT } from './legal.js';
 
 // Platform not ruled out: the news pill's row is held open even before there is anything to show.
 const newsSpace = () => ['loading', 'ready'].includes(catalogState());
@@ -76,15 +77,191 @@ const pick = (list, recent = []) => {
   return pool[Math.floor(Math.random() * pool.length)];
 };
 
+
+// Set to e.g. 'assets/support-qr.png' once the actual WeChat reward QR image is uploaded.
+const SUPPORT_QR_SRC = '';
+
+const supportTitleHtml = () => (locale() === 'en'
+  ? '<span class="home-support-title-a">ArenaGalleri is self-funded by our team.</span><span class="home-support-title-b">If it helps you, <em>keep the servers running</em><span class="home-stop">.</span></span>'
+  : '<span class="home-support-title-a">亿模亿样由我们自费维持，</span><span class="home-support-title-b">如果对你有帮助，欢迎<em>支持站点运行</em><span class="home-stop">。</span></span>');
+
+const supportCardMarkup = () => `<section class="home-support home-hero-slide" data-hero-slide="1" aria-labelledby="home-support-title" aria-hidden="true" inert>
+  <div class="home-support-main">
+    <div class="home-support-copy">
+      <div class="home-support-kicker">
+        <span class="home-support-dot" aria-hidden="true"></span>
+        <span>自费运营 · 自愿赞赏</span>
+      </div>
+      <h2 id="home-support-title" class="home-support-title" data-i18n-ignore>${supportTitleHtml()}</h2>
+      <p class="home-support-lede">目前服务器、带宽、媒体存储与模型 API 评测开销均由团队自费承担，长期维持已面临较大经济压力。你的每一份自愿赞赏，都会直接用于维持站点正常运转与持续收录更多模型。</p>
+      <ul class="home-support-promises">
+        <li>
+          <span class="home-support-icon" aria-hidden="true">${icon('check')}</span>
+          <div>
+            <strong>免费用户零限制</strong>
+            <p>全部浏览、对比、盲评与榜单功能继续免费开放，绝不限制未赞赏用户使用。</p>
+          </div>
+        </li>
+        <li>
+          <span class="home-support-icon" aria-hidden="true">${icon('shield')}</span>
+          <div>
+            <strong>不绑定任何功能与特权</strong>
+            <p>赞赏不换取会员、标识或隐藏权限，不构成商品或服务交易。</p>
+          </div>
+        </li>
+        <li>
+          <span class="home-support-icon" aria-hidden="true">${icon('rank')}</span>
+          <div>
+            <strong>评测与榜单完全独立</strong>
+            <p>赞赏与题目收录、盲评计票及排行算法完全隔离，不影响任何模型结果。</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+    <div class="home-support-qr-col">
+      <div class="home-support-qr-card">
+        <div class="home-support-qr-head">
+          <span class="home-support-qr-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <b>运维赞赏支持</b>
+          <span class="home-support-qr-tag">自愿无偿</span>
+        </div>
+        <div class="home-support-qr-body">
+          <div class="home-support-qr-stage">
+            <span class="qr-corner is-tl" aria-hidden="true"></span>
+            <span class="qr-corner is-tr" aria-hidden="true"></span>
+            <span class="qr-corner is-bl" aria-hidden="true"></span>
+            <span class="qr-corner is-br" aria-hidden="true"></span>
+            ${SUPPORT_QR_SRC
+              ? `<img class="home-support-qr-img" src="${esc(SUPPORT_QR_SRC)}" alt="亿模亿样自愿赞赏二维码" loading="lazy" decoding="async" />`
+              : `<div class="home-support-qr-placeholder" role="img" aria-label="赞赏二维码待放入">
+                  <svg class="home-support-qr-grid" viewBox="0 0 120 120" aria-hidden="true" fill="none">
+                    <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="4"/>
+                    <rect x="17" y="17" width="14" height="14" rx="2" fill="currentColor"/>
+                    <rect x="80" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="4"/>
+                    <rect x="89" y="17" width="14" height="14" rx="2" fill="currentColor"/>
+                    <rect x="8" y="80" width="32" height="32" rx="4" stroke="currentColor" stroke-width="4"/>
+                    <rect x="17" y="89" width="14" height="14" rx="2" fill="currentColor"/>
+                    <rect x="52" y="12" width="8" height="8" rx="1.5" fill="currentColor" opacity=".38"/>
+                    <rect x="64" y="24" width="8" height="8" rx="1.5" fill="currentColor" opacity=".28"/>
+                    <rect x="52" y="36" width="8" height="8" rx="1.5" fill="currentColor" opacity=".38"/>
+                    <rect x="12" y="52" width="8" height="8" rx="1.5" fill="currentColor" opacity=".32"/>
+                    <rect x="26" y="64" width="8" height="8" rx="1.5" fill="currentColor" opacity=".28"/>
+                    <rect x="84" y="52" width="8" height="8" rx="1.5" fill="currentColor" opacity=".34"/>
+                    <rect x="98" y="64" width="8" height="8" rx="1.5" fill="currentColor" opacity=".3"/>
+                    <rect x="52" y="84" width="8" height="8" rx="1.5" fill="currentColor" opacity=".34"/>
+                    <rect x="68" y="96" width="8" height="8" rx="1.5" fill="currentColor" opacity=".28"/>
+                    <rect x="86" y="86" width="22" height="22" rx="4" stroke="currentColor" stroke-width="3" stroke-dasharray="4 4" opacity=".45"/>
+                  </svg>
+                  <span class="home-support-qr-badge">赞赏码待放入</span>
+                  <small>建议使用微信赞赏码</small>
+                </div>`}
+          </div>
+          <p class="home-support-qr-note">扫码自愿赞赏 · 金额随意 · 请量力而行</p>
+          <p class="home-support-qr-contact"><span>联系与反馈：</span><a data-i18n-ignore href="mailto:${CONTACT}">${CONTACT}</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="home-support-foot">
+    <p class="home-support-legal">
+      <span aria-hidden="true">${icon('guide')}</span>
+      <span>合规说明：本页支持属于用户向个人/运营团队的自愿无偿赠与，非公开募捐或慈善捐赠，不绑定任何站内功能与权益，无法开具发票或公益捐赠票据；赞赏完成后原则上不予退还，未成年人请在监护人同意下操作。</span>
+    </p>
+    <div class="home-support-foot-acts">
+      <a class="home-link" href="#/terms">使用条款${icon('right')}</a>
+      <button type="button" class="home-motion" data-hero-card="0">返回作品展 <span aria-hidden="true">←</span></button>
+    </div>
+  </div>
+</section>`;
+
+const heroCarouselPager = () => `<div class="home-card-pager" role="tablist" aria-label="首页展示卡片">
+  <button type="button" class="home-card-pager-arrow" data-hero-card-prev aria-label="上一张卡片" disabled>${icon('prev')}</button>
+  <div class="home-card-dots">
+    <button type="button" class="home-card-dot" role="tab" aria-selected="true" data-hero-card="0"><small>01</small><span>作品展台</span></button>
+    <button type="button" class="home-card-dot" role="tab" aria-selected="false" data-hero-card="1"><small>02</small><span>支持运维</span></button>
+  </div>
+  <button type="button" class="home-card-pager-arrow" data-hero-card-next aria-label="下一张卡片">${icon('next')}</button>
+</div>`;
+
+function bindHeroCarousel(root) {
+  const shell = root.querySelector('[data-hero-carousel]');
+  const frame = shell?.querySelector('.home-hero-frame');
+  const track = shell?.querySelector('[data-hero-track]');
+  const slides = shell ? $$('[data-hero-slide]', shell) : [];
+  let index = 0;
+  const apply = (next) => {
+    if (!track || !slides.length) return;
+    index = Math.max(0, Math.min(slides.length - 1, next));
+    track.style.setProperty('--card-index', String(index));
+    slides.forEach((slide, i) => {
+      const active = i === index;
+      slide.setAttribute('aria-hidden', String(!active));
+      slide.inert = !active;
+    });
+    $$('[role="tab"][data-hero-card]', shell).forEach((tab) => {
+      tab.setAttribute('aria-selected', String(+tab.dataset.heroCard === index));
+    });
+    $$('[data-hero-card-prev]', shell).forEach((btn) => { btn.disabled = index <= 0; });
+    $$('[data-hero-card-next]', shell).forEach((btn) => { btn.disabled = index >= slides.length - 1; });
+  };
+  const syncTitle = () => {
+    const title = shell?.querySelector('#home-support-title');
+    if (title) title.innerHTML = supportTitleHtml();
+  };
+  const onClick = (event) => {
+    if (event.target.closest('[data-hero-card-prev]')) { apply(index - 1); return; }
+    if (event.target.closest('[data-hero-card-next]')) { apply(index + 1); return; }
+    const target = event.target.closest('[data-hero-card]');
+    if (target) apply(+target.dataset.heroCard);
+  };
+  const onKeydown = (event) => {
+    const tabs = $$('[role="tab"][data-hero-card]', shell);
+    const at = tabs.indexOf(document.activeElement);
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+    if (at < 0 || !step) return;
+    event.preventDefault();
+    const next = Math.max(0, Math.min(tabs.length - 1, at + step));
+    apply(next);
+    tabs[next]?.focus();
+  };
+  let touchStart = null;
+  const onTouchStart = (event) => {
+    if (event.touches.length !== 1 || event.target.closest('.home-tabs')) { touchStart = null; return; }
+    touchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  };
+  const onTouchEnd = (event) => {
+    if (!touchStart || !event.changedTouches.length) return;
+    const dx = event.changedTouches[0].clientX - touchStart.x;
+    const dy = event.changedTouches[0].clientY - touchStart.y;
+    touchStart = null;
+    if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) apply(index + (dx < 0 ? 1 : -1));
+  };
+  shell?.addEventListener('click', onClick);
+  shell?.querySelector('.home-card-pager')?.addEventListener('keydown', onKeydown);
+  frame?.addEventListener('touchstart', onTouchStart, { passive: true });
+  frame?.addEventListener('touchend', onTouchEnd, { passive: true });
+  window.addEventListener('localechange', syncTitle);
+  apply(0);
+  return {
+    index: () => index,
+    go: apply,
+    destroy() {
+      window.removeEventListener('localechange', syncTitle);
+    },
+  };
+}
+
 // Open the home layout before the authoritative catalog arrives. Counts and
 // work links stay out of this shell until the platform has supplied them.
 function mountWaiting(root, ctx) {
   const failed = catalogState() === 'error';
   root.innerHTML = `${ctx.header([], false, '', { notice: false })}<main class="landing page home-pending">
-    <div class="home-hero-shell">
-      <div class="home-hero-frame">
-        <div class="home-hero-track">
-          <section class="home-hero home-hero-slide" aria-labelledby="home-title">
+    <div class="home-hero-shell" data-hero-carousel>
+      <div class="home-hero-stage-row">
+        <button type="button" class="home-card-nav is-prev" data-hero-card-prev aria-label="上一张卡片" disabled>${icon('prev')}</button>
+        <div class="home-hero-frame">
+          <div class="home-hero-track" data-hero-track>
+            <section class="home-hero home-hero-slide" data-hero-slide="0" aria-labelledby="home-title">
       <div class="home-copy">
         <div class="home-verse" style="--len:10">
           <h1 id="home-title"><span class="home-verse-a">同一份提示词，</span><span class="home-verse-b">各有自己的答案<span class="home-stop">。</span></span></h1>
@@ -109,9 +286,13 @@ function mountWaiting(root, ctx) {
         </div>
       </div>
       <div class="home-foot"><span class="home-pending-caption">同一道题，多种表达。</span></div>
-          </section>
+            </section>
+            ${supportCardMarkup()}
+          </div>
         </div>
+        <button type="button" class="home-card-nav is-next" data-hero-card-next aria-label="下一张卡片">${icon('next')}</button>
       </div>
+      ${heroCarouselPager()}
     </div>
     <section class="home-recent" aria-label="最近收录"><div class="home-recent-head"><h2>最近收录</h2></div><p class="muted">${failed ? '等待重新连接' : '作品加载后将在这里更新'}</p></section>
   </main>${ctx.footer()}`;
@@ -126,8 +307,9 @@ function mountWaiting(root, ctx) {
   };
   update();
   const timer = retry ? setInterval(update, 1000) : null;
+  const carousel = bindHeroCarousel(root);
   setPageTitle([ctx.DATA.title, ctx.DATA.subtitle]);
-  return { destroy() { if (timer) clearInterval(timer); } };
+  return { destroy() { if (timer) clearInterval(timer); carousel.destroy(); } };
 }
 
 export function mount(root, ctx) {
@@ -217,10 +399,12 @@ export function mount(root, ctx) {
   let lastProof = statusMarkup(), lastTabs = tabsMarkup(), lastStrip = catalogReady() ? stripMarkup() : '';
 
   root.innerHTML = `${ctx.header()}<main class="landing page">
-    <div class="home-hero-shell">
-      <div class="home-hero-frame">
-        <div class="home-hero-track">
-          <section class="home-hero home-hero-slide" aria-labelledby="home-title">
+    <div class="home-hero-shell" data-hero-carousel>
+      <div class="home-hero-stage-row">
+        <button type="button" class="home-card-nav is-prev" data-hero-card-prev aria-label="上一张卡片" disabled>${icon('prev')}</button>
+        <div class="home-hero-frame">
+          <div class="home-hero-track" data-hero-track>
+            <section class="home-hero home-hero-slide" data-hero-slide="0" aria-labelledby="home-title">
       <div class="home-copy">
         <div class="home-news-slot" data-home-news${newsSpace() ? '' : ' hidden'}></div>
         <div class="home-verse${decks.length ? ' is-turning' : ''}">
@@ -245,9 +429,13 @@ export function mount(root, ctx) {
         <div class="home-tabs" role="tablist" aria-label="选择题目">${lastTabs}</div>
         <button class="home-motion" type="button" data-autoplay aria-pressed="false">暂停轮播 <span aria-hidden="true">Ⅱ</span></button>
       </div>
-          </section>
+            </section>
+            ${supportCardMarkup()}
+          </div>
         </div>
+        <button type="button" class="home-card-nav is-next" data-hero-card-next aria-label="下一张卡片">${icon('next')}</button>
       </div>
+      ${heroCarouselPager()}
     </div>
     <section class="home-recent" aria-label="最近收录">
       <div class="home-recent-head"><h2>最近收录</h2><button class="home-motion" type="button" data-motion aria-pressed="false">暂停流动 <span aria-hidden="true">Ⅱ</span></button></div>
@@ -267,6 +455,7 @@ export function mount(root, ctx) {
 
   fitPosters(root);
   const deck = root.querySelector('.home-deck'), slip = root.querySelector('.home-slip'), hero = root.querySelector('.home-hero');
+  const carousel = bindHeroCarousel(root), heroShell = root.querySelector('[data-hero-carousel]') || hero;
   const cta = root.querySelector('[data-home-cta]'), autoplay = root.querySelector('[data-autoplay]');
   const verse = root.querySelector('.home-verse'), tabList = root.querySelector('.home-tabs');
   let current = 0, cards = [], elapsed = 0, sinceShuffle = 0, playing = !reducedMotion(), autoQuestion = playing, hovering = false;
@@ -476,7 +665,7 @@ export function mount(root, ctx) {
   // Cards shuffle and a random other question comes up on its own, pausing while the pointer or focus is on the hero.
   const TICK = 100;
   const timer = setInterval(() => {
-    if (!playing || hovering || !heroVisible || document.visibilityState !== 'visible') return;
+    if (carousel.index() !== 0 || !playing || hovering || !heroVisible || document.visibilityState !== 'visible') return;
     sinceShuffle += TICK;
     if (autoQuestion) {
       elapsed += TICK;
@@ -507,12 +696,12 @@ export function mount(root, ctx) {
   const syncMotion = () => { recentSection.querySelector('.home-stream-track').style.animationPlayState = document.hidden || !recentVisible ? 'paused' : ''; };
   const near = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      if (entry.target === hero) heroVisible = entry.isIntersecting;
+      if (entry.target === heroShell) heroVisible = entry.isIntersecting;
       else recentVisible = entry.isIntersecting;
     }
     syncMotion();
   });
-  near.observe(hero); near.observe(recentSection);
+  near.observe(heroShell); near.observe(recentSection);
   document.addEventListener('visibilitychange', syncMotion);
 
 
@@ -553,6 +742,7 @@ export function mount(root, ctx) {
     destroy() {
       clearInterval(timer);
       clearInterval(retryTimer);
+      carousel.destroy();
       gone = true;
       window.removeEventListener('localechange', refreshLocale);
       window.removeEventListener('announcementschange', showNews);
