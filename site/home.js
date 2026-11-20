@@ -87,7 +87,7 @@ const SPIRAL_ART = {
   hand: { centerX: 410, centerY: 340, height: 652, maxWidth: 592, angle: -15 },
   wire: {
     pitch: 15.1, radiusX: 8.5, radiusY: 12.2,
-    baseWidth: 1.7, coilWidth: 2.45, baseColor: '#b7ab84', coilRGB: '244,223,137',
+    baseWidth: 1.7, coilWidth: 2.45, baseColor: '#a86958', coilRGB: '234,116,86',
   },
 };
 let cachedSpiralScanlines;
