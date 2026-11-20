@@ -585,4 +585,7 @@ export default {
   "联系反馈：": "Contact: ",
   "合规说明：本支持属自愿无偿赠与，非公开募捐或慈善捐赠，不绑定任何站内功能与权益，无法开具发票或公益捐赠票据；赞赏原则上不退还，请量力而行，未成年人须经监护人同意。": "Disclosure: Support here is a voluntary, unconditional personal gift, not charitable fundraising. It unlocks no features or privileges, is non-refundable in principle, and no invoice or charity receipt can be issued. Minors require guardian consent.",
   "评测结果完全独立": "Independent evaluations",
+  "服务器与模型评测均为自费承担；赞赏纯属自愿，不绑定任何功能，免费使用不受影响。": "Servers and model evaluations are paid out of pocket. Tips are strictly voluntary, unlock no gated features, and free access is never restricted.",
+  "微信扫码赞赏": "Scan with WeChat",
+  "自愿无偿赠与，非公开募捐或慈善捐赠，不绑定权益、影响榜单或开具发票；原则上不退还，未成年人须经监护人同意。": "Voluntary unconditional gift, not charitable fundraising. Unlocks no perks, does not affect rankings, no invoice or receipt, non-refundable in principle; minors need guardian consent.",
 };

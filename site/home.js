@@ -3,7 +3,6 @@ import { $$, esc, icon, img, brandMark, reducedMotion } from './ui.js';
 import { catalogState, isSenior, platform } from './platform.js';
 import { previewScreenshotOf, previewZoomKind, screenshotOf } from './work-preview-media.js';
 import { latestAnnouncement, announcementShortDate } from './announcements.js';
-import { CONTACT } from './legal.js';
 
 // Platform not ruled out: the news pill's row is held open even before there is anything to show.
 const newsSpace = () => ['loading', 'ready'].includes(catalogState());
@@ -296,8 +295,8 @@ function mountSpiralCanvas(canvas) {
 }
 
 const supportTitleHtml = () => (locale() === 'en'
-  ? '<span class="home-support-title-a">ArenaGalleri is self-funded by our team.</span><span class="home-support-title-b">If it helps, <em>keep the servers running</em><span class="home-support-stop">.</span></span>'
-  : '<span class="home-support-title-a">亿模亿样由团队自费维持，</span><span class="home-support-title-b">觉得有用，欢迎<em>支持站点运行</em><span class="home-support-stop">。</span></span>');
+  ? '<span class="home-support-title-a">ArenaGalleri is self-funded.</span><span class="home-support-title-b">If you like it, <em>help keep it running</em><span class="home-support-stop">.</span></span>'
+  : '<span class="home-support-title-a">亿模亿样由我们自费维持，</span><span class="home-support-title-b">觉得不错，欢迎<em>支持运维</em><span class="home-support-stop">。</span></span>');
 
 const supportCardMarkup = () => `<section class="home-support home-hero-slide" data-hero-slide="1" aria-labelledby="home-support-title" aria-hidden="true" inert>
   <div class="home-support-poster">
@@ -305,33 +304,19 @@ const supportCardMarkup = () => `<section class="home-support home-hero-slide" d
       <canvas class="home-support-canvas" width="760" height="700" role="img" aria-label="金黄螺线构成的点赞手势"></canvas>
     </div>
     <div class="home-support-content">
-      <p class="home-support-eyebrow"><span class="home-support-dot" aria-hidden="true"></span><span>自费运营 · 自愿赞赏</span></p>
       <h2 id="home-support-title" class="home-support-title" data-i18n-ignore>${supportTitleHtml()}</h2>
-      <p class="home-support-lede">服务器、带宽、媒体存储与模型 API 评测开销均由我们自费承担，长期维持面临较大经济压力。每一份自愿赞赏都将直接用于站点日常运转。</p>
-      <div class="home-support-lower">
-        <figure class="home-support-qr-wrap">
-          <div class="home-support-qr-disc">
-            <img class="home-support-qr-img" src="${SUPPORT_QR_SRC}" alt="亿模亿样微信自愿赞赏码" loading="lazy" decoding="async" />
-          </div>
-          <figcaption class="home-support-qr-cap">微信扫码赞赏 · 金额随意</figcaption>
-        </figure>
-        <div class="home-support-side">
-          <ul class="home-support-points">
-            <li><span class="home-support-num" aria-hidden="true">01</span><div><strong>免费用户零限制</strong><p>全部浏览、对比、盲评与榜单继续免费开放，绝不设限。</p></div></li>
-            <li><span class="home-support-num" aria-hidden="true">02</span><div><strong>不绑定任何功能</strong><p>赞赏不换取会员或特权，不构成商品与服务交易。</p></div></li>
-            <li><span class="home-support-num" aria-hidden="true">03</span><div><strong>评测结果完全独立</strong><p>与题目收录、盲评计票及排行算法彻底隔离。</p></div></li>
-          </ul>
-          <p class="home-support-contact"><span>联系反馈：</span><a data-i18n-ignore href="mailto:${CONTACT}">${CONTACT}</a></p>
+      <p class="home-support-lede">服务器与模型评测均为自费承担；赞赏纯属自愿，不绑定任何功能，免费使用不受影响。</p>
+      <figure class="home-support-qr-wrap">
+        <div class="home-support-qr-disc">
+          <img class="home-support-qr-img" src="${SUPPORT_QR_SRC}" alt="亿模亿样微信自愿赞赏码" loading="lazy" decoding="async" />
         </div>
-      </div>
+        <figcaption class="home-support-qr-cap">微信扫码赞赏</figcaption>
+      </figure>
     </div>
   </div>
   <div class="home-support-band">
-    <p class="home-support-legal">合规说明：本支持属自愿无偿赠与，非公开募捐或慈善捐赠，不绑定任何站内功能与权益，无法开具发票或公益捐赠票据；赞赏原则上不退还，请量力而行，未成年人须经监护人同意。</p>
-    <div class="home-support-band-acts">
-      <a class="home-support-band-link" href="#/terms">使用条款${icon('right')}</a>
-      <button type="button" class="home-support-band-back" data-hero-card="0"><span aria-hidden="true">←</span> 返回作品展</button>
-    </div>
+    <p class="home-support-legal">自愿无偿赠与，非公开募捐或慈善捐赠，不绑定权益、影响榜单或开具发票；原则上不退还，未成年人须经监护人同意。</p>
+    <a class="home-support-band-link" href="#/terms">使用条款${icon('right')}</a>
   </div>
 </section>`;
 
