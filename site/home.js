@@ -81,7 +81,10 @@ const pick = (list, recent = []) => {
 function mountWaiting(root, ctx) {
   const failed = catalogState() === 'error';
   root.innerHTML = `${ctx.header([], false, '', { notice: false })}<main class="landing page home-pending">
-    <section class="home-hero" aria-labelledby="home-title">
+    <div class="home-hero-shell">
+      <div class="home-hero-frame">
+        <div class="home-hero-track">
+          <section class="home-hero home-hero-slide" aria-labelledby="home-title">
       <div class="home-copy">
         <div class="home-verse" style="--len:10">
           <h1 id="home-title"><span class="home-verse-a">同一份提示词，</span><span class="home-verse-b">各有自己的答案<span class="home-stop">。</span></span></h1>
@@ -106,7 +109,10 @@ function mountWaiting(root, ctx) {
         </div>
       </div>
       <div class="home-foot"><span class="home-pending-caption">同一道题，多种表达。</span></div>
-    </section>
+          </section>
+        </div>
+      </div>
+    </div>
     <section class="home-recent" aria-label="最近收录"><div class="home-recent-head"><h2>最近收录</h2></div><p class="muted">${failed ? '等待重新连接' : '作品加载后将在这里更新'}</p></section>
   </main>${ctx.footer()}`;
   const retry = root.querySelector('[data-platform-reconnect]');
@@ -211,7 +217,10 @@ export function mount(root, ctx) {
   let lastProof = statusMarkup(), lastTabs = tabsMarkup(), lastStrip = catalogReady() ? stripMarkup() : '';
 
   root.innerHTML = `${ctx.header()}<main class="landing page">
-    <section class="home-hero" aria-labelledby="home-title">
+    <div class="home-hero-shell">
+      <div class="home-hero-frame">
+        <div class="home-hero-track">
+          <section class="home-hero home-hero-slide" aria-labelledby="home-title">
       <div class="home-copy">
         <div class="home-news-slot" data-home-news${newsSpace() ? '' : ' hidden'}></div>
         <div class="home-verse${decks.length ? ' is-turning' : ''}">
@@ -236,7 +245,10 @@ export function mount(root, ctx) {
         <div class="home-tabs" role="tablist" aria-label="选择题目">${lastTabs}</div>
         <button class="home-motion" type="button" data-autoplay aria-pressed="false">暂停轮播 <span aria-hidden="true">Ⅱ</span></button>
       </div>
-    </section>
+          </section>
+        </div>
+      </div>
+    </div>
     <section class="home-recent" aria-label="最近收录">
       <div class="home-recent-head"><h2>最近收录</h2><button class="home-motion" type="button" data-motion aria-pressed="false">暂停流动 <span aria-hidden="true">Ⅱ</span></button></div>
       <div class="home-stream"><div class="home-stream-track">${lastStrip}</div></div>
