@@ -584,4 +584,5 @@ export default {
   "与题目收录、盲评计票及排行算法彻底隔离。": "Strictly separated from question curation, blind voting, and ranking algorithms.",
   "联系反馈：": "Contact: ",
   "合规说明：本支持属自愿无偿赠与，非公开募捐或慈善捐赠，不绑定任何站内功能与权益，无法开具发票或公益捐赠票据；赞赏原则上不退还，请量力而行，未成年人须经监护人同意。": "Disclosure: Support here is a voluntary, unconditional personal gift, not charitable fundraising. It unlocks no features or privileges, is non-refundable in principle, and no invoice or charity receipt can be issued. Minors require guardian consent.",
+  "评测结果完全独立": "Independent evaluations",
 };
