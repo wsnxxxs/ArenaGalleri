@@ -2864,9 +2864,13 @@ body.has-prompt-modal { overflow: hidden; }
   }
   .home-support-poster {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
+    justify-items: center;
     gap: 18px;
     padding: 20px 0 24px;
   }
+  .home-support-art { justify-content: center; }
   .home-support-canvas {
     width: min(92%, 326px);
   }
