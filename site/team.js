@@ -1,23 +1,28 @@
-// Developer team: interactive hanging lanyard ID badge stage (#/team, #/team/<id>).
-// Designed around a declarative MEMBERS list so additional member badges can be added cleanly.
+// Developer team: isometric card stack overview (#/team) + choreographed hanging PVC badge stage (#/team/<id>).
 import { locale, setPageTitle } from './i18n.js';
-import { $, esc, icon, reducedMotion } from './ui.js';
-import { toast } from './platform.js';
+import { $, $$, esc, icon, reducedMotion } from './ui.js';
 
+const GROUP_META = {
+  lead: { zh: '核心负责人', en: 'Core Leads', singularZh: '核心负责人', singularEn: 'Core Lead', pillTone: 'ink' },
+  member: { zh: '团队成员', en: 'Team Members', singularZh: '团队成员', singularEn: 'Team Member', pillTone: 'blue' },
+  honorary: { zh: '荣誉成员', en: 'Honorary Members', singularZh: '荣誉成员', singularEn: 'Honorary Member', pillTone: 'red' },
+};
+
+const GROUP_ORDER = ['lead', 'member', 'honorary'];
+
+// Exact roster & lexicographical grouping from the team overview layout.
 const MEMBERS = [
   {
     id: 'kme7',
     index: '01',
+    group: 'lead',
     name: 'kme7',
-    nameMain: 'kme',
-    nameAccent: '7',
     accentColor: '#1628e2',
     restAngle: -7.2,
-    taglineZh: '搭建亿模亿样，和背后每一场评测的故事。',
-    taglineEn: 'Building ArenaGalleri and the stories behind it.',
-    statusTopZh: '发起 · 产品与开发',
+    cardTitle: { mode: 'inline-drop', main: 'kme', accent: '7', size: 'lg' },
+    statusTopZh: '核心负责人 · 发起与开发',
     statusBottomZh: '@ 亿模亿样 · ArenaGalleri',
-    statusTopEn: 'Currently building & maintaining',
+    statusTopEn: 'Core Lead · Founder & Builder',
     statusBottomEn: '@ ArenaGalleri · Arena of Bias',
     currentLabelZh: '当前负责',
     currentLabelEn: 'Currently',
@@ -30,47 +35,194 @@ const MEMBERS = [
       { zh: '偏见试验场', en: 'Arena of Bias', tone: 'red' },
       { zh: '核心开发', en: 'Core Dev', tone: 'blue' },
     ],
-    bioZh: [
-      '亿模亿样（ArenaGalleri）与偏见试验场（Arena of Bias）的发起人与核心开发者，主要负责平台架构、题库策展、双盲评测系统与榜单体验的持续打磨。',
-      '把同一份提示词交给不同 AI 模型，让可运行的网页、三维场景、文字与音乐作品并排接受真实检验——这个工牌展台是团队成员页的第一张名片，更多伙伴的工牌也将陆续挂上。',
-    ],
-    bioEn: [
-      'Founder and core builder of ArenaGalleri and Arena of Bias, working across frontend exhibition architecture, benchmark curation, blind evaluation, and leaderboard design.',
-      'This hanging badge stage is the first card in our team directory — additional collaborator badges will be added as the roster grows.',
-    ],
-    links: [
-      { href: 'https://github.com/kme7kme7-prog', zh: 'GitHub · kme7kme7-prog', en: 'GitHub · kme7kme7-prog', external: true },
-      { href: '#/questions', zh: '浏览题库', en: 'Browse questions' },
-      { href: '#/arena', zh: '进入盲评', en: 'Blind arena' },
-    ],
+  },
+  {
+    id: 'shadow',
+    index: '02',
+    group: 'lead',
+    name: 'Shadow',
+    accentColor: '#1f3fd1',
+    restAngle: -6.4,
+    cardTitle: { mode: 'single-dot', main: 'Shadow', size: 'md' },
+  },
+  {
+    id: 'wujisuan',
+    index: '03',
+    group: 'lead',
+    name: '无机酸',
+    accentColor: '#0e6f7c',
+    restAngle: -6.8,
+    cardTitle: { mode: 'inline', main: '无机', accent: '酸', size: 'cjk-md' },
+  },
+  {
+    id: 'alanbacker',
+    index: '04',
+    group: 'member',
+    name: 'AlanBacker',
+    accentColor: '#1628e2',
+    restAngle: -7.0,
+    cardTitle: { mode: 'stacked', top: 'Alan', bottom: 'Backer', size: 'stack-en' },
+  },
+  {
+    id: 'alex',
+    index: '05',
+    group: 'member',
+    name: 'Alex',
+    accentColor: '#2346d8',
+    restAngle: -6.2,
+    cardTitle: { mode: 'single-dot', main: 'Alex', size: 'lg' },
+  },
+  {
+    id: 'johhny',
+    index: '06',
+    group: 'member',
+    name: 'Johhny',
+    accentColor: '#c73a24',
+    restAngle: -6.9,
+    cardTitle: { mode: 'single-dot', main: 'Johhny', size: 'md' },
+  },
+  {
+    id: 'qinshihuang',
+    index: '07',
+    group: 'member',
+    name: '秦始皇',
+    accentColor: '#b83a24',
+    restAngle: -6.5,
+    cardTitle: { mode: 'inline', main: '秦始', accent: '皇', size: 'cjk-md' },
+  },
+  {
+    id: 'test',
+    index: '08',
+    group: 'member',
+    name: 'test',
+    accentColor: '#1d6b52',
+    restAngle: -7.1,
+    cardTitle: { mode: 'single-dot', main: 'test', size: 'lg' },
+  },
+  {
+    id: 'xiaofolanyang',
+    index: '09',
+    group: 'member',
+    name: '小佛懒羊',
+    accentColor: '#2c48c8',
+    restAngle: -6.6,
+    cardTitle: { mode: 'stacked', top: '小佛', bottom: '懒羊', size: 'stack-cjk' },
+  },
+  {
+    id: 'caolvchong',
+    index: '10',
+    group: 'member',
+    name: '一只草履虫',
+    accentColor: '#1b7a5e',
+    restAngle: -6.8,
+    cardTitle: { mode: 'stacked', top: '一只', bottom: '草履虫', size: 'stack-cjk-sm' },
+  },
+  {
+    id: 'icy',
+    index: '11',
+    group: 'honorary',
+    name: 'Icyの狼',
+    accentColor: '#1a5fb4',
+    restAngle: -6.5,
+    cardTitle: { mode: 'inline-accent-first', accent: 'Icy', main: 'の狼', size: 'mix-md' },
+  },
+  {
+    id: 'xiaoming',
+    index: '12',
+    group: 'honorary',
+    name: '小小小名不是小明',
+    accentColor: '#5c35b8',
+    restAngle: -6.9,
+    cardTitle: { mode: 'stacked', top: '小小小名', bottom: '不是小明', size: 'stack-cjk-xs' },
   },
 ];
 
 const english = () => locale() === 'en';
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeOutCubic = (t) => 1 - (1 - t) ** 3;
+const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
+const easeOutQuint = (t) => 1 - (1 - t) ** 5;
 
-function memberById(id) {
-  if (!id) return MEMBERS[0];
-  return MEMBERS.find((m) => m.id.toLowerCase() === String(id).toLowerCase()) || null;
+function memberIndexByParam(param) {
+  if (!param) return -1;
+  const q = decodeURIComponent(String(param)).trim().toLowerCase();
+  return MEMBERS.findIndex((m) => m.id.toLowerCase() === q || m.name.toLowerCase() === q);
+}
+
+function backdropScaleClass(name) {
+  let units = 0;
+  for (const ch of String(name)) units += /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 1.02 : 0.58;
+  if (units <= 3.1) return 'is-xl';
+  if (units <= 4.9) return 'is-lg';
+  if (units <= 6.5) return 'is-md';
+  return 'is-sm';
 }
 
 function memberCopy(m) {
   const en = english();
+  const g = GROUP_META[m.group];
   return {
-    tagline: en ? m.taglineEn : m.taglineZh,
-    statusTop: en ? m.statusTopEn : m.statusTopZh,
-    statusBottom: en ? m.statusBottomEn : m.statusBottomZh,
-    currentLabel: en ? m.currentLabelEn : m.currentLabelZh,
-    currentValue: en ? m.currentValueEn : m.currentValueZh,
-    tagsLabel: en ? m.tagsLabelEn : m.tagsLabelZh,
-    pills: m.pills.map((p) => ({ text: en ? p.en : p.zh, tone: p.tone })),
-    bio: en ? m.bioEn : m.bioZh,
-    links: m.links.map((l) => ({ href: l.href, text: en ? l.en : l.zh, external: Boolean(l.external) })),
+    statusTop: en ? (m.statusTopEn || g.singularEn) : (m.statusTopZh || g.singularZh),
+    statusBottom: en ? (m.statusBottomEn || '@ ArenaGalleri') : (m.statusBottomZh || '@ 亿模亿样 · ArenaGalleri'),
+    currentLabel: en ? (m.currentLabelEn || 'Role') : (m.currentLabelZh || '所属分组'),
+    currentValue: en ? (m.currentValueEn || `${g.singularEn} @ ArenaGalleri`) : (m.currentValueZh || `${g.singularZh} @ 亿模亿样`),
+    tagsLabel: en ? (m.tagsLabelEn || 'Team') : (m.tagsLabelZh || '团队标签'),
+    pills: (m.pills || [
+      { zh: g.singularZh, en: g.singularEn, tone: g.pillTone },
+      { zh: '亿模亿样', en: 'ArenaGalleri', tone: 'ink' },
+    ]).map((p) => ({ text: en ? p.en : p.zh, tone: p.tone })),
   };
 }
 
+function cardNameHtml(m) {
+  const spec = m.cardTitle || { mode: 'single-dot', main: m.name, size: 'md' };
+  const cls = `team-card-name is-${esc(spec.size || 'md')}`;
+  if (spec.mode === 'inline-drop') {
+    return `<div class="${cls}" aria-label="${esc(m.name)}"><span class="team-card-name-main">${esc(spec.main)}</span><span class="team-card-name-accent is-drop">${esc(spec.accent)}</span></div>`;
+  }
+  if (spec.mode === 'inline') {
+    return `<div class="${cls}" aria-label="${esc(m.name)}"><span class="team-card-name-main">${esc(spec.main)}</span><span class="team-card-name-accent">${esc(spec.accent)}</span></div>`;
+  }
+  if (spec.mode === 'inline-accent-first') {
+    return `<div class="${cls}" aria-label="${esc(m.name)}"><span class="team-card-name-accent">${esc(spec.accent)}</span><span class="team-card-name-main">${esc(spec.main)}</span></div>`;
+  }
+  if (spec.mode === 'stacked') {
+    return `<div class="${cls} is-stacked" aria-label="${esc(m.name)}"><span class="team-card-name-main">${esc(spec.top)}</span><span class="team-card-name-accent">${esc(spec.bottom)}</span></div>`;
+  }
+  return `<div class="${cls}" aria-label="${esc(m.name)}"><span class="team-card-name-main">${esc(spec.main)}</span><span class="team-card-name-dot" aria-hidden="true">.</span></div>`;
+}
+
+function pvcCardInnerHtml(m) {
+  const copy = memberCopy(m);
+  return `<div class="team-pvc-header" aria-hidden="true">
+      <span class="team-pvc-hole"></span>
+      <span class="team-pvc-slot"></span>
+      <span class="team-pvc-hole"></span>
+    </div>
+    <div class="team-pvc-seam" aria-hidden="true"></div>
+    <div class="team-card">
+      <div class="team-card-top">
+        ${cardNameHtml(m)}
+        <span class="team-card-serial">${esc(m.index)}</span>
+      </div>
+      <div class="team-card-meta">
+        <div class="team-card-group">
+          <span class="team-card-label">${esc(copy.currentLabel)}</span>
+          <span class="team-card-value">${esc(copy.currentValue)}</span>
+        </div>
+        <div class="team-card-group">
+          <span class="team-card-label">${esc(copy.tagsLabel)}</span>
+          <div class="team-card-pills">
+            ${copy.pills.map((p) => `<span class="team-pill is-${esc(p.tone)}">${esc(p.text)}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="team-pvc-sheen" aria-hidden="true"></div>`;
+}
+
 function claspSvgMarkup() {
-  // Brushed steel swivel D-ring + wire hook positioned over the PVC oval lanyard slot.
   return `<svg class="team-clasp-svg" viewBox="0 0 64 96" width="64" height="96" aria-hidden="true">
     <defs>
       <linearGradient id="team-metal-v" x1="0" y1="0" x2="1" y2="0">
@@ -96,17 +248,12 @@ function claspSvgMarkup() {
       </filter>
     </defs>
     <g filter="url(#team-clasp-shadow)">
-      <!-- Folded black fabric tab gripping the D-ring bar -->
       <path d="M22 4 L42 4 L40 24 C40 26.5 38 28 35.5 28 L28.5 28 C26 28 24 26.5 24 24 Z" fill="url(#team-collar-g)"/>
       <path d="M23.5 11 L40.5 11" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
-      <!-- Flat metal D-ring loop -->
       <path d="M21 25 C21 21 43 21 43 25 L41 37 C40.5 41 37 44 32 44 C27 44 23.5 41 23 37 Z" fill="none" stroke="url(#team-metal-h)" stroke-width="4.2" stroke-linejoin="round"/>
       <path d="M22.2 25.5 C22.2 22.8 41.8 22.8 41.8 25.5" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
-      <!-- Swivel joint collar -->
       <rect x="28.2" y="42" width="7.6" height="8" rx="3" fill="url(#team-metal-v)"/>
-      <!-- Back loop of J-hook entering behind the slot -->
       <path d="M31.5 49 C26.5 55 26 70 29.8 79.5" fill="none" stroke="#85888f" stroke-width="2.7" stroke-linecap="round" opacity="0.72"/>
-      <!-- Front gleaming wire pin threading down over the PVC header lip into the oval slot -->
       <path d="M32.2 48.5 C35.5 54 35.8 68 33.4 81.5 C32.7 85 29.8 85 29.5 81.5" fill="none" stroke="url(#team-metal-v)" stroke-width="3.6" stroke-linecap="round"/>
       <path d="M32.4 50 C34.8 55 35 67 33.1 79" fill="none" stroke="rgba(255,255,255,0.72)" stroke-width="1" stroke-linecap="round"/>
     </g>
@@ -115,29 +262,31 @@ function claspSvgMarkup() {
 
 export function mount(root, ctx) {
   const rawParam = ctx.param ? String(ctx.param) : null;
-  const matched = memberById(rawParam);
-  let activeIndex = matched ? MEMBERS.indexOf(matched) : 0;
-  let missingParam = Boolean(rawParam && !matched);
-  let modalOpen = false;
+  const initialIdx = memberIndexByParam(rawParam);
+  let activeIndex = initialIdx >= 0 ? initialIdx : 0;
+  let mode = initialIdx >= 0 ? 'detail' : 'overview'; // 'overview' | 'entering' | 'detail' | 'leaving'
+  let hoveredIndex = -1;
   let hasInteracted = false;
   let destroyed = false;
 
-  // Physics state (clasp pivot position relative to stage, plus pendulum angle).
+  // Physics & transition state.
   let rafId = 0;
   let lastTs = 0;
+  let phaseTime = 0;
   let stageRect = { width: 1200, height: 760 };
   let restX = 600;
-  let restY = 265;
+  let restY = 270;
   let x = restX;
   let y = restY;
   let vx = 0;
   let vy = 0;
-  let theta = -0.18;
+  let theta = -0.12;
   let omega = 0;
   let tiltX = 0;
   let tiltY = 0;
   let targetTiltX = 0;
   let targetTiltY = 0;
+
   let dragging = false;
   let dragPointerId = null;
   let dragStartClientX = 0;
@@ -152,24 +301,51 @@ export function mount(root, ctx) {
   let lastDragTime = 0;
   let dragVelX = 0;
   let dragVelY = 0;
-  let phaseTime = 0;
 
+  // Active choreography descriptor for entering / leaving transitions.
+  let anim = null;
+
+  // Cached DOM references.
   let resizeObserver = null;
   let stageEl = null;
+  let overviewEl = null;
+  let rosterEl = null;
+  let detailRevealEl = null;
   let pivotEl = null;
   let pvcEl = null;
   let shadowEl = null;
+  let claspEl = null;
+  let svgEl = null;
   let strapLeftEl = null;
   let strapRightEl = null;
   let strapLeftHiEl = null;
   let strapRightHiEl = null;
   let shadowLeftEl = null;
   let shadowRightEl = null;
-  let svgEl = null;
   let hintEl = null;
+  let crumbCurrentEl = null;
 
   const activeMember = () => MEMBERS[activeIndex] || MEMBERS[0];
   const restAngleRad = () => (activeMember().restAngle * Math.PI) / 180;
+
+  function badgeGeometry() {
+    const w = stageRect.width;
+    const narrow = w <= 640;
+    const tiny = w <= 360;
+    const badgeW = tiny ? 196 : narrow ? 214 : 258;
+    const badgeH = tiny ? 288 : narrow ? 312 : 374;
+    const slotY = narrow ? 19 : 22;
+    const deckCardW = tiny ? 136 : narrow ? 156 : 216;
+    return {
+      narrow,
+      badgeW,
+      badgeH,
+      slotY,
+      centerOffsetY: badgeH * 0.5 - slotY,
+      deckScale: deckCardW / badgeW,
+      claspLen: narrow ? 58 : 68,
+    };
+  }
 
   function computeLayout(resetPosition = false) {
     if (!stageEl) return;
@@ -179,12 +355,11 @@ export function mount(root, ctx) {
     const narrow = r.width <= 640;
     const compactH = r.height < 640;
     restX = r.width * 0.5;
-    // Keep the V-lanyard occupying ~33–38% of stage height so the badge overlaps the giant bottom wordmark cleanly.
     restY = narrow
-      ? clamp(r.height * 0.37, 185, 270)
+      ? clamp(r.height * 0.36, 185, 268)
       : compactH
         ? clamp(r.height * 0.33, 180, 232)
-        : clamp(r.height * 0.36, 220, 308);
+        : clamp(r.height * 0.36, 218, 306);
     if (svgEl) svgEl.setAttribute('viewBox', `0 0 ${Math.round(r.width)} ${Math.round(r.height)}`);
     if (resetPosition) {
       x = restX;
@@ -195,64 +370,91 @@ export function mount(root, ctx) {
         theta = restAngleRad();
         omega = 0;
       } else {
-        // Gentle drop-in swing on first arrival so the physical affordance is immediately felt.
         theta = restAngleRad() - 0.14;
         omega = 0.85;
       }
     }
   }
 
-  function applyVisuals() {
-    if (!pivotEl || !svgEl) return;
-    const w = stageRect.width;
-    const narrow = w <= 640;
-    const deg = (theta * 180) / Math.PI;
-    const lift = dragging ? 1 : clamp(Math.hypot(x - restX, y - restY) / 160, 0, 1);
+  function measureStackSlotCenter(index) {
+    if (!stageEl) return { cx: stageRect.width * 0.28, cy: stageRect.height * 0.5 };
+    const slot = $(`[data-stack-index="${index}"]`, stageEl);
+    if (!slot) return { cx: stageRect.width * 0.28, cy: stageRect.height * 0.5 };
+    const sRect = stageEl.getBoundingClientRect();
+    const r = slot.getBoundingClientRect();
+    return {
+      cx: r.left + r.width * 0.5 - sRect.left,
+      cy: r.top + r.height * 0.5 - sRect.top,
+    };
+  }
 
-    // Position the badge assembly at the exact oval-slot pivot (x, y) and rotate smoothly.
-    pivotEl.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${deg.toFixed(3)}deg)`;
+  function syncHoverUi(nextIdx) {
+    hoveredIndex = nextIdx;
+    if (!stageEl) return;
+    for (const slot of $$('[data-stack-index]', stageEl)) {
+      const idx = Number(slot.dataset.stackIndex);
+      slot.classList.toggle('is-hovered', idx === hoveredIndex);
+      slot.classList.toggle('is-above-hovered', hoveredIndex >= 0 && idx < hoveredIndex);
+      slot.classList.toggle('is-below-hovered', hoveredIndex >= 0 && idx > hoveredIndex);
+    }
+    for (const btn of $$('[data-roster-index]', stageEl)) {
+      btn.classList.toggle('is-hovered', Number(btn.dataset.rosterIndex) === hoveredIndex);
+    }
+  }
 
+  function syncMemberDetailDom() {
+    if (!stageEl) return;
+    const m = activeMember();
+    const copy = memberCopy(m);
+    const en = english();
+    if (pivotEl) pivotEl.style.setProperty('--member-accent', m.accentColor);
     if (pvcEl) {
-      const rx = tiltX.toFixed(2);
-      const ry = tiltY.toFixed(2);
-      const scale = (1 + lift * 0.018).toFixed(4);
-      pvcEl.style.transform = `perspective(950px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${scale})`;
-      const sheenShift = clamp(50 + deg * 1.6 + tiltY * 2.4, 10, 90);
-      pvcEl.style.setProperty('--sheen-x', `${sheenShift.toFixed(1)}%`);
+      pvcEl.innerHTML = pvcCardInnerHtml(m);
+      pvcEl.setAttribute('aria-label', en ? `${m.name} badge — drag to swing` : `${m.name} 工牌 — 可拖拽晃动`);
     }
-
-    if (shadowEl) {
-      const sx = 20 + lift * 16 + Math.sin(theta) * 8;
-      const sy = 22 + lift * 18 + Math.abs(Math.sin(theta)) * 4;
-      const blur = 26 + lift * 14;
-      shadowEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0)`;
-      shadowEl.style.filter = `blur(${blur.toFixed(1)}px)`;
-      shadowEl.style.opacity = (0.92 - lift * 0.2).toFixed(3);
+    const statusEl = $('[data-detail-status]', stageEl);
+    if (statusEl) statusEl.innerHTML = `${esc(copy.statusTop)}<br>${esc(copy.statusBottom)}`;
+    const wordEl = $('[data-backdrop-word]', stageEl);
+    if (wordEl) {
+      wordEl.textContent = m.name;
+      wordEl.className = `team-backdrop-word ${backdropScaleClass(m.name)}`;
     }
+    const crumbsNav = $('.crumbs', root);
+    if (crumbsNav) {
+      crumbsNav.innerHTML = mode === 'overview'
+        ? `<span aria-current="page">${esc(en ? 'Developer Team' : '开发者团队')}</span>`
+        : `<a href="#/team">${esc(en ? 'Developer Team' : '开发者团队')}</a><span class="sep" aria-hidden="true">/</span><span data-i18n-ignore aria-current="page">${esc(m.name)}</span>`;
+    }
+    setPageTitle(mode === 'overview'
+      ? ['开发者团队', ctx.DATA.title]
+      : ['开发者团队', { text: m.name, original: true }, ctx.DATA.title]);
+  }
 
-    // Compute the exact moving top of the folded clasp collar in stage coordinates.
-    // The collar top sits claspLen pixels "above" the oval slot pivot along the rotated badge axis.
-    const claspLen = narrow ? 58 : 68;
-    const sinT = Math.sin(theta);
-    const cosT = Math.cos(theta);
-    const collarX = x + sinT * claspLen;
-    const collarY = y - cosT * claspLen;
+  function renderLanyard(px, py, rad, drawFraction, lift, velX = 0) {
+    if (!svgEl || !strapLeftEl || !strapRightEl) return;
+    const draw = clamp(drawFraction, 0, 1);
+    svgEl.style.opacity = draw <= 0.005 ? '0' : '1';
+    if (draw <= 0.005) return;
 
-    // Strap anchor spread along the very top edge of the stage (narrower on mobile so corner copy stays clear).
+    const w = stageRect.width;
+    const { narrow, claspLen } = badgeGeometry();
+    const sinT = Math.sin(rad);
+    const cosT = Math.cos(rad);
+    const collarX = px + sinT * claspLen;
+    const collarY = py - cosT * claspLen;
+
     const spread = narrow ? clamp(w * 0.088, 24, 36) : clamp(w * 0.082, 82, 126);
     const axL = restX - spread;
     const axR = restX + spread;
     const ay = -24;
 
-    // Slight collar width offset so the two ribbons visibly meet in a crisp V.
     const neckHalf = narrow ? 3.2 : 3.8;
     const endLX = collarX - cosT * neckHalf;
     const endLY = collarY - sinT * neckHalf;
     const endRX = collarX + cosT * neckHalf;
     const endRY = collarY + sinT * neckHalf;
 
-    // Subtle fabric sag / inertial bow when swinging rapidly.
-    const bow = clamp(-vx * 0.016, -24, 24);
+    const bow = clamp(-velX * 0.016, -24, 24);
     const midLX = (axL + endLX) * 0.5 + bow;
     const midLY = (ay + endLY) * 0.5 + Math.abs(bow) * 0.25;
     const midRX = (axR + endRX) * 0.5 + bow;
@@ -260,33 +462,209 @@ export function mount(root, ctx) {
 
     const dL = `M ${axL.toFixed(1)} ${ay} Q ${midLX.toFixed(1)} ${midLY.toFixed(1)} ${endLX.toFixed(1)} ${endLY.toFixed(1)}`;
     const dR = `M ${axR.toFixed(1)} ${ay} Q ${midRX.toFixed(1)} ${midRY.toFixed(1)} ${endRX.toFixed(1)} ${endRY.toFixed(1)}`;
+    const dashOffset = ((1 - draw) * 100).toFixed(2);
 
-    strapLeftEl.setAttribute('d', dL);
-    strapRightEl.setAttribute('d', dR);
-    strapLeftHiEl.setAttribute('d', dL);
-    strapRightHiEl.setAttribute('d', dR);
+    for (const el of [strapLeftEl, strapLeftHiEl]) {
+      el.setAttribute('d', dL);
+      el.style.strokeDashoffset = dashOffset;
+    }
+    for (const el of [strapRightEl, strapRightHiEl]) {
+      el.setAttribute('d', dR);
+      el.style.strokeDashoffset = dashOffset;
+    }
 
-    // Matching diagonal cast shadow falling down-right from the lanyard straps.
     const shX = 24 + lift * 12;
     const shY = 14 + lift * 12;
     const sdL = `M ${(axL + shX * 0.7).toFixed(1)} ${ay} Q ${(midLX + shX).toFixed(1)} ${(midLY + shY).toFixed(1)} ${(endLX + shX).toFixed(1)} ${(endLY + shY).toFixed(1)}`;
     const sdR = `M ${(axR + shX * 0.7).toFixed(1)} ${ay} Q ${(midRX + shX).toFixed(1)} ${(midRY + shY).toFixed(1)} ${(endRX + shX).toFixed(1)} ${(endRY + shY).toFixed(1)}`;
     shadowLeftEl.setAttribute('d', sdL);
     shadowRightEl.setAttribute('d', sdR);
+    shadowLeftEl.style.strokeDashoffset = dashOffset;
+    shadowRightEl.style.strokeDashoffset = dashOffset;
+  }
+
+  function applyDetailVisuals() {
+    if (!pivotEl || !pvcEl || !shadowEl || !claspEl) return;
+    const deg = (theta * 180) / Math.PI;
+    const lift = dragging ? 1 : clamp(Math.hypot(x - restX, y - restY) / 160, 0, 1);
+
+    pivotEl.style.opacity = '1';
+    pivotEl.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${deg.toFixed(3)}deg)`;
+
+    const rx = tiltX.toFixed(2);
+    const ry = tiltY.toFixed(2);
+    const scale = (1 + lift * 0.018).toFixed(4);
+    pvcEl.style.transform = `perspective(980px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${scale})`;
+    const sheenShift = clamp(50 + deg * 1.6 + tiltY * 2.4, 10, 90);
+    pvcEl.style.setProperty('--sheen-x', `${sheenShift.toFixed(1)}%`);
+
+    const sx = 20 + lift * 16 + Math.sin(theta) * 8;
+    const sy = 22 + lift * 18 + Math.abs(Math.sin(theta)) * 4;
+    const blur = 26 + lift * 14;
+    shadowEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0)`;
+    shadowEl.style.filter = `blur(${blur.toFixed(1)}px)`;
+    shadowEl.style.opacity = (0.92 - lift * 0.2).toFixed(3);
+
+    claspEl.style.opacity = '1';
+    claspEl.style.transform = 'translate3d(0, 0, 0) scale(1)';
+
+    renderLanyard(x, y, theta, 1, lift, vx);
+  }
+
+  function applyStageModeClasses() {
+    if (!stageEl) return;
+    stageEl.dataset.mode = mode;
+    if (overviewEl) overviewEl.setAttribute('aria-hidden', mode === 'detail' ? 'true' : 'false');
+    if (detailRevealEl) {
+      detailRevealEl.setAttribute('aria-hidden', mode === 'overview' ? 'true' : 'false');
+      if (mode === 'detail') detailRevealEl.style.setProperty('--wipe', '100%');
+      if (mode === 'overview') detailRevealEl.style.setProperty('--wipe', '0%');
+    }
+    if (pivotEl) {
+      pivotEl.style.pointerEvents = mode === 'detail' ? 'auto' : 'none';
+      if (mode === 'overview') {
+        pivotEl.style.opacity = '0';
+        if (svgEl) svgEl.style.opacity = '0';
+      }
+    }
+  }
+
+  function stepTransition(now) {
+    if (!anim || !pivotEl || !pvcEl || !shadowEl || !claspEl || !detailRevealEl) return;
+    const rawP = clamp((now - anim.start) / anim.duration, 0, 1);
+
+    if (anim.kind === 'enter') {
+      // Phase 1 (0..0.24): card lifts upward out of isometric stack while deck & roster float away.
+      // Phase 2 (0.18..0.58): badge unfolds upright, lanyard shoots down & silver clasp threads the slot.
+      // Phase 3 (0.20..1.00): threaded badge sweeps left → center while detail stage wipes left → right!
+      const liftP = easeOutCubic(clamp(rawP / 0.26, 0, 1));
+      const flightP = easeInOutCubic(clamp((rawP - 0.14) / 0.86, 0, 1));
+      const unfoldP = easeInOutCubic(clamp((rawP - 0.12) / 0.56, 0, 1));
+      const lanyardP = easeOutCubic(clamp((rawP - 0.20) / 0.34, 0, 1));
+      const claspP = easeOutCubic(clamp((rawP - 0.28) / 0.26, 0, 1));
+      const wipeP = easeOutQuint(clamp((rawP - 0.22) / 0.74, 0, 1));
+
+      // Parabolic lift + left-to-right sweeping arc (swings slightly past center to carry the wipe naturally).
+      const liftY = -62 * Math.sin(liftP * Math.PI * 0.5) * (1 - flightP * 0.78);
+      const arcY = -34 * Math.sin(flightP * Math.PI);
+      const sweepOvershoot = 28 * Math.sin(clamp((rawP - 0.35) / 0.65, 0, 1) * Math.PI);
+      const curX = lerp(anim.startX, restX, flightP) + sweepOvershoot;
+      const curY = lerp(anim.startY, restY, flightP) + liftY + arcY;
+
+      // Isometric tilt smoothly unfolds to 0 while pivot rotation eases into the resting swing angle.
+      const isoX = lerp(56, 0, unfoldP);
+      const isoZ = lerp(-36, 0, unfoldP);
+      const isoScale = lerp(anim.deckScale, 1, unfoldP);
+      const swingLean = -16 * Math.sin(flightP * Math.PI);
+      const curTheta = lerp(0, restAngleRad(), flightP) + (swingLean * Math.PI) / 180;
+      const curDeg = (curTheta * 180) / Math.PI;
+
+      pivotEl.style.opacity = '1';
+      pivotEl.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0) rotate(${curDeg.toFixed(3)}deg)`;
+      pvcEl.style.transform = `perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+      pvcEl.style.setProperty('--sheen-x', `${(22 + flightP * 48).toFixed(1)}%`);
+
+      const shadowLift = 0.4 + 0.6 * Math.sin(rawP * Math.PI);
+      shadowEl.style.transform = `translate3d(${(18 + shadowLift * 18).toFixed(1)}px, ${(20 + shadowLift * 20).toFixed(1)}px, 0) perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+      shadowEl.style.filter = `blur(${(20 + shadowLift * 14).toFixed(1)}px)`;
+      shadowEl.style.opacity = (0.72 + unfoldP * 0.2).toFixed(3);
+
+      claspEl.style.opacity = claspP.toFixed(3);
+      claspEl.style.transform = `translate3d(0, ${lerp(-26, 0, claspP).toFixed(1)}px, 0) scale(${lerp(0.86, 1, claspP).toFixed(3)})`;
+
+      renderLanyard(curX, curY, curTheta, lanyardP, shadowLift, (restX - anim.startX) * (1 - flightP) * 1.1);
+      detailRevealEl.style.setProperty('--wipe', `${(wipeP * 100).toFixed(2)}%`);
+
+      if (rawP >= 1) {
+        // Hand off live rightward momentum seamlessly into the spring-pendulum physics engine!
+        x = restX;
+        y = restY;
+        vx = 145;
+        vy = 18;
+        theta = restAngleRad() - 0.05;
+        omega = -1.45;
+        anim = null;
+        mode = 'detail';
+        applyStageModeClasses();
+        syncMemberDetailDom();
+        applyDetailVisuals();
+      }
+      return;
+    }
+
+    if (anim.kind === 'leave') {
+      // Natural symmetrical return: right-to-left reverse wipe + unhook upward + smooth glide back into stack.
+      const wipeP = 1 - easeInOutCubic(clamp(rawP / 0.54, 0, 1));
+      const lanyardP = 1 - easeOutCubic(clamp(rawP / 0.36, 0, 1));
+      const claspP = 1 - easeOutCubic(clamp(rawP / 0.28, 0, 1));
+      const flightP = easeInOutCubic(clamp((rawP - 0.06) / 0.84, 0, 1));
+      const foldP = easeInOutCubic(clamp((rawP - 0.14) / 0.72, 0, 1));
+
+      const arcY = -28 * Math.sin(flightP * Math.PI);
+      const curX = lerp(anim.fromX, anim.targetX, flightP);
+      const curY = lerp(anim.fromY, anim.targetY, flightP) + arcY;
+      const curTheta = lerp(anim.fromTheta, 0, flightP);
+      const curDeg = (curTheta * 180) / Math.PI;
+
+      const isoX = lerp(0, 56, foldP);
+      const isoZ = lerp(0, -36, foldP);
+      const isoScale = lerp(1, anim.deckScale, foldP);
+
+      pivotEl.style.opacity = '1';
+      pivotEl.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0) rotate(${curDeg.toFixed(3)}deg)`;
+      pvcEl.style.transform = `perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+
+      const shadowFade = 1 - foldP * 0.45;
+      shadowEl.style.transform = `translate3d(${lerp(22, 10, foldP).toFixed(1)}px, ${lerp(24, 14, foldP).toFixed(1)}px, 0) perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+      shadowEl.style.filter = `blur(${lerp(26, 14, foldP).toFixed(1)}px)`;
+      shadowEl.style.opacity = (0.85 * shadowFade).toFixed(3);
+
+      claspEl.style.opacity = claspP.toFixed(3);
+      claspEl.style.transform = `translate3d(0, ${lerp(0, -24, 1 - claspP).toFixed(1)}px, 0) scale(${lerp(1, 0.88, 1 - claspP).toFixed(3)})`;
+
+      renderLanyard(curX, curY, curTheta, lanyardP, 0.25, 0);
+      detailRevealEl.style.setProperty('--wipe', `${(wipeP * 100).toFixed(2)}%`);
+
+      // Bring the overview deck & roster gently back in as the card nears home.
+      if (rawP >= 0.34 && overviewEl && overviewEl.classList.contains('is-exiting')) {
+        overviewEl.classList.remove('is-exiting');
+      }
+
+      if (rawP >= 1) {
+        anim = null;
+        mode = 'overview';
+        for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
+        if (overviewEl) overviewEl.classList.remove('is-exiting');
+        applyStageModeClasses();
+        syncMemberDetailDom();
+        // Gently highlight the card that just landed home so the eye tracks continuity.
+        const returnedSlot = $(`[data-stack-index="${activeIndex}"]`, stageEl);
+        if (returnedSlot) {
+          returnedSlot.classList.add('is-settled');
+          setTimeout(() => returnedSlot.classList.remove('is-settled'), 700);
+        }
+      }
+    }
   }
 
   function tick(ts) {
     if (destroyed) return;
     rafId = requestAnimationFrame(tick);
-    if (!lastTs) { lastTs = ts; applyVisuals(); return; }
+    if (!lastTs) { lastTs = ts; return; }
     const dt = Math.min((ts - lastTs) / 1000, 0.04);
     lastTs = ts;
     phaseTime += dt;
 
+    if (mode === 'entering' || mode === 'leaving') {
+      stepTransition(ts);
+      return;
+    }
+
+    if (mode !== 'detail') return;
+
     const targetAngle = restAngleRad() + Math.sin(phaseTime * 1.15) * 0.008;
 
     if (dragging) {
-      // Smoothly pull the clasp toward the pointer while tilting according to drag velocity & grab lever.
       const dx = dragOffsetX - x;
       const dy = dragOffsetY - y;
       const prevVx = vx;
@@ -295,7 +673,6 @@ export function mount(root, ctx) {
       x += dx * Math.min(1, dt * 26);
       y += dy * Math.min(1, dt * 26);
 
-      // Natural pendulum tilt from horizontal pull + off-center grab torque.
       const leverTorque = clamp(-dragVelX * 0.00055, -0.58, 0.58)
         + clamp((x - restX) * -0.0014, -0.32, 0.32)
         + clamp((dragGrabLocalX / 120) * ((y - restY) * 0.0012), -0.18, 0.18);
@@ -304,7 +681,6 @@ export function mount(root, ctx) {
       omega += rotAcc * dt;
       theta = clamp(theta + omega * dt, -0.92, 0.92);
     } else {
-      // Spring-damper tether pulling the clasp back to rest, coupled into angular pendulum inertia.
       const prevVx = vx;
       const ax = (restX - x) * 115 - vx * 11.2;
       const ay = (restY - y) * 125 - vy * 12.0;
@@ -313,32 +689,126 @@ export function mount(root, ctx) {
       x += vx * dt;
       y += vy * dt;
 
-      // Inertial pendulum coupling: accelerating clasp left swings the heavy bottom right.
       const inertiaTorque = clamp(-ax * 0.0021 - (vx - prevVx) * 0.0004, -22, 22);
       const alpha = (targetAngle - theta) * 54 - omega * 4.1 + inertiaTorque;
       omega += alpha * dt;
       theta = clamp(theta + omega * dt, -1.05, 1.05);
     }
 
-    // Smooth 3D hover tilt easing.
     tiltX += (targetTiltX - tiltX) * Math.min(1, dt * 11);
     tiltY += (targetTiltY - tiltY) * Math.min(1, dt * 11);
 
-    applyVisuals();
+    applyDetailVisuals();
   }
 
   function startLoop() {
     cancelAnimationFrame(rafId);
     lastTs = 0;
     if (reducedMotion()) {
-      theta = restAngleRad();
-      omega = 0;
-      x = restX;
-      y = restY;
-      applyVisuals();
+      if (mode === 'detail') {
+        theta = restAngleRad();
+        omega = 0;
+        x = restX;
+        y = restY;
+        applyDetailVisuals();
+      }
       return;
     }
     rafId = requestAnimationFrame(tick);
+  }
+
+  function openMember(index) {
+    if (index < 0 || index >= MEMBERS.length) return;
+    if (mode === 'entering' || mode === 'leaving') return;
+    activeIndex = index;
+    dragging = false;
+    tiltX = 0;
+    tiltY = 0;
+    targetTiltX = 0;
+    targetTiltY = 0;
+
+    const m = activeMember();
+    history.replaceState(history.state, '', `#/team/${m.id}`);
+    syncMemberDetailDom();
+
+    if (reducedMotion()) {
+      mode = 'detail';
+      syncHoverUi(-1);
+      computeLayout(true);
+      applyStageModeClasses();
+      syncMemberDetailDom();
+      applyDetailVisuals();
+      return;
+    }
+
+    // Measure the exact screen center of the chosen card in the left isometric stack BEFORE hiding it.
+    const { cx, cy } = measureStackSlotCenter(index);
+    const { centerOffsetY, deckScale } = badgeGeometry();
+
+    syncHoverUi(-1);
+    for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
+    const chosenSlot = $(`[data-stack-index="${index}"]`, stageEl);
+    chosenSlot?.classList.add('is-extracted');
+
+    mode = 'entering';
+    applyStageModeClasses();
+    if (overviewEl) overviewEl.classList.add('is-exiting');
+    if (detailRevealEl) detailRevealEl.style.setProperty('--wipe', '0%');
+
+    anim = {
+      kind: 'enter',
+      start: performance.now(),
+      duration: 980,
+      startX: cx,
+      startY: cy - centerOffsetY,
+      deckScale,
+    };
+    stepTransition(anim.start);
+  }
+
+  function returnToOverview() {
+    if (mode !== 'detail') return;
+    dragging = false;
+    pivotEl?.classList.remove('is-dragging');
+    targetTiltX = 0;
+    targetTiltY = 0;
+    tiltX = 0;
+    tiltY = 0;
+
+    history.replaceState(history.state, '', '#/team');
+
+    if (reducedMotion()) {
+      mode = 'overview';
+      if (overviewEl) overviewEl.classList.remove('is-exiting');
+      for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
+      applyStageModeClasses();
+      syncMemberDetailDom();
+      return;
+    }
+
+    // Measure the exact home slot center in the left isometric stack.
+    for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
+    const homeSlot = $(`[data-stack-index="${activeIndex}"]`, stageEl);
+    homeSlot?.classList.add('is-extracted');
+    const { cx, cy } = measureStackSlotCenter(activeIndex);
+    const { centerOffsetY, deckScale } = badgeGeometry();
+
+    mode = 'leaving';
+    applyStageModeClasses();
+    if (overviewEl) overviewEl.classList.add('is-exiting');
+
+    anim = {
+      kind: 'leave',
+      start: performance.now(),
+      duration: 720,
+      fromX: x,
+      fromY: y,
+      fromTheta: theta,
+      targetX: cx,
+      targetY: cy - centerOffsetY,
+      deckScale,
+    };
+    stepTransition(anim.start);
   }
 
   function markInteracted() {
@@ -347,60 +817,90 @@ export function mount(root, ctx) {
     if (hintEl) hintEl.classList.add('is-hidden');
   }
 
-  function renderModal(m, copy) {
-    if (!modalOpen) return '';
-    const en = english();
-    const shareUrl = `${location.origin}${location.pathname}#/team/${m.id}`;
-    return `<div class="team-modal-backdrop" data-team-modal-backdrop>
-      <section class="team-modal" role="dialog" aria-modal="true" aria-labelledby="team-modal-title" data-i18n-ignore>
-        <div class="team-modal-head">
-          <div class="team-modal-id">
-            <span class="team-modal-index">${esc(m.index)}</span>
-            <h2 id="team-modal-title"><span class="team-name-main">${esc(m.nameMain)}</span><span class="team-name-accent" style="color:${esc(m.accentColor)}">${esc(m.nameAccent)}</span></h2>
-          </div>
-          <button type="button" class="icon-btn team-modal-close" data-team-modal-close aria-label="${esc(en ? 'Close' : '关闭')}">${icon('close')}</button>
-        </div>
-        <p class="team-modal-role">${esc(copy.statusTop)} · ${esc(copy.statusBottom)}</p>
-        <div class="team-modal-pills">${copy.pills.map((p) => `<span class="team-pill is-${esc(p.tone)}">${esc(p.text)}</span>`).join('')}</div>
-        <div class="team-modal-bio">${copy.bio.map((para) => `<p>${esc(para)}</p>`).join('')}</div>
-        <div class="team-modal-actions">
-          ${copy.links.map((l) => `<a class="btn sm${l.external ? ' primary' : ''}" href="${esc(l.href)}"${l.external ? ' target="_blank" rel="noopener"' : ''}>${esc(l.text)}${icon(l.external ? 'arrow' : 'right')}</a>`).join('')}
-          <button type="button" class="btn sm ghost" data-team-copy="${esc(shareUrl)}">${icon('link')}${esc(en ? 'Copy link' : '复制名片链接')}</button>
-        </div>
-        <p class="team-modal-foot">${esc(en ? 'More team member badges will be added here soon.' : '成员名录将陆续补充，更多伙伴的工牌会陆续挂上。')}</p>
-      </section>
+  function stackCardHtml(m, i) {
+    // Stack from bottom (highest index) to top (index 0 = kme7) so top cards naturally overlap lower cards.
+    const zIndex = MEMBERS.length - i;
+    return `<div class="team-stack-slot" data-stack-index="${i}" style="--stack-i:${i};--member-accent:${esc(m.accentColor)};z-index:${zIndex}">
+      <button type="button" class="team-stack-card" data-open-member="${i}" aria-label="${esc(m.name)}" data-i18n-ignore>
+        <span class="team-stack-edge" aria-hidden="true"></span>
+        <span class="team-stack-header" aria-hidden="true">
+          <span class="team-stack-hole"></span>
+          <span class="team-stack-slot-cut"></span>
+          <span class="team-stack-hole"></span>
+        </span>
+        <span class="team-stack-seam" aria-hidden="true"></span>
+        <span class="team-stack-face">
+          <span class="team-stack-top">
+            <span class="team-stack-name">${esc(m.name)}</span>
+            <span class="team-stack-num">${esc(m.index)}</span>
+          </span>
+          <span class="team-stack-foot">
+            <span class="team-stack-bar"></span>
+            <span class="team-stack-group">${esc(english() ? GROUP_META[m.group].singularEn : GROUP_META[m.group].singularZh)}</span>
+          </span>
+        </span>
+      </button>
     </div>`;
   }
 
-  function renderSwitcher() {
-    if (MEMBERS.length <= 1) return '';
+  function rosterGroupsHtml() {
     const en = english();
-    return `<nav class="team-switcher" aria-label="${esc(en ? 'Team members' : '团队成员')}" data-i18n-ignore>
-      ${MEMBERS.map((m, i) => `<button type="button" class="team-switch-btn${i === activeIndex ? ' is-active' : ''}" data-team-select="${i}" aria-current="${i === activeIndex ? 'true' : 'false'}"><span>${esc(m.index)}</span>${esc(m.name)}</button>`).join('')}
-    </nav>`;
+    return GROUP_ORDER.map((groupKey) => {
+      const meta = GROUP_META[groupKey];
+      const items = MEMBERS.map((m, i) => ({ m, i })).filter(({ m }) => m.group === groupKey);
+      return `<section class="team-roster-group" aria-label="${esc(en ? meta.en : meta.zh)}">
+        <h2 class="team-roster-group-title">${esc(en ? `${meta.en}:` : `${meta.zh}：`)}</h2>
+        <div class="team-roster-grid">
+          ${items.map(({ m, i }) => `<button type="button" class="team-roster-name${m.name.length >= 7 && /[\u3000-\u9fff]/.test(m.name) ? ' is-wide' : ''}" data-roster-index="${i}" data-open-member="${i}" style="--member-accent:${esc(m.accentColor)}"><span class="team-roster-dot" aria-hidden="true"></span><span class="team-roster-label">${esc(m.name)}</span></button>`).join('')}
+        </div>
+      </section>`;
+    }).join('');
   }
 
   function draw(resetPhysics = true) {
     const m = activeMember();
     const copy = memberCopy(m);
     const en = english();
-    const crumbs = [{ text: '开发者团队', href: '#/team' }, { text: m.name, original: true }];
+    const crumbs = [{ text: '开发者团队' }];
 
     root.innerHTML = `${ctx.header(crumbs, false, '')}<main class="team-page">
-      <section class="team-stage" data-team-stage aria-label="${esc(en ? `${m.name} · Developer profile` : `${m.name} · 开发者名片`)}">
-        ${missingParam ? `<p class="team-missing" role="status" data-i18n-ignore>${esc(en ? 'That member badge has not been added yet — showing kme7.' : '该成员工牌尚未添加，当前展示 kme7。')}</p>` : ''}
+      <section class="team-stage" data-team-stage data-mode="${esc(mode)}" aria-label="${esc(en ? 'Developer Team' : '开发者团队')}">
 
-        <div class="team-corner team-corner-left" data-i18n-ignore>
-          <p>${esc(copy.tagline)} <button type="button" class="team-more-btn" data-team-more>[${esc(en ? 'more' : '更多')}]</button></p>
-        </div>
-        <div class="team-corner team-corner-right" data-i18n-ignore>
-          <p>${esc(copy.statusTop)}<br>${esc(copy.statusBottom)}</p>
+        <!-- Layer 1: Isometric card stack + grouped lexicographical roster -->
+        <div class="team-overview" data-team-overview data-i18n-ignore>
+          <div class="team-deck-zone">
+            <div class="team-deck" style="--stack-count:${MEMBERS.length}">
+              ${MEMBERS.map((member, i) => stackCardHtml(member, i)).join('')}
+            </div>
+          </div>
+          <div class="team-roster" data-team-roster>
+            <header class="team-roster-head">
+              <h1 class="team-roster-title">${en
+                ? '<span class="team-roster-zh">Team</span><span class="team-roster-en">团队</span>'
+                : '<span class="team-roster-zh">团队</span><span class="team-roster-en">Team</span>'}</h1>
+              <p class="team-roster-order">${esc(en ? '(Alphabetical)' : '（字典序）')}</p>
+            </header>
+            <div class="team-roster-groups">
+              ${rosterGroupsHtml()}
+            </div>
+          </div>
         </div>
 
-        <div class="team-backdrop" aria-hidden="true" data-i18n-ignore>
-          <span class="team-backdrop-word">${esc(m.name)}</span>
+        <!-- Layer 2: Detail backdrop elements, wiped smoothly left → right -->
+        <div class="team-detail-reveal" data-team-detail-reveal style="--wipe:${mode === 'detail' ? '100%' : '0%'}" data-i18n-ignore>
+          <div class="team-corner team-corner-left">
+            <button type="button" class="team-back-btn" data-team-back aria-label="${esc(en ? 'Back to team roster' : '返回团队名单')}">${icon('prev')}<span>${esc(en ? 'Back' : '返回')}</span></button>
+          </div>
+          <div class="team-corner team-corner-right">
+            <p data-detail-status>${esc(copy.statusTop)}<br>${esc(copy.statusBottom)}</p>
+          </div>
+          <div class="team-backdrop" aria-hidden="true">
+            <span class="team-backdrop-word ${backdropScaleClass(m.name)}" data-backdrop-word>${esc(m.name)}</span>
+          </div>
+          <p class="team-hint${hasInteracted ? ' is-hidden' : ''}" data-team-hint>${esc(en ? 'Drag or flick the badge' : '可拖拽或轻拨工牌')}</p>
         </div>
 
+        <!-- Layer 3: Dynamic V-lanyard SVG -->
         <svg class="team-lanyard-svg" data-team-svg aria-hidden="true" preserveAspectRatio="none">
           <defs>
             <filter id="team-strap-blur" x="-30%" y="-20%" width="160%" height="150%">
@@ -408,63 +908,37 @@ export function mount(root, ctx) {
             </filter>
           </defs>
           <g class="team-strap-shadows" filter="url(#team-strap-blur)">
-            <path class="team-strap-shadow" data-shadow-left d=""/>
-            <path class="team-strap-shadow" data-shadow-right d=""/>
+            <path class="team-strap-shadow" data-shadow-left pathLength="100" d=""/>
+            <path class="team-strap-shadow" data-shadow-right pathLength="100" d=""/>
           </g>
           <g class="team-straps">
-            <path class="team-strap" data-strap-left d=""/>
-            <path class="team-strap" data-strap-right d=""/>
-            <path class="team-strap-hi" data-strap-left-hi d=""/>
-            <path class="team-strap-hi" data-strap-right-hi d=""/>
+            <path class="team-strap" data-strap-left pathLength="100" d=""/>
+            <path class="team-strap" data-strap-right pathLength="100" d=""/>
+            <path class="team-strap-hi" data-strap-left-hi pathLength="100" d=""/>
+            <path class="team-strap-hi" data-strap-right-hi pathLength="100" d=""/>
           </g>
         </svg>
 
+        <!-- Layer 4: Live physical PVC badge + brushed steel clasp -->
         <div class="team-badge-pivot" data-team-pivot style="--member-accent:${esc(m.accentColor)}">
           <div class="team-pvc-shadow" data-team-shadow aria-hidden="true"></div>
-          <div class="team-pvc" data-team-pvc role="button" tabindex="0" aria-label="${esc(en ? `${m.name} badge — drag to swing, press Enter for more` : `${m.name} 工牌 — 可拖拽晃动，按回车查看详情`)}" data-i18n-ignore>
-            <div class="team-pvc-header" aria-hidden="true">
-              <span class="team-pvc-hole"></span>
-              <span class="team-pvc-slot"></span>
-              <span class="team-pvc-hole"></span>
-            </div>
-            <div class="team-pvc-seam" aria-hidden="true"></div>
-            <div class="team-card">
-              <div class="team-card-top">
-                <div class="team-card-name" aria-label="${esc(m.name)}">
-                  <span class="team-card-name-main">${esc(m.nameMain)}</span><span class="team-card-name-accent">${esc(m.nameAccent)}</span>
-                </div>
-                <span class="team-card-serial">${esc(m.index)}</span>
-              </div>
-              <div class="team-card-meta">
-                <div class="team-card-group">
-                  <span class="team-card-label">${esc(copy.currentLabel)}</span>
-                  <span class="team-card-value">${esc(copy.currentValue)}</span>
-                </div>
-                <div class="team-card-group">
-                  <span class="team-card-label">${esc(copy.tagsLabel)}</span>
-                  <div class="team-card-pills">
-                    ${copy.pills.map((p) => `<span class="team-pill is-${esc(p.tone)}">${esc(p.text)}</span>`).join('')}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="team-pvc-sheen" aria-hidden="true"></div>
+          <div class="team-pvc" data-team-pvc role="button" tabindex="0" aria-label="${esc(en ? `${m.name} badge — drag to swing` : `${m.name} 工牌 — 可拖拽晃动`)}" data-i18n-ignore>
+            ${pvcCardInnerHtml(m)}
           </div>
-          <div class="team-clasp" aria-hidden="true">${claspSvgMarkup()}</div>
+          <div class="team-clasp" data-team-clasp aria-hidden="true">${claspSvgMarkup()}</div>
         </div>
 
-        ${renderSwitcher()}
-        <p class="team-hint${hasInteracted ? ' is-hidden' : ''}" data-team-hint data-i18n-ignore>${esc(en ? 'Drag or flick the badge' : '可拖拽或轻拨工牌')}</p>
       </section>
-      <div data-team-modal-host>${renderModal(m, copy)}</div>
     </main>${ctx.footer()}`;
 
-    setPageTitle(['开发者团队', { text: m.name, original: true }, ctx.DATA.title]);
-
     stageEl = $('[data-team-stage]', root);
+    overviewEl = $('[data-team-overview]', root);
+    rosterEl = $('[data-team-roster]', root);
+    detailRevealEl = $('[data-team-detail-reveal]', root);
     pivotEl = $('[data-team-pivot]', root);
     pvcEl = $('[data-team-pvc]', root);
     shadowEl = $('[data-team-shadow]', root);
+    claspEl = $('[data-team-clasp]', root);
     svgEl = $('[data-team-svg]', root);
     strapLeftEl = $('[data-strap-left]', root);
     strapRightEl = $('[data-strap-right]', root);
@@ -473,6 +947,7 @@ export function mount(root, ctx) {
     shadowLeftEl = $('[data-shadow-left]', root);
     shadowRightEl = $('[data-shadow-right]', root);
     hintEl = $('[data-team-hint]', root);
+    crumbCurrentEl = $('.crumbs [aria-current="page"]', root);
 
     resizeObserver?.disconnect();
     if (typeof ResizeObserver === 'function' && stageEl) {
@@ -480,41 +955,20 @@ export function mount(root, ctx) {
         const prevRestX = restX;
         const prevRestY = restY;
         computeLayout(false);
-        if (!dragging) {
+        if (mode === 'detail' && !dragging) {
           x += restX - prevRestX;
           y += restY - prevRestY;
+          applyDetailVisuals();
         }
-        applyVisuals();
       });
       resizeObserver.observe(stageEl);
     }
 
     computeLayout(resetPhysics);
-    applyVisuals();
+    applyStageModeClasses();
+    syncMemberDetailDom();
+    if (mode === 'detail') applyDetailVisuals();
     startLoop();
-  }
-
-  function syncModal() {
-    const host = $('[data-team-modal-host]', root);
-    if (!host) return;
-    const m = activeMember();
-    host.innerHTML = renderModal(m, memberCopy(m));
-  }
-
-  function openModal() {
-    if (modalOpen) return;
-    modalOpen = true;
-    document.body.classList.add('has-team-modal');
-    syncModal();
-    $('[data-team-modal-close]', root)?.focus();
-  }
-
-  function closeModal(restoreFocus = true) {
-    if (!modalOpen) return;
-    modalOpen = false;
-    document.body.classList.remove('has-team-modal');
-    syncModal();
-    if (restoreFocus) $('[data-team-more]', root)?.focus();
   }
 
   function elasticTether(rawX, rawY) {
@@ -523,7 +977,6 @@ export function mount(root, ctx) {
     const dist = Math.hypot(dx, dy);
     const maxSoft = Math.min(stageRect.width * 0.34, 240);
     if (dist <= maxSoft) return { tx: rawX, ty: clamp(rawY, 72, stageRect.height - 130) };
-    // Smooth logarithmic rubber-band stretch past soft radius.
     const extra = dist - maxSoft;
     const damped = maxSoft + 90 * (1 - Math.exp(-extra / 120));
     const ratio = damped / dist;
@@ -533,8 +986,32 @@ export function mount(root, ctx) {
     };
   }
 
+  const onPointerOver = (event) => {
+    if (mode !== 'overview') return;
+    const el = event.target.closest('[data-roster-index], [data-stack-index]');
+    if (!el) return;
+    const idx = Number(el.dataset.rosterIndex ?? el.dataset.stackIndex);
+    if (Number.isInteger(idx) && idx !== hoveredIndex) syncHoverUi(idx);
+  };
+
+  const onPointerOut = (event) => {
+    if (mode !== 'overview') return;
+    const from = event.target.closest('[data-roster-index], [data-stack-index]');
+    if (!from) return;
+    const to = event.relatedTarget?.closest?.('[data-roster-index], [data-stack-index]');
+    if (!to) syncHoverUi(-1);
+  };
+
+  const onFocusIn = (event) => {
+    if (mode !== 'overview') return;
+    const el = event.target.closest('[data-roster-index], [data-open-member]');
+    if (!el) return;
+    const idx = Number(el.dataset.rosterIndex ?? el.dataset.openMember);
+    if (Number.isInteger(idx)) syncHoverUi(idx);
+  };
+
   const onPointerDown = (event) => {
-    if (modalOpen || event.button > 0) return;
+    if (mode !== 'detail' || event.button > 0) return;
     const target = event.target.closest('[data-team-pvc], .team-clasp');
     if (!target || !stageEl) return;
     event.preventDefault();
@@ -555,7 +1032,6 @@ export function mount(root, ctx) {
     dragVelX = 0;
     dragVelY = 0;
 
-    // Preserve where on the badge the user grabbed so it doesn't jump to cursor center.
     dragGrabLocalX = px - x;
     dragGrabLocalY = py - y;
     dragOffsetX = x;
@@ -564,11 +1040,11 @@ export function mount(root, ctx) {
     targetTiltY = 0;
 
     pivotEl?.classList.add('is-dragging');
-    try { pvcEl?.setPointerCapture(event.pointerId); } catch { /* ignore capture issues */ }
+    try { pvcEl?.setPointerCapture(event.pointerId); } catch { /* ignore */ }
   };
 
   const onPointerMove = (event) => {
-    if (!stageEl) return;
+    if (!stageEl || mode !== 'detail') return;
     if (dragging && event.pointerId === dragPointerId) {
       const now = performance.now();
       const dtMs = Math.max(8, now - lastDragTime);
@@ -593,8 +1069,7 @@ export function mount(root, ctx) {
       return;
     }
 
-    // Subtle 3D sheen & parallax tilt when hovering over the PVC sleeve.
-    if (!modalOpen && !reducedMotion() && pvcEl && event.pointerType === 'mouse') {
+    if (!reducedMotion() && pvcEl && event.pointerType === 'mouse') {
       const rect = pvcEl.getBoundingClientRect();
       const inside = event.clientX >= rect.left && event.clientX <= rect.right
         && event.clientY >= rect.top && event.clientY <= rect.bottom;
@@ -618,11 +1093,9 @@ export function mount(root, ctx) {
     dragPointerId = null;
 
     if (!dragMoved) {
-      // A light tap gives the badge a playful nudge.
       omega += (theta >= restAngleRad() ? -1 : 1) * 1.65;
       vx += (Math.random() > 0.5 ? 1 : -1) * 42;
     } else {
-      // Impart fling velocity on release.
       vx = clamp(dragVelX * 0.42, -950, 950);
       vy = clamp(dragVelY * 0.42, -950, 950);
       omega += clamp(-dragVelX * 0.0022, -4.8, 4.8);
@@ -630,54 +1103,42 @@ export function mount(root, ctx) {
   };
 
   const onClick = (event) => {
-    const more = event.target.closest('[data-team-more]');
-    if (more) { openModal(); return; }
-
-    const closeBtn = event.target.closest('[data-team-modal-close]');
-    if (closeBtn) { closeModal(); return; }
-
-    if (event.target.matches('[data-team-modal-backdrop]')) {
-      closeModal();
+    const backBtn = event.target.closest('[data-team-back]');
+    if (backBtn) {
+      returnToOverview();
       return;
     }
-
-    const selectBtn = event.target.closest('[data-team-select]');
-    if (selectBtn) {
-      const next = Number(selectBtn.dataset.teamSelect);
-      if (Number.isInteger(next) && next >= 0 && next < MEMBERS.length && next !== activeIndex) {
-        activeIndex = next;
-        missingParam = false;
-        history.replaceState(history.state, '', `#/team/${MEMBERS[activeIndex].id}`);
-        draw(true);
-      }
+    const openBtn = event.target.closest('[data-open-member]');
+    if (openBtn && mode === 'overview') {
+      const idx = Number(openBtn.dataset.openMember);
+      if (Number.isInteger(idx)) openMember(idx);
       return;
     }
-
-    const copyBtn = event.target.closest('[data-team-copy]');
-    if (copyBtn) {
-      navigator.clipboard?.writeText(copyBtn.dataset.teamCopy).then(
-        () => toast(english() ? 'Link copied' : '已复制链接'),
-        () => toast(english() ? 'Copy failed — please copy from the address bar' : '复制失败，请从地址栏复制'),
-      );
+    const teamCrumb = event.target.closest('a[href="#/team"]');
+    if (teamCrumb && mode === 'detail') {
+      event.preventDefault();
+      returnToOverview();
     }
   };
 
   const onKeyDown = (event) => {
-    if (event.key === 'Escape' && modalOpen) {
+    if (event.key === 'Escape' && mode === 'detail') {
       event.preventDefault();
-      closeModal();
-      return;
-    }
-    if (!modalOpen && (event.key === 'Enter' || event.key === ' ') && event.target?.matches?.('[data-team-pvc]')) {
-      event.preventDefault();
-      openModal();
+      returnToOverview();
     }
   };
 
   const relocalize = () => {
-    if (!destroyed) draw(false);
+    if (!destroyed) {
+      if (mode === 'entering') { anim = null; mode = 'detail'; }
+      if (mode === 'leaving') { anim = null; mode = 'overview'; }
+      draw(false);
+    }
   };
 
+  root.addEventListener('pointerover', onPointerOver);
+  root.addEventListener('pointerout', onPointerOut);
+  root.addEventListener('focusin', onFocusIn);
   root.addEventListener('pointerdown', onPointerDown);
   root.addEventListener('click', onClick);
   window.addEventListener('pointermove', onPointerMove);
@@ -695,7 +1156,9 @@ export function mount(root, ctx) {
       destroyed = true;
       cancelAnimationFrame(rafId);
       resizeObserver?.disconnect();
-      document.body.classList.remove('has-team-modal');
+      root.removeEventListener('pointerover', onPointerOver);
+      root.removeEventListener('pointerout', onPointerOut);
+      root.removeEventListener('focusin', onFocusIn);
       root.removeEventListener('pointerdown', onPointerDown);
       root.removeEventListener('click', onClick);
       window.removeEventListener('pointermove', onPointerMove);
