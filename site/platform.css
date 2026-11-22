@@ -2905,15 +2905,13 @@ body.has-prompt-modal { overflow: hidden; }
   --team-hole-bg: rgb(245 245 244 / 22%);
   --team-hole-edge: rgb(24 24 22 / 14%);
   --team-seam-dot: rgb(26 26 24 / 17%);
-  --team-stack-bg: linear-gradient(148deg, #fafcfd 0%, #edf3f6 58%, #e2ecef 100%);
-  --team-stack-border: rgb(21 67 84 / 36%);
-  --team-stack-thickness: #184e63;
-  --team-stack-face-bg: linear-gradient(172deg, #ffffff 0%, #f6f8fa 100%);
-  --team-stack-shadow: rgb(16 44 56 / 14%);
+  --team-stack-pvc-bg: linear-gradient(148deg, rgb(255 255 255 / 93%) 0%, rgb(243 244 246 / 88%) 52%, rgb(255 255 255 / 92%) 100%);
+  --team-stack-pvc-edge: rgb(24 24 22 / 19%);
+  --team-stack-pvc-thick: rgb(24 24 22 / 11%);
+  --team-stack-shadow: rgb(18 18 16 / 10%);
   --team-badge-w: 258px;
   --team-badge-h: 374px;
-  --stack-card-w: 216px;
-  --stack-card-h: 313px;
+  --deck-scale: 0.86;
   --stack-step: 15px;
 }
 :root[data-theme="dark"] .team-page {
@@ -2931,11 +2929,10 @@ body.has-prompt-modal { overflow: hidden; }
   --team-hole-bg: rgb(17 17 16 / 34%);
   --team-hole-edge: rgb(255 255 255 / 24%);
   --team-seam-dot: rgb(255 255 255 / 24%);
-  --team-stack-bg: linear-gradient(148deg, #273238 0%, #1c2428 58%, #151c20 100%);
-  --team-stack-border: rgb(155 204 222 / 26%);
-  --team-stack-thickness: #0c1317;
-  --team-stack-face-bg: linear-gradient(172deg, #f8f7f3 0%, #edece6 100%);
-  --team-stack-shadow: rgb(0 0 0 / 48%);
+  --team-stack-pvc-bg: linear-gradient(148deg, rgb(54 54 52 / 94%) 0%, rgb(36 36 34 / 92%) 52%, rgb(46 46 44 / 94%) 100%);
+  --team-stack-pvc-edge: rgb(255 255 255 / 25%);
+  --team-stack-pvc-thick: rgb(0 0 0 / 58%);
+  --team-stack-shadow: rgb(0 0 0 / 42%);
 }
 
 .team-stage {
@@ -2982,20 +2979,21 @@ body.has-prompt-modal { overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 360px;
+  min-height: 370px;
 }
 .team-deck {
   position: relative;
-  width: 340px;
-  height: calc(210px + (var(--stack-count, 12) - 1) * var(--stack-step));
+  width: 368px;
+  height: calc(226px + (var(--stack-count, 12) - 1) * var(--stack-step));
 }
+/* Pure orthographic parallel projection (no perspective()): all opposite edges stay strictly parallel. */
 .team-stack-slot {
   position: absolute;
   left: 50%;
-  top: calc(104px + var(--stack-i, 0) * var(--stack-step));
-  width: var(--stack-card-w);
-  height: var(--stack-card-h);
-  transform: translate(-50%, -50%) perspective(1100px) rotateX(56deg) rotateZ(-36deg);
+  top: calc(112px + var(--stack-i, 0) * var(--stack-step));
+  width: var(--team-badge-w);
+  height: var(--team-badge-h);
+  transform: translate(-50%, -50%) scale(var(--deck-scale)) rotateX(55deg) rotateZ(-36deg);
   transform-origin: center center;
   transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -3006,157 +3004,53 @@ body.has-prompt-modal { overflow: hidden; }
 }
 .team-overview.is-exiting .team-stack-slot:not(.is-extracted) {
   opacity: 0;
-  transform: translate(-50%, calc(-50% + 26px)) perspective(1100px) rotateX(56deg) rotateZ(-36deg) scale(0.95);
+  transform: translate(-50%, calc(-50% + 26px)) scale(calc(var(--deck-scale) * 0.95)) rotateX(55deg) rotateZ(-36deg);
 }
 
-.team-stack-card {
+.team-stack-card.team-pvc.is-stacked-card {
   position: relative;
+  top: auto;
+  left: auto;
   width: 100%;
   height: 100%;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 13px;
-  border: 1.5px solid var(--team-stack-border);
-  background: var(--team-stack-bg);
-  box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 55%),
-    -3px 4px 0 0 var(--team-stack-thickness),
-    -8px 12px 20px var(--team-stack-shadow);
-  cursor: pointer;
   text-align: left;
+  cursor: pointer;
+  background: var(--team-stack-pvc-bg);
+  border: 1px solid var(--team-stack-pvc-edge);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    inset 0 0 0 1px var(--team-pvc-inner),
+    -1.5px 2px 0 0 var(--team-stack-pvc-thick),
+    -7px 10px 18px var(--team-stack-shadow);
   transition:
     transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     border-color 0.25s ease,
     box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.25s ease;
+    opacity 0.25s ease;
 }
-:root[data-theme="dark"] .team-stack-card {
-  box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 14%),
-    -3px 4px 0 0 var(--team-stack-thickness),
-    -10px 14px 24px var(--team-stack-shadow);
-}
-.team-stack-slot.is-hovered .team-stack-card {
-  transform: translate3d(34px, -22px, 0);
+.team-stack-slot.is-hovered .team-stack-card.is-stacked-card {
+  transform: translate3d(42px, -22px, 0);
   border-color: var(--member-accent, #1628e2);
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 85%),
-    -4px 6px 0 0 var(--member-accent, #1628e2),
-    -18px 26px 34px rgb(16 32 48 / 24%);
+    inset 0 0 0 1px var(--team-pvc-inner),
+    -2px 3px 0 0 var(--member-accent, #1628e2),
+    -18px 24px 32px rgb(18 18 16 / 18%);
 }
-.team-stack-slot.is-above-hovered .team-stack-card {
-  transform: translate3d(-6px, -16px, 0);
+.team-stack-slot.is-above-hovered .team-stack-card.is-stacked-card {
+  transform: translate3d(-6px, -18px, 0);
 }
-.team-stack-slot.is-below-hovered .team-stack-card {
+.team-stack-slot.is-below-hovered .team-stack-card.is-stacked-card {
   transform: translate3d(0, 6px, 0);
-  opacity: 0.86;
+  opacity: 0.9;
 }
-.team-stack-slot.is-settled .team-stack-card {
+.team-stack-slot.is-settled .team-stack-card.is-stacked-card {
   border-color: var(--member-accent, #1628e2);
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 85%),
-    -3px 5px 0 0 var(--member-accent, #1628e2),
-    -12px 18px 26px rgb(16 32 48 / 20%);
-}
-.team-stack-card:focus-visible {
-  outline: 2px solid var(--member-accent, var(--accent));
-  outline-offset: 4px;
-}
-
-.team-stack-edge {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(125deg, rgb(255 255 255 / 32%) 0%, transparent 45%, rgb(22 90 114 / 12%) 100%);
-  pointer-events: none;
-}
-.team-stack-header {
-  flex: none;
-  height: 36px;
-  padding: 0 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.team-stack-hole {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid rgb(21 67 84 / 26%);
-  background: rgb(255 255 255 / 35%);
-}
-.team-stack-slot-cut {
-  width: 30px;
-  height: 8.5px;
-  border-radius: 999px;
-  border: 1px solid rgb(21 67 84 / 28%);
-  background: rgb(255 255 255 / 35%);
-}
-:root[data-theme="dark"] .team-stack-hole,
-:root[data-theme="dark"] .team-stack-slot-cut {
-  border-color: rgb(255 255 255 / 22%);
-  background: rgb(10 14 16 / 40%);
-}
-.team-stack-seam {
-  flex: none;
-  height: 5px;
-  margin: 0 3px;
-  border-top: 1px solid rgb(255 255 255 / 45%);
-  border-bottom: 1px solid rgb(21 67 84 / 16%);
-  background-image: radial-gradient(circle, rgb(21 67 84 / 22%) 0.65px, transparent 0.85px);
-  background-size: 4px 4px;
-}
-.team-stack-face {
-  flex: 1;
-  min-height: 0;
-  margin: 6px 9px 9px;
-  padding: 14px 14px 12px;
-  border-radius: 3px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  background: var(--team-stack-face-bg);
-  color: #141413;
-  box-shadow: inset 0 0 0 1px rgb(20 20 18 / 6%);
-}
-.team-stack-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-.team-stack-name {
-  font-family: var(--team-serif);
-  font-size: 26px;
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -0.025em;
-  color: #111110;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.team-stack-num {
-  flex: none;
-  font: 500 10px/1 var(--mono);
-  letter-spacing: 0.08em;
-  color: rgb(20 20 18 / 38%);
-}
-.team-stack-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.team-stack-bar {
-  width: 24px;
-  height: 3px;
-  border-radius: 999px;
-  background: var(--member-accent, #1628e2);
-}
-.team-stack-group {
-  font: 10px/1.2 var(--sans);
-  color: #5b5a55;
+    inset 0 0 0 1px var(--team-pvc-inner),
+    -2px 2.5px 0 0 var(--member-accent, #1628e2),
+    -12px 16px 24px rgb(18 18 16 / 15%);
 }
 
 /* Right side: 团队 Team roster (matches sketch typography & 3-column layout) */
@@ -3717,12 +3611,11 @@ body.has-prompt-modal { overflow: hidden; }
     padding-inline: 24px;
   }
   .team-page {
-    --stack-card-w: 184px;
-    --stack-card-h: 267px;
+    --deck-scale: 0.74;
     --stack-step: 13px;
   }
-  .team-deck { width: 280px; height: calc(185px + (var(--stack-count, 12) - 1) * var(--stack-step)); }
-  .team-stack-slot { top: calc(92px + var(--stack-i, 0) * var(--stack-step)); }
+  .team-deck { width: 310px; height: calc(194px + (var(--stack-count, 12) - 1) * var(--stack-step)); }
+  .team-stack-slot { top: calc(96px + var(--stack-i, 0) * var(--stack-step)); }
   .team-corner {
     max-width: 38vw;
     font-size: 13.5px;
@@ -3756,18 +3649,11 @@ body.has-prompt-modal { overflow: hidden; }
     inset: 0;
   }
   .team-page {
-    --stack-card-w: 156px;
-    --stack-card-h: 227px;
     --stack-step: 10px;
   }
-  .team-deck-zone { min-height: 256px; }
-  .team-deck { width: 240px; height: calc(156px + (var(--stack-count, 12) - 1) * var(--stack-step)); }
-  .team-stack-slot { top: calc(78px + var(--stack-i, 0) * var(--stack-step)); }
-  .team-stack-header { height: 28px; padding: 0 12px; }
-  .team-stack-hole { width: 9px; height: 9px; }
-  .team-stack-slot-cut { width: 24px; height: 7px; }
-  .team-stack-face { margin: 4px 7px 7px; padding: 10px 10px 8px; }
-  .team-stack-name { font-size: 19px; }
+  .team-deck-zone { min-height: 266px; }
+  .team-deck { width: 260px; height: calc(168px + (var(--stack-count, 12) - 1) * var(--stack-step)); }
+  .team-stack-slot { top: calc(84px + var(--stack-i, 0) * var(--stack-step)); }
   .team-roster-grid { gap: 6px 12px; }
   .team-roster-name { font-size: 14.5px; }
 }
@@ -3776,6 +3662,7 @@ body.has-prompt-modal { overflow: hidden; }
   .team-page {
     --team-badge-w: 214px;
     --team-badge-h: 312px;
+    --deck-scale: 0.72;
   }
   .team-corner {
     top: 18px;
@@ -3845,8 +3732,7 @@ body.has-prompt-modal { overflow: hidden; }
   .team-page {
     --team-badge-w: 196px;
     --team-badge-h: 288px;
-    --stack-card-w: 136px;
-    --stack-card-h: 198px;
+    --deck-scale: 0.68;
     --stack-step: 9px;
   }
   .team-roster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

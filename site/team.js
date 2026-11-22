@@ -332,17 +332,18 @@ export function mount(root, ctx) {
     const w = stageRect.width;
     const narrow = w <= 640;
     const tiny = w <= 360;
+    const tablet = w <= 960;
     const badgeW = tiny ? 196 : narrow ? 214 : 258;
     const badgeH = tiny ? 288 : narrow ? 312 : 374;
     const slotY = narrow ? 19 : 22;
-    const deckCardW = tiny ? 136 : narrow ? 156 : 216;
+    const deckScale = tiny ? 0.68 : narrow ? 0.72 : tablet ? 0.74 : 0.86;
     return {
       narrow,
       badgeW,
       badgeH,
       slotY,
       centerOffsetY: badgeH * 0.5 - slotY,
-      deckScale: deckCardW / badgeW,
+      deckScale,
       claspLen: narrow ? 58 : 68,
     };
   }
@@ -491,11 +492,10 @@ export function mount(root, ctx) {
     pivotEl.style.opacity = '1';
     pivotEl.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${deg.toFixed(3)}deg)`;
 
-    const rx = tiltX.toFixed(2);
-    const ry = tiltY.toFixed(2);
     const scale = (1 + lift * 0.018).toFixed(4);
-    pvcEl.style.transform = `perspective(980px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${scale})`;
-    const sheenShift = clamp(50 + deg * 1.6 + tiltY * 2.4, 10, 90);
+    // Keep strictly parallel orthographic lines (no vanishing-point perspective distortion).
+    pvcEl.style.transform = `scale(${scale})`;
+    const sheenShift = clamp(50 + deg * 1.6 + tiltY * 3.2, 10, 90);
     pvcEl.style.setProperty('--sheen-x', `${sheenShift.toFixed(1)}%`);
 
     const sx = 20 + lift * 16 + Math.sin(theta) * 8;
@@ -551,8 +551,8 @@ export function mount(root, ctx) {
       const curX = lerp(anim.startX, restX, flightP) + sweepOvershoot;
       const curY = lerp(anim.startY, restY, flightP) + liftY + arcY;
 
-      // Isometric tilt smoothly unfolds to 0 while pivot rotation eases into the resting swing angle.
-      const isoX = lerp(56, 0, unfoldP);
+      // Orthographic parallel-projection unfold (no perspective vanishing point — all edges stay parallel).
+      const isoX = lerp(55, 0, unfoldP);
       const isoZ = lerp(-36, 0, unfoldP);
       const isoScale = lerp(anim.deckScale, 1, unfoldP);
       const swingLean = -16 * Math.sin(flightP * Math.PI);
@@ -561,11 +561,11 @@ export function mount(root, ctx) {
 
       pivotEl.style.opacity = '1';
       pivotEl.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0) rotate(${curDeg.toFixed(3)}deg)`;
-      pvcEl.style.transform = `perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+      pvcEl.style.transform = `scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
       pvcEl.style.setProperty('--sheen-x', `${(22 + flightP * 48).toFixed(1)}%`);
 
       const shadowLift = 0.4 + 0.6 * Math.sin(rawP * Math.PI);
-      shadowEl.style.transform = `translate3d(${(18 + shadowLift * 18).toFixed(1)}px, ${(20 + shadowLift * 20).toFixed(1)}px, 0) perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+      shadowEl.style.transform = `translate3d(${(18 + shadowLift * 18).toFixed(1)}px, ${(20 + shadowLift * 20).toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
       shadowEl.style.filter = `blur(${(20 + shadowLift * 14).toFixed(1)}px)`;
       shadowEl.style.opacity = (0.72 + unfoldP * 0.2).toFixed(3);
 
@@ -606,16 +606,16 @@ export function mount(root, ctx) {
       const curTheta = lerp(anim.fromTheta, 0, flightP);
       const curDeg = (curTheta * 180) / Math.PI;
 
-      const isoX = lerp(0, 56, foldP);
+      const isoX = lerp(0, 55, foldP);
       const isoZ = lerp(0, -36, foldP);
       const isoScale = lerp(1, anim.deckScale, foldP);
 
       pivotEl.style.opacity = '1';
       pivotEl.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0) rotate(${curDeg.toFixed(3)}deg)`;
-      pvcEl.style.transform = `perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+      pvcEl.style.transform = `scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
 
       const shadowFade = 1 - foldP * 0.45;
-      shadowEl.style.transform = `translate3d(${lerp(22, 10, foldP).toFixed(1)}px, ${lerp(24, 14, foldP).toFixed(1)}px, 0) perspective(1100px) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg) scale(${isoScale.toFixed(4)})`;
+      shadowEl.style.transform = `translate3d(${lerp(22, 10, foldP).toFixed(1)}px, ${lerp(24, 14, foldP).toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
       shadowEl.style.filter = `blur(${lerp(26, 14, foldP).toFixed(1)}px)`;
       shadowEl.style.opacity = (0.85 * shadowFade).toFixed(3);
 
@@ -818,27 +818,11 @@ export function mount(root, ctx) {
   }
 
   function stackCardHtml(m, i) {
-    // Stack from bottom (highest index) to top (index 0 = kme7) so top cards naturally overlap lower cards.
+    // Reuse the exact same PVC badge markup inside each stacked card so overview and detail share one physical card.
     const zIndex = MEMBERS.length - i;
     return `<div class="team-stack-slot" data-stack-index="${i}" style="--stack-i:${i};--member-accent:${esc(m.accentColor)};z-index:${zIndex}">
-      <button type="button" class="team-stack-card" data-open-member="${i}" aria-label="${esc(m.name)}" data-i18n-ignore>
-        <span class="team-stack-edge" aria-hidden="true"></span>
-        <span class="team-stack-header" aria-hidden="true">
-          <span class="team-stack-hole"></span>
-          <span class="team-stack-slot-cut"></span>
-          <span class="team-stack-hole"></span>
-        </span>
-        <span class="team-stack-seam" aria-hidden="true"></span>
-        <span class="team-stack-face">
-          <span class="team-stack-top">
-            <span class="team-stack-name">${esc(m.name)}</span>
-            <span class="team-stack-num">${esc(m.index)}</span>
-          </span>
-          <span class="team-stack-foot">
-            <span class="team-stack-bar"></span>
-            <span class="team-stack-group">${esc(english() ? GROUP_META[m.group].singularEn : GROUP_META[m.group].singularZh)}</span>
-          </span>
-        </span>
+      <button type="button" class="team-stack-card team-pvc is-stacked-card" data-open-member="${i}" aria-label="${esc(m.name)}" data-i18n-ignore>
+        ${pvcCardInnerHtml(m)}
       </button>
     </div>`;
   }
