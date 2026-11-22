@@ -3628,6 +3628,7 @@ body.has-prompt-modal { overflow: hidden; }
   white-space: nowrap;
 }
 .team-pill.is-ink { background: #161615; }
+.team-pill.is-accent { background: var(--accent); }
 .team-pill.is-red { background: #d63122; }
 .team-pill.is-blue { background: #3122b8; }
 

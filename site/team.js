@@ -3,7 +3,7 @@ import { locale, setPageTitle } from './i18n.js';
 import { $, $$, esc, icon, reducedMotion } from './ui.js';
 
 const GROUP_META = {
-  lead: { zh: '核心负责人', en: 'Core Leads', singularZh: '核心负责人', singularEn: 'Core Lead', pillTone: 'ink' },
+  lead: { zh: '核心负责人', en: 'Core Leads', singularZh: '核心负责人', singularEn: 'Core Lead', pillTone: 'accent' },
   member: { zh: '团队成员', en: 'Team Members', singularZh: '团队成员', singularEn: 'Team Member', pillTone: 'blue' },
   honorary: { zh: '荣誉成员', en: 'Honorary Members', singularZh: '荣誉成员', singularEn: 'Honorary Member', pillTone: 'red' },
 };
@@ -40,13 +40,6 @@ const MEMBERS = [
     currentLabelEn: 'Currently',
     currentValueZh: '产品与开发 @ 亿模亿样',
     currentValueEn: 'Product & Dev @ ArenaGalleri',
-    tagsLabelZh: '参与构建',
-    tagsLabelEn: 'Projects',
-    pills: [
-      { zh: '亿模亿样', en: 'ArenaGalleri', tone: 'ink' },
-      { zh: '偏见试验场', en: 'Arena of Bias', tone: 'red' },
-      { zh: '核心开发', en: 'Core Dev', tone: 'blue' },
-    ],
   },
   {
     id: 'shadow',
