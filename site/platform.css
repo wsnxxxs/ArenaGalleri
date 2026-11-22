@@ -2898,7 +2898,9 @@ body.has-prompt-modal { overflow: hidden; }
   --team-strap: #1c1c1b;
   --team-strap-hi: rgb(255 255 255 / 12%);
   --team-strap-shadow: rgb(16 16 15 / 17%);
-  --team-pvc-shadow: rgb(16 16 15 / 17%);
+  --team-pvc-shadow: rgb(16 16 15 / 11%);
+  --team-pvc-shadow-mid: rgb(16 16 15 / 6%);
+  --team-pvc-shadow-outer: rgb(16 16 15 / 4%);
   --team-pvc-bg: linear-gradient(148deg, rgb(255 255 255 / 78%) 0%, rgb(241 243 246 / 62%) 50%, rgb(255 255 255 / 74%) 100%);
   --team-pvc-edge: rgb(24 24 22 / 17%);
   --team-pvc-inner: rgb(255 255 255 / 90%);
@@ -2922,7 +2924,9 @@ body.has-prompt-modal { overflow: hidden; }
   --team-strap: #292927;
   --team-strap-hi: rgb(255 255 255 / 18%);
   --team-strap-shadow: rgb(0 0 0 / 52%);
-  --team-pvc-shadow: rgb(0 0 0 / 56%);
+  --team-pvc-shadow: rgb(0 0 0 / 46%);
+  --team-pvc-shadow-mid: rgb(0 0 0 / 26%);
+  --team-pvc-shadow-outer: rgb(0 0 0 / 15%);
   --team-pvc-bg: linear-gradient(148deg, rgb(255 255 255 / 22%) 0%, rgb(210 216 226 / 9%) 48%, rgb(255 255 255 / 17%) 100%);
   --team-pvc-edge: rgb(255 255 255 / 26%);
   --team-pvc-inner: rgb(255 255 255 / 38%);
@@ -3347,8 +3351,11 @@ body.has-prompt-modal { overflow: hidden; }
   left: calc(var(--team-badge-w) / -2);
   width: var(--team-badge-w);
   height: var(--team-badge-h);
-  border-radius: 16px;
+  border-radius: 15px;
   background: var(--team-pvc-shadow);
+  box-shadow:
+    0 0 0 3px var(--team-pvc-shadow-mid),
+    0 0 12px 4px var(--team-pvc-shadow-outer);
   pointer-events: none;
   will-change: transform, filter, opacity;
 }

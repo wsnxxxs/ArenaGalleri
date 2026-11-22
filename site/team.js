@@ -497,6 +497,21 @@ export function mount(root, ctx) {
     }
   }
 
+  // Crisp directional cast shadow matching the lanyard's upper-left light vector and semi-hard edge.
+  function renderCardShadow(rad, lift, opacityScale = 1, extraTransform = '') {
+    if (!shadowEl) return;
+    const worldX = 24 + lift * 14;
+    const worldY = 16 + lift * 14;
+    const cosT = Math.cos(rad);
+    const sinT = Math.sin(rad);
+    const localX = worldX * cosT + worldY * sinT;
+    const localY = -worldX * sinT + worldY * cosT;
+    const blur = 3.5 + lift * 2.5;
+    shadowEl.style.transform = `translate3d(${localX.toFixed(1)}px, ${localY.toFixed(1)}px, 0)${extraTransform}`;
+    shadowEl.style.filter = `blur(${blur.toFixed(1)}px)`;
+    shadowEl.style.opacity = ((0.96 - lift * 0.14) * opacityScale).toFixed(3);
+  }
+
   // Shared shadow + sheen formula so the final transition frame matches the first live physics frame identically!
   function applyDetailVisuals() {
     if (!pivotEl || !pvcEl || !shadowEl || !claspEl) return;
@@ -512,12 +527,7 @@ export function mount(root, ctx) {
     const sheenShift = clamp(50 + deg * 1.6 + tiltY * 3.2, 10, 90);
     pvcEl.style.setProperty('--sheen-x', `${sheenShift.toFixed(1)}%`);
 
-    const sx = 20 + lift * 16 + Math.sin(theta) * 8;
-    const sy = 22 + lift * 18 + Math.abs(Math.sin(theta)) * 4;
-    const blur = 26 + lift * 14;
-    shadowEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0)`;
-    shadowEl.style.filter = `blur(${blur.toFixed(1)}px)`;
-    shadowEl.style.opacity = (0.92 - lift * 0.2).toFixed(3);
+    renderCardShadow(theta, lift, 1);
 
     claspEl.style.opacity = '1';
     claspEl.style.transform = 'translate3d(0, 0, 0) scale(1)';
@@ -588,17 +598,13 @@ export function mount(root, ctx) {
       const endSheen = clamp(50 + curDeg * 1.6, 10, 90);
       pvcEl.style.setProperty('--sheen-x', `${lerp(42, endSheen, unfoldP).toFixed(1)}%`);
 
+      const lift = clamp(Math.hypot(curX - restX, curY - restY) / 160, 0, 1);
       // Match applyDetailVisuals() shadow formula identically at unfoldP=1 & rawP=1 (zero shadow snap!).
-      const sx = 20 + Math.sin(curTheta) * 8;
-      const sy = 22 + Math.abs(Math.sin(curTheta)) * 4;
-      shadowEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
-      shadowEl.style.filter = 'blur(26px)';
-      shadowEl.style.opacity = (0.92 * easeOutCubic(unfoldP)).toFixed(3);
+      renderCardShadow(curTheta, lift, easeOutCubic(unfoldP), ` scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`);
 
       claspEl.style.opacity = claspP.toFixed(3);
       claspEl.style.transform = `translate3d(0, ${lerp(-24, 0, claspP).toFixed(1)}px, 0) scale(${lerp(0.88, 1, claspP).toFixed(3)})`;
 
-      const lift = clamp(Math.hypot(curX - restX, curY - restY) / 160, 0, 1);
       renderLanyard(curX, curY, curTheta, lanyardP, lift, (restX - anim.startX) * (1 - flightP) * 0.9);
       detailRevealEl.style.setProperty('--wipe', `${(wipeP * 100).toFixed(2)}%`);
 
@@ -659,11 +665,7 @@ export function mount(root, ctx) {
         pvcEl.style.transform = `scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
         pvcEl.style.setProperty('--stack-mix', foldP.toFixed(3));
 
-        const sx = 20 + Math.sin(curTheta) * 8;
-        const sy = 22 + Math.abs(Math.sin(curTheta)) * 4;
-        shadowEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
-        shadowEl.style.filter = 'blur(26px)';
-        shadowEl.style.opacity = (0.92 * (1 - easeOutCubic(foldP))).toFixed(3);
+        renderCardShadow(curTheta, 0, 1 - easeOutCubic(foldP), ` scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`);
 
         claspEl.style.opacity = claspP.toFixed(3);
         claspEl.style.transform = `translate3d(0, ${lerp(0, -24, 1 - claspP).toFixed(1)}px, 0) scale(${lerp(1, 0.88, 1 - claspP).toFixed(3)})`;
