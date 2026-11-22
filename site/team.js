@@ -55,6 +55,10 @@ const MEMBERS = [
     name: 'Shadow',
     accentColor: '#1f3fd1',
     restAngle: -6.4,
+    avatar: 'assets/team/shadow.jpg',
+    avatarPos: '46% 42%',
+    introLinesZh: ['暂无'],
+    introLinesEn: ['TBD'],
     cardTitle: { mode: 'single-dot', main: 'Shadow', size: 'md' },
   },
   {
@@ -64,6 +68,10 @@ const MEMBERS = [
     name: '无机酸',
     accentColor: '#0e6f7c',
     restAngle: -6.8,
+    avatar: 'assets/team/wujisuan.jpg',
+    avatarPos: '50% 48%',
+    introLinesZh: ['我们亿模亿样要组一辈子乐队！'],
+    introLinesEn: ['ArenaGalleri is going to be a band for life!'],
     cardTitle: { mode: 'inline', main: '无机', accent: '酸', size: 'cjk-md' },
   },
   {
@@ -127,6 +135,10 @@ const MEMBERS = [
     name: '一只草履虫',
     accentColor: '#1b7a5e',
     restAngle: -6.8,
+    avatar: 'assets/team/caolvchong.jpg',
+    avatarPos: '50% 48%',
+    introLinesZh: ['我能不介绍自己吗？（）'],
+    introLinesEn: ['Can I skip introducing myself? ()'],
     cardTitle: { mode: 'stacked', top: '一只', bottom: '草履虫', size: 'stack-cjk-sm' },
   },
   {
@@ -244,7 +256,8 @@ function profileExtraHtml(m) {
   const hasIntro = Array.isArray(lines) && lines.length > 0;
   if (!hasAvatar && !hasIntro) return '';
   const label = en ? (m.introLabelEn || 'About') : (m.introLabelZh || '自我介绍');
-  return `${hasAvatar ? `<figure class="team-profile-avatar"><img src="${esc(m.avatar)}" alt="${esc(en ? `${m.name} avatar` : `${m.name} 头像`)}" decoding="async" draggable="false" /></figure>` : ''}${hasIntro ? `<aside class="team-profile-intro" aria-label="${esc(label)}"><p class="team-profile-intro-label">${esc(label)}</p><p class="team-profile-intro-body">${lines.map((line) => esc(line)).join('<br>')}</p></aside>` : ''}`;
+  const pos = m.avatarPos ? ` style="object-position:${esc(m.avatarPos)}"` : '';
+  return `${hasAvatar ? `<figure class="team-profile-avatar"><img src="${esc(m.avatar)}" alt="${esc(en ? `${m.name} avatar` : `${m.name} 头像`)}"${pos} decoding="async" draggable="false" /></figure>` : ''}${hasIntro ? `<aside class="team-profile-intro" aria-label="${esc(label)}"><p class="team-profile-intro-label">${esc(label)}</p><p class="team-profile-intro-body">${lines.map((line) => esc(line)).join('<br>')}</p></aside>` : ''}`;
 }
 
 function hasProfileExtra(m) {
