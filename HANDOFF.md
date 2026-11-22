@@ -1,3 +1,7 @@
+## 2026-11-23 · 试运行站成员照片与赞赏码不入库
+
+- 用户决定：`site/assets/team/*.jpg` 16 张成员照片和个人赞赏码 `site/assets/support-qr.jpg` 不进公开仓库，已从本分支历史去掉并加入 `.gitignore`。原图在服务器 `/root/private-assets/gallery-guided-trial/`，部署试运行站时构建后覆盖到产物上。本分支不合并 `main`，试运行站从本分支部署。详见 `docs/archive/2026-11-23-vps-sync-wsnxxxs.md` 文末。
+
 ## 2026-11-23 · 服务器现场补录入库（未推送、未部署）
 
 - 正式站现场四轮（work-boost、站点验证文件、Sub2API 登录页、音乐类）补录到 `sync/vps-formal-20261123`。试运行站另补录 `lb/integration` 和 37 轮改动到 `sync/vps-trial-20261123`。漂移检查显示两站源码与分支一致，正式站只差 main 上未部署的引导试运行提交。试运行改动多数未门控，不能直接合并 main。`AGENTS.md` 写明只从提交上线。[本轮归档](docs/archive/2026-11-23-vps-sync-wsnxxxs.md)

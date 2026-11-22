@@ -28,3 +28,7 @@ integration.json
 /prompts/
 /captures/
 /assets/
+
+# Personal photos and payment code for the guided trial stay out of the public repo; deploys copy them from the server.
+site/assets/team/*.jpg
+site/assets/support-qr.jpg
