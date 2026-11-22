@@ -33,3 +33,8 @@
 ## 遗留物
 
 - 工作树 `.wt/sync-gallery-20261123`（试运行分支）、`.wt/gallery-live-rule-20261123`（正式分支）。本地 `main` 的他人未提交改动和未跟踪文件未动。服务器 `.nojekyll` 只在线上。
+
+## 决策更新（2026-11-23）
+
+- 用户决定：成员照片（`site/assets/team/*.jpg`，16 张）和个人赞赏码 `site/assets/support-qr.jpg` 不进公开仓库。试运行分支已从历史中去掉这 17 个文件，并加入 `.gitignore`；团队徽章和螺旋插画仍在仓库。
+- 原图保存在服务器 `/root/private-assets/gallery-guided-trial/`，与 2026-11-23 线上文件逐个核对一致。部署试运行站时，构建后把该目录覆盖到产物上。漂移检查需加 `--exclude assets/support-qr.jpg`；`assets/team/` 下的照片会显示为「只在服务器」，属预期。
