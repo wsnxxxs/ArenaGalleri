@@ -8,6 +8,7 @@
 - `datapack.json`、`integration.json` 是忽略的本地配置。公开仓库只保留占位示例，不能加入真实数据仓库地址、数据版本历史或凭据。
 - 公开 CI 只检查源码及合成数据测试；禁止下载、缓存或上传私有包，不恢复 Pages 发布。
 - `dist/`、`.datapack/`、`.integration/`、`output/`、`node_modules/`、日志和本地业务数据是生成物，不提交、不手改。禁止无差别清理。
+- 不在服务器上直接改线上文件，不从工作区、暂存目录或手改文件上线。正式站只部署已合并 `main` 的提交，管理员试运行站可部署已推送的分支提交。部署前后用后端仓库的 `scripts/live-drift.mjs` 核对现场并记入 `/root/deploy-log.tsv`，做法见后端仓库 `docs/deploy.md` 第 0 节。
 - 他人未提交、未跟踪的文件不改、不删。做法或范围不清时先确认；不把文档中的候选想法当作任务。
 - 未获用户授权不 commit 或 push。获准后每轮一条英文简单句提交，身份使用负责人的 GitHub 用户名和 noreply 邮箱。
 - 修改后运行 `npm run check`、`npm test`；有数据读取权限时再运行 `npm run build`、`CI=1 npm run check:intake`，目视核对影响页面。如实记录未执行的验证，不把构建成功称为全部交互通过。
