@@ -113,15 +113,16 @@ function applyTaskSolveStatus(taskId, status) {
 
 const curatedSaving = new Set();
 const isCuratedTask = task => Boolean(task?.curatedSectionId);
+const CURATED_STAR_SVG = '<svg class="curated-star-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.4l2.72 5.66 6.23.86-4.54 4.35 1.11 6.19L12 16.48l-5.52 2.98 1.11-6.19-4.54-4.35 6.23-.86L12 2.4z" fill="currentColor"/><path d="M12 2.4l2.72 5.66 6.23.86-4.54 4.35 1.11 6.19L12 16.48V2.4z" fill="rgb(255 255 255 / 22%)"/></svg>';
 function taskCuratedStarHtml(task) {
-  return `<span class="task-curated-star" data-curated-star="${esc(task.id)}" role="img" aria-label="精选题" title="精选题"${isCuratedTask(task) ? '' : ' hidden'}>🌟</span>`;
+  return `<span class="task-curated-star" data-curated-star="${esc(task.id)}" role="img" aria-label="精选题" title="精选题"${isCuratedTask(task) ? '' : ' hidden'}>${CURATED_STAR_SVG}</span>`;
 }
 function taskCuratedSidebarHtml(task) {
   if (globalThis.SAME_PROMPT_CONFIG?.guidedVoting !== true) return '';
-  if (!isStaff()) return isCuratedTask(task) ? '<p class="curated-side-badge"><span aria-hidden="true">🌟</span> 精选题</p>' : '';
+  if (!isStaff()) return isCuratedTask(task) ? `<p class="curated-side-badge">${CURATED_STAR_SVG}<span>精选题</span></p>` : '';
   const supported = CATEGORIES.some(category => category.name === task.category && category.judging === 'vote');
   const saving = curatedSaving.has(task.id);
-  return `<div class="curated-side"><label><input type="checkbox" data-task-curated="${esc(task.id)}"${isCuratedTask(task) ? ' checked' : ''}${saving || !supported ? ' disabled' : ''}><span>是否是精选题</span><span class="curated-side-star" aria-hidden="true">🌟</span></label><p>${saving ? '正在保存…' : !supported ? '该题目类型暂不支持精选' : task.category === '音乐' ? '音乐可先标为精选，榜单暂不计分。' : '精选题会优先展示，并在题库标星。'}</p></div>`;
+  return `<div class="curated-side"><label><input type="checkbox" data-task-curated="${esc(task.id)}"${isCuratedTask(task) ? ' checked' : ''}${saving || !supported ? ' disabled' : ''}><span>是否是精选题</span><span class="curated-side-star" aria-hidden="true">${CURATED_STAR_SVG}</span></label><p>${saving ? '正在保存…' : !supported ? '该题目类型暂不支持精选' : task.category === '音乐' ? '音乐可先标为精选，榜单暂不计分。' : '精选题会优先展示，并在题库标星。'}</p></div>`;
 }
 function applyTaskCurated(taskId, sectionId) {
   for (const list of [DATA?.tasks, platform.questions]) {
@@ -652,6 +653,16 @@ const footer = () => `<footer class="footer"><div class="wrap footer-in">
   <p class="footer-legal">© ${new Date().getFullYear()} ${esc(DATA.title)} · 站内作品由 AI 模型生成，仅供比较与学习参考 · 引用或转载请<a href="#/terms#cite">注明来源</a> · <a href="mailto:${CONTACT}">${CONTACT}</a>${beianLink() ? ` · ${beianLink()}` : ''}</p>
 </div></footer>`;
 
+let draftOrnamentUid = 0;
+function draftOrnamentHtml(extraClass = '') {
+  const uid = ++draftOrnamentUid;
+  const hatchId = `draft-hatch-${uid}`;
+  const fadeId = `draft-fade-${uid}`;
+  const maskId = `draft-mask-${uid}`;
+  // 100% original ArenaGalleri drafting motif: one prompt beam projecting onto stepped parallel specimen frames.
+  return `<span class="draft-ornament${extraClass ? ` ${extraClass}` : ''}" aria-hidden="true"><svg viewBox="0 0 280 78" fill="none"><defs><pattern id="${hatchId}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="5" stroke="var(--draft-hatch)" stroke-width="1"/></pattern><linearGradient id="${fadeId}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#000"/><stop offset="18%" stop-color="#fff"/><stop offset="94%" stop-color="#fff"/><stop offset="100%" stop-color="#000"/></linearGradient><mask id="${maskId}"><rect x="0" y="0" width="280" height="78" fill="url(#${fadeId})"/></mask></defs><g mask="url(#${maskId})" stroke="var(--draft-line)" stroke-width="0.7"><line x1="0" y1="8" x2="278" y2="8"/><line x1="0" y1="26" x2="278" y2="26"/><line x1="0" y1="54" x2="278" y2="54"/><line x1="0" y1="70" x2="278" y2="70"/><line x1="58" y1="2" x2="58" y2="76"/><line x1="128" y1="2" x2="128" y2="76"/><line x1="196" y1="2" x2="196" y2="76"/><line x1="252" y1="2" x2="252" y2="76"/></g><g stroke="var(--draft-dash)" stroke-width="0.95" stroke-dasharray="2.2 2.6" stroke-linecap="round"><line x1="94" y1="17" x2="146" y2="17"/><line x1="128" y1="17" x2="128" y2="42"/><line x1="128" y1="42" x2="146" y2="42"/></g><rect x="58" y="11" width="36" height="12" rx="2.5" fill="var(--draft-fill)" stroke="var(--draft-stroke)" stroke-width="1.05"/><line x1="64" y1="17" x2="88" y2="17" stroke="var(--draft-stroke)" stroke-width="1.1" stroke-linecap="round"/><g><rect x="192" y="10" width="60" height="42" rx="4" fill="var(--draft-fill)" stroke="var(--draft-dash)" stroke-width="1" stroke-dasharray="2.4 2.4"/><rect x="169" y="18" width="60" height="42" rx="4" fill="var(--draft-fill)" stroke="var(--draft-stroke)" stroke-width="1"/><rect x="146" y="26" width="60" height="42" rx="4" fill="var(--draft-fill)" stroke="var(--draft-stroke)" stroke-width="1.1"/><rect x="152" y="32" width="48" height="22" rx="2" fill="url(#${hatchId})" stroke="var(--draft-line)" stroke-width="0.8"/><line x1="152" y1="61" x2="174" y2="61" stroke="var(--draft-stroke)" stroke-width="1.4" stroke-linecap="round"/><rect x="184" y="58.5" width="16" height="4.8" rx="1.4" fill="var(--accent)"/></g><g stroke="var(--draft-stroke)" stroke-width="0.85"><line x1="55" y1="8" x2="61" y2="8"/><line x1="58" y1="5" x2="58" y2="11"/><line x1="249" y1="70" x2="255" y2="70"/><line x1="252" y1="67" x2="252" y2="73"/></g></svg></span>`;
+}
+
 // A shared two-column shell keeps every platform page in the same exhibition. The top bar is the
 // site navigation and carries the way back; the sidebar only holds this section's own views.
 function pageStart({ title, description, descriptionOriginal = false, section, meta = '', nav = '', heading = title, headingOriginal = false, caption = '', crumbs = [{ text: title }] }) {
@@ -659,7 +670,7 @@ function pageStart({ title, description, descriptionOriginal = false, section, m
     <aside class="app-sidebar">
       <h1>${esc(title)}</h1><p class="side-intro"${descriptionOriginal ? ' data-i18n-ignore' : ''}>${esc(description)}</p>${meta}${nav}
       <div class="side-bottom"><p>同一份提示词，<br>看见不同的答案。</p></div>
-    </aside><main class="workspace page"><div class="collection-heading"><h2${headingOriginal ? ' data-i18n-ignore' : ''}>${esc(heading)}</h2>${caption || '<span class="collection-caption">亿模亿样 · 模型作品对比</span>'}</div>`;
+    </aside><main class="workspace page"><div class="collection-heading${caption ? '' : ' has-draft'}"><h2${headingOriginal ? ' data-i18n-ignore' : ''}>${esc(heading)}</h2>${caption || draftOrnamentHtml()}</div>`;
 }
 // Views of the current section in a platform sidebar: [href, glyph, text, current, count].
 const sideNav = (label, links) => `<nav class="side-nav section-nav" aria-label="${esc(label)}">${links.map(([href, glyph, text, current, count]) => `<a class="side-link" href="${esc(href)}"${current ? ' aria-current="page"' : ''}>${icon(glyph)}${esc(text)}${count === undefined ? '' : `<span class="nav-count">${count}</span>`}</a>`).join('')}</nav>`;
@@ -2385,7 +2396,7 @@ function createViewer(t) {
 // ---- router ---------------------------------------------------------------------------
 function notFound(msg) {
   setPageTitle(['找不到页面', DATA.title]);
-  root.innerHTML = `${header()}<main class="page wrap empty-page"><p class="kicker"><span class="num">404</span></p><h1>找不到页面</h1><p>${esc(msg)}</p><a class="btn primary" href="#/">回到首页${icon('right')}</a></main>`;
+  root.innerHTML = `${header()}<main class="page wrap empty-page">${draftOrnamentHtml('is-empty-corner')}<p class="kicker"><span class="num">404</span></p><h1>找不到页面</h1><p>${esc(msg)}</p><a class="btn primary" href="#/">回到首页${icon('right')}</a></main>`;
 }
 
 // Platform pages live in their own modules and need the server; task ids never use these names.

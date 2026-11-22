@@ -7,12 +7,12 @@
 :root { --ease-out: cubic-bezier(.16, 1, .3, 1); --ease-in-out: cubic-bezier(.65, 0, .35, 1); }
 
 /* ---- navigation ---- */
-/* The old screen dims away under a breath of blur; the new one fades up while its items rise. */
-::view-transition-old(root) { animation: motion-vt-out .24s cubic-bezier(.4, 0, 1, 1) both; }
-::view-transition-new(root) { animation: motion-vt-in .4s var(--ease-out) both; }
-@keyframes motion-vt-out { to { opacity: 0; filter: blur(3px); transform: scale(.996); } }
-@keyframes motion-vt-in { from { opacity: 0; } }
-::view-transition-group(topbar), ::view-transition-group(sidebar) { animation-duration: .34s; animation-timing-function: var(--ease-out); }
+/* Crisp zero-ghost route handoff: the old view clears cleanly before the new one settles in. */
+::view-transition-old(root) { animation: motion-vt-out .13s cubic-bezier(.4, 0, 1, 1) both; }
+::view-transition-new(root) { animation: motion-vt-in .24s var(--ease-out) .05s both; }
+@keyframes motion-vt-out { to { opacity: 0; } }
+@keyframes motion-vt-in { from { opacity: 0; transform: translateY(4px); } }
+::view-transition-group(topbar), ::view-transition-group(sidebar) { animation-duration: .24s; animation-timing-function: var(--ease-out); }
 /* The work frame: a card's picture grows into the viewer's stage and shrinks back on return. */
 ::view-transition-group(work-hero) { z-index: 1; animation-duration: .6s; animation-timing-function: var(--ease-out); }
 ::view-transition-old(work-hero), ::view-transition-new(work-hero) { width: 100%; height: 100%; object-fit: cover; animation-duration: .6s; animation-timing-function: var(--ease-out); }
@@ -38,7 +38,7 @@
 /* A hairline under the top edge while a navigation is still busy (motion.js). */
 .route-progress {
   position: fixed; top: 0; left: 0; z-index: 90; width: 100%; height: 2px; pointer-events: none;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 15%, transparent), var(--ink));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 12%, transparent), var(--ink) 78%, var(--accent));
   transform: scaleX(0); transform-origin: 0 50%; opacity: 0; transition: opacity .45s ease .1s;
 }
 .route-progress.is-on { opacity: 1; transition-duration: .2s; transition-delay: 0s; }

@@ -13,12 +13,14 @@ a { text-decoration: none; }
    their own layers, so an unchanged shell stays still while the content changes. */
 #app > .topbar { view-transition-name: topbar; }
 .app-sidebar { view-transition-name: sidebar; }
-.btn { min-height: 38px; padding: 7px 15px; background: var(--surface); color: var(--ink-2); font-size: 13px; line-height: 1.5; }
-.btn:hover { background: var(--surface-2); border-color: var(--muted); color: var(--ink); }
-.btn.primary { font-weight: 600; }
+.btn { min-height: 38px; padding: 7px 15px; background: var(--surface); color: var(--ink-2); font-size: 13px; line-height: 1.5; box-shadow: inset 0 1px 0 var(--pvc-rim); transition: background-color .2s, border-color .2s, color .2s, box-shadow .2s, transform .2s var(--ease); }
+.btn:hover { background: var(--surface-2); border-color: var(--muted); color: var(--ink); box-shadow: var(--elev-1); }
+.btn.primary { font-weight: 600; box-shadow: var(--elev-1); }
+.btn.primary:hover { transform: translateY(-1px); box-shadow: var(--elev-2); }
 .btn.sm { min-height: 31px; height: auto; padding: 5px 10px; font-size: 12px; }
-.icon-btn { border: 1px solid var(--line); border-radius: 6px; width: 34px; height: 34px; color: var(--ink-2); }
-.topbar { position: sticky; backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg); }
+.icon-btn { border: 1px solid var(--line); border-radius: 6px; width: 34px; height: 34px; color: var(--ink-2); background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.icon-btn:hover { border-color: var(--line-2); box-shadow: var(--elev-1); }
+.topbar { position: sticky; background: var(--glass); -webkit-backdrop-filter: saturate(1.35) blur(14px); backdrop-filter: saturate(1.35) blur(14px); box-shadow: inset 0 -1px 0 var(--line); border-bottom: 0; }
 .topbar-in { width: 100%; max-width: 1800px; gap: 18px; }
 .topbar-tools { flex: none; gap: 10px; }
 .topbar:not(.sandbar) .crumbs { display: flex; flex: 1; gap: 8px; min-width: 0; padding-left: 18px; border-left: 1px solid var(--line-2); color: var(--muted); font-size: 12px; overflow: hidden; }
@@ -32,10 +34,16 @@ a { text-decoration: none; }
 .top-back:hover { background: var(--surface-2); border-color: var(--muted); color: var(--ink); }
 /* Wide screens go up by the breadcrumb; "返回" stands in for it on narrow ones. */
 .topbar:not(.sandbar) .top-back { display: none; }
-.site-nav { gap: 3px; margin: 0 7px 0 0; padding-right: 17px; border-right: 1px solid var(--line); }
-.site-nav .topbar-link { padding: 7px 11px; font-size: 12px; }
-.site-nav .topbar-link:hover, .site-nav .topbar-link[aria-current="page"] { color: var(--ink); background: var(--surface-2); }
-.account-btn { height: 34px; border-color: var(--line); background: transparent; border-radius: 6px; font-size: 12px; padding-inline: 10px; }
+.site-nav { gap: 4px; margin: 0 7px 0 0; padding-right: 17px; border-right: 1px solid var(--line); }
+.site-nav .topbar-link { position: relative; padding: 7px 11px; border-radius: 6px; font-size: 12.5px; color: var(--ink-2); background: transparent; }
+.site-nav .topbar-link::after { content: ""; position: absolute; left: 11px; right: 11px; bottom: 2px; height: 1.5px; background: var(--ink); transform: scaleX(0); transform-origin: left center; transition: transform .26s cubic-bezier(.22, 1, .36, 1), background-color .2s ease; }
+.site-nav .topbar-link:hover { color: var(--ink); background: transparent; }
+.site-nav .topbar-link:hover::after { transform: scaleX(1); }
+.site-nav .topbar-link[aria-current="page"] { color: var(--ink); font-weight: 500; background: transparent; }
+.site-nav .topbar-link[aria-current="page"]::before { content: ""; width: 4.5px; height: 4.5px; margin-right: 2px; border-radius: 50%; background: var(--accent); flex: none; }
+.site-nav .topbar-link[aria-current="page"]::after { transform: scaleX(1); background: var(--accent); }
+.account-btn { height: 34px; border-color: var(--line); background: color-mix(in srgb, var(--surface) 65%, transparent); border-radius: 6px; font-size: 12px; padding-inline: 10px; box-shadow: inset 0 1px 0 var(--pvc-rim); }
+.account-btn:hover { border-color: var(--line-2); box-shadow: var(--elev-1); }
 .account-btn .i { display: block; width: 15px; height: 15px; color: var(--muted); }
 .avatar { background: var(--surface-2); border: 1px solid var(--line-2); color: var(--ink-2); }
 .account { display: flex; align-items: center; gap: 7px; }
@@ -302,8 +310,40 @@ dialog.sheet.avatar-sheet { width: min(440px, calc(100% - 32px)); }
 .workspace { min-width: 0; padding: 29px 38px 0; }
 .workspace > .block, .workspace > [data-panel].wrap { width: 100%; padding: 24px 0; margin: 0; }
 .workspace > [data-panel]:not([hidden]) { min-height: 60vh; }
-.collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 51px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
-.collection-heading h2, .collection-title h2 { font: 600 20px/1.5 var(--sans); }
+.collection-heading { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 51px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.collection-heading.has-draft { min-height: 62px; padding-bottom: 18px; overflow: visible; }
+.collection-heading.has-draft .collection-caption { margin-left: auto; position: relative; z-index: 1; }
+.collection-heading h2, .collection-title h2 { position: relative; z-index: 1; font: 600 20px/1.5 var(--sans); }
+
+/* Attio-inspired orthographic parallel-projection drafting ornament in open upper-right whitespace. */
+.draft-ornament {
+  flex: none;
+  display: block;
+  width: 224px;
+  height: 56px;
+  margin: -10px -4px -10px 6px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.draft-ornament svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.empty-page { position: relative; }
+.empty-page .draft-ornament.is-empty-corner {
+  position: absolute;
+  top: 48px;
+  right: var(--gutter);
+  width: clamp(220px, 28vw, 340px);
+  height: auto;
+  aspect-ratio: 280 / 78;
+  margin: 0;
+}
+@media (max-width: 1020px) {
+  .collection-heading.has-draft { min-height: 0; }
+  .collection-heading .draft-ornament { display: none; }
+}
+@media (max-width: 720px) {
+  .empty-page .draft-ornament.is-empty-corner { display: none; }
+}
 .collection-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; }
 .collection-title > span, .collection-caption { color: var(--muted); font-size: 12px; }
 .collection-search { display: flex; align-items: center; gap: 8px; color: var(--muted); }
