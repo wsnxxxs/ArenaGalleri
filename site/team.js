@@ -3,9 +3,29 @@ import { locale, setPageTitle } from './i18n.js';
 import { $, $$, esc, icon, reducedMotion } from './ui.js';
 
 const GROUP_META = {
-  lead: { zh: '核心负责人', en: 'Core Leads', singularZh: '核心负责人', singularEn: 'Core Lead', pillTone: 'accent' },
-  member: { zh: '团队成员', en: 'Team Members', singularZh: '团队成员', singularEn: 'Team Member', pillTone: 'blue' },
-  honorary: { zh: '荣誉成员', en: 'Honorary Members', singularZh: '荣誉成员', singularEn: 'Honorary Member', pillTone: 'red' },
+  lead: {
+    zh: '核心负责人',
+    en: 'Core Leads',
+    singularZh: '核心负责人',
+    singularEn: 'Core Lead',
+    pillTone: 'accent',
+    emblem: 'assets/team/emblem-lead.png',
+  },
+  member: {
+    zh: '团队成员',
+    en: 'Team Members',
+    singularZh: '团队成员',
+    singularEn: 'Team Member',
+    pillTone: 'blue',
+  },
+  honorary: {
+    zh: '荣誉成员',
+    en: 'Honorary Members',
+    singularZh: '荣誉成员',
+    singularEn: 'Honorary Member',
+    pillTone: 'red',
+    emblem: 'assets/team/emblem-honorary.png',
+  },
 };
 
 const GROUP_ORDER = ['lead', 'member', 'honorary'];
@@ -83,6 +103,11 @@ const MEMBERS = [
     name: 'Alex',
     accentColor: '#2346d8',
     restAngle: -6.2,
+    avatar: 'assets/team/alex.jpg',
+    avatarPos: '50% 50%',
+    avatarScale: 1.04,
+    introLinesZh: ['暂无'],
+    introLinesEn: ['TBD'],
     cardTitle: { mode: 'single-dot', main: 'Alex', size: 'lg' },
   },
   {
@@ -95,17 +120,34 @@ const MEMBERS = [
     cardTitle: { mode: 'single-dot', main: 'Johhny', size: 'md' },
   },
   {
-    id: 'qinshihuang',
+    id: 'louis',
     index: '07',
+    group: 'member',
+    name: 'Louis',
+    accentColor: '#2a6f97',
+    restAngle: -6.6,
+    avatar: 'assets/team/louis.jpg',
+    avatarPos: '50% 48%',
+    introLinesZh: ['Scalie'],
+    introLinesEn: ['Scalie'],
+    cardTitle: { mode: 'single-dot', main: 'Louis', size: 'md' },
+  },
+  {
+    id: 'qinshihuang',
+    index: '08',
     group: 'member',
     name: '秦始皇',
     accentColor: '#b83a24',
     restAngle: -6.5,
+    avatar: 'assets/team/qinshihuang.jpg',
+    avatarPos: '50% 48%',
+    introLinesZh: ['籍贯河北 现居西安'],
+    introLinesEn: ['Originally from Hebei, now in Xi’an'],
     cardTitle: { mode: 'inline', main: '秦始', accent: '皇', size: 'cjk-md' },
   },
   {
     id: 'test',
-    index: '08',
+    index: '09',
     group: 'member',
     name: 'test',
     accentColor: '#1d6b52',
@@ -114,16 +156,20 @@ const MEMBERS = [
   },
   {
     id: 'xiaofolanyang',
-    index: '09',
+    index: '10',
     group: 'member',
     name: '小佛懒羊',
     accentColor: '#2c48c8',
     restAngle: -6.6,
+    avatar: 'assets/team/xiaofolanyang.jpg',
+    avatarPos: '50% 45%',
+    introLinesZh: ['无机酸跟班'],
+    introLinesEn: ['Wujisuan’s sidekick'],
     cardTitle: { mode: 'stacked', top: '小佛', bottom: '懒羊', size: 'stack-cjk' },
   },
   {
     id: 'caolvchong',
-    index: '10',
+    index: '11',
     group: 'member',
     name: '一只草履虫',
     accentColor: '#1b7a5e',
@@ -136,7 +182,7 @@ const MEMBERS = [
   },
   {
     id: 'icy',
-    index: '11',
+    index: '12',
     group: 'honorary',
     name: 'Icyの狼',
     accentColor: '#1a5fb4',
@@ -145,7 +191,7 @@ const MEMBERS = [
   },
   {
     id: 'xiaoming',
-    index: '12',
+    index: '13',
     group: 'honorary',
     name: '小小小名不是小明',
     accentColor: '#5c35b8',
@@ -215,13 +261,14 @@ function cardNameHtml(m) {
 
 function pvcCardInnerHtml(m) {
   const copy = memberCopy(m);
+  const emblem = GROUP_META[m.group]?.emblem || '';
   return `<div class="team-pvc-header" aria-hidden="true">
       <span class="team-pvc-hole"></span>
       <span class="team-pvc-slot"></span>
       <span class="team-pvc-hole"></span>
     </div>
     <div class="team-pvc-seam" aria-hidden="true"></div>
-    <div class="team-card">
+    <div class="team-card${emblem ? ' has-emblem' : ''}">
       <div class="team-card-top">
         ${cardNameHtml(m)}
         <span class="team-card-serial">${esc(m.index)}</span>
@@ -238,6 +285,7 @@ function pvcCardInnerHtml(m) {
           </div>
         </div>
       </div>
+      ${emblem ? `<img class="team-card-emblem" src="${esc(emblem)}" alt="" aria-hidden="true" decoding="async" draggable="false" />` : ''}
     </div>
     <div class="team-pvc-sheen" aria-hidden="true"></div>`;
 }
@@ -249,8 +297,11 @@ function profileExtraHtml(m) {
   const hasIntro = Array.isArray(lines) && lines.length > 0;
   if (!hasAvatar && !hasIntro) return '';
   const label = en ? (m.introLabelEn || 'About') : (m.introLabelZh || '自我介绍');
-  const pos = m.avatarPos ? ` style="object-position:${esc(m.avatarPos)}"` : '';
-  return `${hasAvatar ? `<figure class="team-profile-avatar"><img src="${esc(m.avatar)}" alt="${esc(en ? `${m.name} avatar` : `${m.name} 头像`)}"${pos} decoding="async" draggable="false" /></figure>` : ''}${hasIntro ? `<aside class="team-profile-intro" aria-label="${esc(label)}"><p class="team-profile-intro-label">${esc(label)}</p><p class="team-profile-intro-body">${lines.map((line) => esc(line)).join('<br>')}</p></aside>` : ''}`;
+  const styles = [];
+  if (m.avatarPos) styles.push(`object-position:${esc(m.avatarPos)}`);
+  if (m.avatarScale) styles.push(`transform:scale(${Number(m.avatarScale)})`);
+  const styleAttr = styles.length ? ` style="${styles.join(';')}"` : '';
+  return `${hasAvatar ? `<figure class="team-profile-avatar"><img src="${esc(m.avatar)}" alt="${esc(en ? `${m.name} avatar` : `${m.name} 头像`)}"${styleAttr} decoding="async" draggable="false" /></figure>` : ''}${hasIntro ? `<aside class="team-profile-intro" aria-label="${esc(label)}"><p class="team-profile-intro-label">${esc(label)}</p><p class="team-profile-intro-body">${lines.map((line) => esc(line)).join('<br>')}</p></aside>` : ''}`;
 }
 
 function hasProfileExtra(m) {

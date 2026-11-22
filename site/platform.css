@@ -3632,6 +3632,24 @@ body.has-prompt-modal { overflow: hidden; }
 .team-pill.is-red { background: #d63122; }
 .team-pill.is-blue { background: #3122b8; }
 
+.team-card.has-emblem .team-card-meta {
+  position: relative;
+  z-index: 1;
+  padding-right: 66px;
+}
+.team-card-emblem {
+  position: absolute;
+  right: 12px;
+  bottom: 13px;
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 1;
+}
+
 .team-pvc-sheen {
   position: absolute;
   inset: 0;
@@ -3863,6 +3881,8 @@ body.has-prompt-modal { overflow: hidden; }
   .team-card-value { font-size: 9.5px; }
   .team-card-pills { gap: 3px; }
   .team-pill { font-size: 7.5px; padding: 1.5px 5.5px; }
+  .team-card.has-emblem .team-card-meta { padding-right: 54px; }
+  .team-card-emblem { right: 9px; bottom: 10px; width: 52px; height: 52px; }
   .team-backdrop { bottom: clamp(46px, 7vh, 72px); }
   .team-backdrop-word.is-xl { font-size: clamp(106px, 30vw, 174px); }
   .team-backdrop-word.is-lg { font-size: clamp(72px, 21vw, 130px); }
@@ -3896,6 +3916,8 @@ body.has-prompt-modal { overflow: hidden; }
   .team-corner-right { right: 10px; }
   .team-card-name.is-lg .team-card-name-main { font-size: 46px; }
   .team-card-name.is-lg .team-card-name-accent { font-size: 54px; }
+  .team-card.has-emblem .team-card-meta { padding-right: 48px; }
+  .team-card-emblem { right: 8px; bottom: 9px; width: 46px; height: 46px; }
   .team-backdrop { bottom: 38px; }
   .team-backdrop-word.is-xl { font-size: 98px; }
 }
