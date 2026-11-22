@@ -18,6 +18,19 @@ const MEMBERS = [
     name: 'kme7',
     accentColor: '#1628e2',
     restAngle: -7.2,
+    avatar: 'assets/team/kme7.jpg',
+    introLabelZh: '自我介绍',
+    introLabelEn: 'About',
+    introLinesZh: [
+      '呃，介绍一下我自己吗，呃，',
+      '[撤回了一条消息]，',
+      '我不知道欸',
+    ],
+    introLinesEn: [
+      'Uh, introduce myself? Uh,',
+      '[recalled a message],',
+      'I dunno~',
+    ],
     cardTitle: { mode: 'inline-drop', main: 'kme', accent: '7', size: 'lg' },
     statusTopZh: '核心负责人 · 发起与开发',
     statusBottomZh: '@ 亿模亿样 · ArenaGalleri',
@@ -224,6 +237,20 @@ function pvcCardInnerHtml(m) {
     <div class="team-pvc-sheen" aria-hidden="true"></div>`;
 }
 
+function profileExtraHtml(m) {
+  const en = english();
+  const hasAvatar = Boolean(m.avatar);
+  const lines = en ? m.introLinesEn : m.introLinesZh;
+  const hasIntro = Array.isArray(lines) && lines.length > 0;
+  if (!hasAvatar && !hasIntro) return '';
+  const label = en ? (m.introLabelEn || 'About') : (m.introLabelZh || '自我介绍');
+  return `${hasAvatar ? `<figure class="team-profile-avatar"><img src="${esc(m.avatar)}" alt="${esc(en ? `${m.name} avatar` : `${m.name} 头像`)}" decoding="async" draggable="false" /></figure>` : ''}${hasIntro ? `<aside class="team-profile-intro" aria-label="${esc(label)}"><p class="team-profile-intro-label">${esc(label)}</p><p class="team-profile-intro-body">${lines.map((line) => esc(line)).join('<br>')}</p></aside>` : ''}`;
+}
+
+function hasProfileExtra(m) {
+  return Boolean(m.avatar || m.introLinesZh?.length || m.introLinesEn?.length);
+}
+
 function claspSvgMarkup() {
   return `<svg class="team-clasp-svg" viewBox="0 0 64 96" width="64" height="96" aria-hidden="true">
     <defs>
@@ -310,6 +337,8 @@ export function mount(root, ctx) {
   let stageEl = null;
   let overviewEl = null;
   let detailRevealEl = null;
+  let detailHeroEl = null;
+  let profileExtraEl = null;
   let pivotEl = null;
   let pvcEl = null;
   let shadowEl = null;
@@ -348,18 +377,21 @@ export function mount(root, ctx) {
 
   function computeLayout(resetPosition = false) {
     if (!stageEl) return;
-    const r = stageEl.getBoundingClientRect();
-    if (!r.width || !r.height) return;
-    stageRect = { width: r.width, height: r.height };
-    const narrow = r.width <= 640;
-    const compactH = r.height < 640;
-    restX = r.width * 0.5;
+    const sr = stageEl.getBoundingClientRect();
+    if (!sr.width || !sr.height) return;
+    // Anchor the hanging lanyard & badge to the top hero viewport even when mobile scrolls down to the bio section.
+    const hr = detailHeroEl ? detailHeroEl.getBoundingClientRect() : sr;
+    const heroH = hr.height > 200 ? hr.height : sr.height;
+    stageRect = { width: sr.width, height: heroH };
+    const narrow = sr.width <= 640;
+    const compactH = heroH < 640;
+    restX = sr.width * 0.5;
     restY = narrow
-      ? clamp(r.height * 0.36, 185, 268)
+      ? clamp(heroH * 0.37, 185, 260)
       : compactH
-        ? clamp(r.height * 0.33, 180, 232)
-        : clamp(r.height * 0.36, 218, 306);
-    if (svgEl) svgEl.setAttribute('viewBox', `0 0 ${Math.round(r.width)} ${Math.round(r.height)}`);
+        ? clamp(heroH * 0.33, 180, 232)
+        : clamp(heroH * 0.36, 218, 306);
+    if (svgEl) svgEl.setAttribute('viewBox', `0 0 ${Math.round(sr.width)} ${Math.round(sr.height)}`);
     if (resetPosition) {
       x = restX;
       y = restY;
@@ -437,6 +469,12 @@ export function mount(root, ctx) {
     if (wordEl) {
       wordEl.textContent = m.name;
       wordEl.className = `team-backdrop-word ${backdropScaleClass(m.name)}`;
+    }
+    const extra = hasProfileExtra(m);
+    stageEl.dataset.hasExtra = extra ? 'true' : 'false';
+    if (profileExtraEl) {
+      profileExtraEl.innerHTML = profileExtraHtml(m);
+      profileExtraEl.hidden = !extra;
     }
   }
 
@@ -838,15 +876,15 @@ export function mount(root, ctx) {
       return;
     }
 
-    mode = 'entering';
-    applyStageModeClasses();
-    syncPageMeta();
-    if (detailRevealEl) detailRevealEl.style.setProperty('--wipe', '0%');
-
     if (index === 0) {
-      // Top card has no cards above it: extract instantaneously at its exact hovered pixel position!
+      // Measure BEFORE mode switches so mobile overview position changes never affect frame-0 handoff!
       const { cx, cy } = measureCardCenter(0, true);
       const { centerOffsetY, deckScale } = badgeGeometry();
+      mode = 'entering';
+      applyStageModeClasses();
+      computeLayout(false);
+      syncPageMeta();
+      if (detailRevealEl) detailRevealEl.style.setProperty('--wipe', '0%');
       syncHoverUi(-1);
       hideOverviewForDetail();
       anim = {
@@ -860,6 +898,12 @@ export function mount(root, ctx) {
       renderTransitionAt(0);
       return;
     }
+
+    mode = 'entering';
+    applyStageModeClasses();
+    computeLayout(false);
+    syncPageMeta();
+    if (detailRevealEl) detailRevealEl.style.setProperty('--wipe', '0%');
 
     // Buried card (#2..#12): keep it inside its true z-order slot while cards above it swiftly lift away (175ms),
     // then hand off seamlessly at 0.00px with zero z-order pop!
@@ -898,6 +942,10 @@ export function mount(root, ctx) {
       applyStageModeClasses();
       syncPageMeta();
       return;
+    }
+
+    if (window.scrollY > 0 && window.innerWidth <= 960) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
     }
 
     // Ensure overview remains cleanly hidden (all non-active cards hidden, active card extracted at its resting slot),
@@ -965,8 +1013,9 @@ export function mount(root, ctx) {
     const en = english();
     const crumbs = [{ text: '开发者团队' }];
 
+    const extra = hasProfileExtra(m);
     root.innerHTML = `${ctx.header(crumbs, false, '')}<main class="team-page">
-      <section class="team-stage" data-team-stage data-mode="${esc(mode)}" aria-label="${esc(en ? 'Developer Team' : '开发者团队')}">
+      <section class="team-stage" data-team-stage data-mode="${esc(mode)}" data-has-extra="${extra ? 'true' : 'false'}" aria-label="${esc(en ? 'Developer Team' : '开发者团队')}">
 
         <!-- Layer 1: Orthographic parallel card stack + grouped lexicographical roster -->
         <div class="team-overview${mode === 'detail' ? ' is-roster-hidden' : ''}" data-team-overview data-i18n-ignore>
@@ -988,18 +1037,21 @@ export function mount(root, ctx) {
           </div>
         </div>
 
-        <!-- Layer 2: Detail backdrop elements wiped smoothly left → right -->
+        <!-- Layer 2: Detail hero & profile extra (avatar + self-intro), wiped smoothly left → right -->
         <div class="team-detail-reveal" data-team-detail-reveal style="--wipe:${mode === 'detail' ? '100%' : '0%'}" data-i18n-ignore>
-          <div class="team-corner team-corner-left">
-            <button type="button" class="team-back-btn" data-team-back aria-label="${esc(en ? 'Back to team roster' : '返回团队名单')}">${icon('prev')}<span>${esc(en ? 'Back' : '返回')}</span></button>
+          <div class="team-detail-hero" data-team-detail-hero>
+            <div class="team-corner team-corner-left">
+              <button type="button" class="team-back-btn" data-team-back aria-label="${esc(en ? 'Back to team roster' : '返回团队名单')}">${icon('prev')}<span>${esc(en ? 'Back' : '返回')}</span></button>
+            </div>
+            <div class="team-corner team-corner-right">
+              <p data-detail-status>${esc(copy.statusTop)}<br>${esc(copy.statusBottom)}</p>
+            </div>
+            <div class="team-backdrop" aria-hidden="true">
+              <span class="team-backdrop-word ${backdropScaleClass(m.name)}" data-backdrop-word>${esc(m.name)}</span>
+            </div>
+            <p class="team-hint${hasInteracted ? ' is-hidden' : ''}" data-team-hint>${esc(en ? 'Drag or flick the badge' : '可拖拽或轻拨工牌')}</p>
           </div>
-          <div class="team-corner team-corner-right">
-            <p data-detail-status>${esc(copy.statusTop)}<br>${esc(copy.statusBottom)}</p>
-          </div>
-          <div class="team-backdrop" aria-hidden="true">
-            <span class="team-backdrop-word ${backdropScaleClass(m.name)}" data-backdrop-word>${esc(m.name)}</span>
-          </div>
-          <p class="team-hint${hasInteracted ? ' is-hidden' : ''}" data-team-hint>${esc(en ? 'Drag or flick the badge' : '可拖拽或轻拨工牌')}</p>
+          <div class="team-profile-extra" data-team-profile-extra${extra ? '' : ' hidden'}>${profileExtraHtml(m)}</div>
         </div>
 
         <!-- Layer 3: Dynamic V-lanyard SVG (multi-pass soft vector shadow avoids full-viewport SVG blur stutter) -->
@@ -1035,6 +1087,8 @@ export function mount(root, ctx) {
     stageEl = $('[data-team-stage]', root);
     overviewEl = $('[data-team-overview]', root);
     detailRevealEl = $('[data-team-detail-reveal]', root);
+    detailHeroEl = $('[data-team-detail-hero]', root);
+    profileExtraEl = $('[data-team-profile-extra]', root);
     pivotEl = $('[data-team-pivot]', root);
     pvcEl = $('[data-team-pvc]', root);
     shadowEl = $('[data-team-shadow]', root);
