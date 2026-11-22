@@ -2899,14 +2899,14 @@ body.has-prompt-modal { overflow: hidden; }
   --team-strap-hi: rgb(255 255 255 / 12%);
   --team-strap-shadow: rgb(16 16 15 / 17%);
   --team-pvc-shadow: rgb(16 16 15 / 17%);
-  --team-pvc-bg: linear-gradient(148deg, rgb(255 255 255 / 64%) 0%, rgb(236 239 244 / 28%) 48%, rgb(255 255 255 / 54%) 100%);
-  --team-pvc-edge: rgb(24 24 22 / 14%);
-  --team-pvc-inner: rgb(255 255 255 / 88%);
+  --team-pvc-bg: linear-gradient(148deg, rgb(255 255 255 / 78%) 0%, rgb(241 243 246 / 62%) 50%, rgb(255 255 255 / 74%) 100%);
+  --team-pvc-edge: rgb(24 24 22 / 17%);
+  --team-pvc-inner: rgb(255 255 255 / 90%);
   --team-hole-bg: rgb(245 245 244 / 22%);
   --team-hole-edge: rgb(24 24 22 / 14%);
   --team-seam-dot: rgb(26 26 24 / 17%);
-  --team-stack-pvc-bg: linear-gradient(148deg, rgb(255 255 255 / 93%) 0%, rgb(243 244 246 / 88%) 52%, rgb(255 255 255 / 92%) 100%);
-  --team-stack-pvc-edge: rgb(24 24 22 / 19%);
+  --team-stack-pvc-bg: linear-gradient(148deg, rgb(255 255 255 / 88%) 0%, rgb(242 244 246 / 82%) 50%, rgb(255 255 255 / 86%) 100%);
+  --team-stack-pvc-edge: rgb(24 24 22 / 18%);
   --team-stack-pvc-thick: rgb(24 24 22 / 11%);
   --team-stack-shadow: rgb(18 18 16 / 10%);
   --team-badge-w: 258px;
@@ -2971,9 +2971,6 @@ body.has-prompt-modal { overflow: hidden; }
 .team-stage[data-mode="leaving"] .team-overview {
   pointer-events: none;
 }
-.team-stage[data-mode="detail"] .team-overview {
-  opacity: 0;
-}
 
 .team-deck-zone {
   display: flex;
@@ -2995,16 +2992,29 @@ body.has-prompt-modal { overflow: hidden; }
   height: var(--team-badge-h);
   transform: translate(-50%, -50%) scale(var(--deck-scale)) rotateX(55deg) rotateZ(-36deg);
   transform-origin: center center;
-  transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1), transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .team-stack-slot.is-extracted {
   opacity: 0 !important;
   pointer-events: none;
-  transition: none;
+  transition: none !important;
 }
-.team-overview.is-exiting .team-stack-slot:not(.is-extracted) {
+.team-stack-slot.is-deck-hidden {
   opacity: 0;
-  transform: translate(-50%, calc(-50% + 26px)) scale(calc(var(--deck-scale) * 0.95)) rotateX(55deg) rotateZ(-36deg);
+  pointer-events: none;
+  transform: translate(-50%, calc(-50% + 22px)) scale(calc(var(--deck-scale) * 0.96)) rotateX(55deg) rotateZ(-36deg);
+}
+.team-stack-slot.is-deck-hidden.is-upper-card {
+  transform: translate(-50%, calc(-50% - 34px)) scale(calc(var(--deck-scale) * 0.96)) rotateX(55deg) rotateZ(-36deg);
+  transition: opacity 0.17s ease-out, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.team-stack-slot.is-pre-lifting .team-stack-card.is-stacked-card {
+  transform: translate3d(52px, -28px, 0);
+  border-color: rgb(24 24 22 / 24%);
+  box-shadow:
+    inset 0 0 0 1px var(--team-pvc-inner),
+    -1.5px 2px 0 0 var(--team-stack-pvc-thick),
+    -12px 18px 26px var(--team-stack-shadow);
 }
 
 .team-stack-card.team-pvc.is-stacked-card {
@@ -3018,39 +3028,40 @@ body.has-prompt-modal { overflow: hidden; }
   cursor: pointer;
   background: var(--team-stack-pvc-bg);
   border: 1px solid var(--team-stack-pvc-edge);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   box-shadow:
     inset 0 0 0 1px var(--team-pvc-inner),
     -1.5px 2px 0 0 var(--team-stack-pvc-thick),
     -7px 10px 18px var(--team-stack-shadow);
   transition:
-    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.25s ease,
-    box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.25s ease;
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.24s ease,
+    box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.24s ease;
+}
+.team-stack-slot.is-extracted .team-stack-card.is-stacked-card {
+  transition: none !important;
 }
 .team-stack-slot.is-hovered .team-stack-card.is-stacked-card {
   transform: translate3d(42px, -22px, 0);
-  border-color: var(--member-accent, #1628e2);
+  border-color: rgb(24 24 22 / 34%);
   box-shadow:
     inset 0 0 0 1px var(--team-pvc-inner),
-    -2px 3px 0 0 var(--member-accent, #1628e2),
-    -18px 24px 32px rgb(18 18 16 / 18%);
+    -2px 3px 0 0 rgb(24 24 22 / 18%),
+    -16px 22px 30px rgb(18 18 16 / 16%);
+}
+:root[data-theme="dark"] .team-stack-slot.is-hovered .team-stack-card.is-stacked-card {
+  border-color: rgb(255 255 255 / 44%);
+  box-shadow:
+    inset 0 0 0 1px var(--team-pvc-inner),
+    -2px 3px 0 0 rgb(0 0 0 / 68%),
+    -18px 24px 34px rgb(0 0 0 / 55%);
 }
 .team-stack-slot.is-above-hovered .team-stack-card.is-stacked-card {
   transform: translate3d(-6px, -18px, 0);
 }
 .team-stack-slot.is-below-hovered .team-stack-card.is-stacked-card {
   transform: translate3d(0, 6px, 0);
-  opacity: 0.9;
-}
-.team-stack-slot.is-settled .team-stack-card.is-stacked-card {
-  border-color: var(--member-accent, #1628e2);
-  box-shadow:
-    inset 0 0 0 1px var(--team-pvc-inner),
-    -2px 2.5px 0 0 var(--member-accent, #1628e2),
-    -12px 16px 24px rgb(18 18 16 / 15%);
+  opacity: 0.92;
 }
 
 /* Right side: 团队 Team roster (matches sketch typography & 3-column layout) */
@@ -3058,9 +3069,9 @@ body.has-prompt-modal { overflow: hidden; }
   display: flex;
   flex-direction: column;
   justify-content: center;
-  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.team-overview.is-exiting .team-roster {
+.team-overview.is-roster-hidden .team-roster {
   opacity: 0;
   transform: translate3d(24px, 14px, 0);
 }
@@ -3310,11 +3321,13 @@ body.has-prompt-modal { overflow: hidden; }
 .team-strap-shadow {
   fill: none;
   stroke: var(--team-strap-shadow);
-  stroke-width: 16;
   stroke-linecap: round;
   stroke-dasharray: 100;
   stroke-dashoffset: 0;
 }
+.team-strap-shadow.is-outer { stroke-width: 34; opacity: 0.22; }
+.team-strap-shadow.is-mid { stroke-width: 24; opacity: 0.34; }
+.team-strap-shadow.is-core { stroke-width: 15; opacity: 0.44; }
 
 /* ---- Layer 4: Live physical hanging PVC badge + steel clasp ---- */
 .team-badge-pivot {
@@ -3352,16 +3365,13 @@ body.has-prompt-modal { overflow: hidden; }
   border: 1px solid var(--team-pvc-edge);
   box-shadow:
     inset 0 0 0 1px var(--team-pvc-inner),
-    inset 0 2px 7px rgb(255 255 255 / 48%),
-    inset 0 -2px 5px rgb(20 20 18 / 8%),
-    0 2px 10px rgb(16 16 15 / 7%);
-  backdrop-filter: blur(2.6px) saturate(106%);
-  -webkit-backdrop-filter: blur(2.6px) saturate(106%);
+    -1.5px 2px 0 0 var(--team-stack-pvc-thick),
+    -6px 9px 16px var(--team-stack-shadow);
   cursor: grab;
   touch-action: none;
-  transform-style: preserve-3d;
   will-change: transform;
   --sheen-x: 42%;
+  --stack-mix: 0;
 }
 .team-badge-pivot.is-dragging .team-pvc {
   cursor: grabbing;
@@ -3678,7 +3688,9 @@ body.has-prompt-modal { overflow: hidden; }
     font-size: 12.5px;
   }
   .team-strap { stroke-width: 11.5; }
-  .team-strap-shadow { stroke-width: 12.5; }
+  .team-strap-shadow.is-outer { stroke-width: 26; }
+  .team-strap-shadow.is-mid { stroke-width: 18; }
+  .team-strap-shadow.is-core { stroke-width: 11; }
   .team-clasp {
     left: -27px;
     top: -66px;

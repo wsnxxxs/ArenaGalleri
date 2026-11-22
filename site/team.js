@@ -1,4 +1,4 @@
-// Developer team: isometric card stack overview (#/team) + choreographed hanging PVC badge stage (#/team/<id>).
+// Developer team: orthographic parallel card stack (#/team) + zero-flash choreographed hanging PVC badge (#/team/<id>).
 import { locale, setPageTitle } from './i18n.js';
 import { $, $$, esc, icon, reducedMotion } from './ui.js';
 
@@ -10,7 +10,6 @@ const GROUP_META = {
 
 const GROUP_ORDER = ['lead', 'member', 'honorary'];
 
-// Exact roster & lexicographical grouping from the team overview layout.
 const MEMBERS = [
   {
     id: 'kme7',
@@ -136,6 +135,9 @@ const MEMBERS = [
     cardTitle: { mode: 'stacked', top: '小小小名', bottom: '不是小明', size: 'stack-cjk-xs' },
   },
 ];
+
+const ISO_X = 55;
+const ISO_Z = -36;
 
 const english = () => locale() === 'en';
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -282,9 +284,7 @@ export function mount(root, ctx) {
   let vy = 0;
   let theta = -0.12;
   let omega = 0;
-  let tiltX = 0;
   let tiltY = 0;
-  let targetTiltX = 0;
   let targetTiltY = 0;
 
   let dragging = false;
@@ -302,14 +302,13 @@ export function mount(root, ctx) {
   let dragVelX = 0;
   let dragVelY = 0;
 
-  // Active choreography descriptor for entering / leaving transitions.
   let anim = null;
+  let extractTimer = 0;
 
   // Cached DOM references.
   let resizeObserver = null;
   let stageEl = null;
   let overviewEl = null;
-  let rosterEl = null;
   let detailRevealEl = null;
   let pivotEl = null;
   let pvcEl = null;
@@ -323,7 +322,6 @@ export function mount(root, ctx) {
   let shadowLeftEl = null;
   let shadowRightEl = null;
   let hintEl = null;
-  let crumbCurrentEl = null;
 
   const activeMember = () => MEMBERS[activeIndex] || MEMBERS[0];
   const restAngleRad = () => (activeMember().restAngle * Math.PI) / 180;
@@ -371,18 +369,22 @@ export function mount(root, ctx) {
         theta = restAngleRad();
         omega = 0;
       } else {
-        theta = restAngleRad() - 0.14;
-        omega = 0.85;
+        theta = restAngleRad() - 0.12;
+        omega = 0.75;
       }
     }
   }
 
-  function measureStackSlotCenter(index) {
+  // Measure the EXACT visual center of a card in stage coordinates.
+  // Passing useInnerCard=true captures the card right where the user sees it (including any hover slide-out).
+  // Passing useInnerCard=false captures the card's stationary un-hovered home slot center.
+  function measureCardCenter(index, useInnerCard = false) {
     if (!stageEl) return { cx: stageRect.width * 0.28, cy: stageRect.height * 0.5 };
     const slot = $(`[data-stack-index="${index}"]`, stageEl);
     if (!slot) return { cx: stageRect.width * 0.28, cy: stageRect.height * 0.5 };
+    const target = useInnerCard ? ($('.team-stack-card', slot) || slot) : slot;
     const sRect = stageEl.getBoundingClientRect();
-    const r = slot.getBoundingClientRect();
+    const r = target.getBoundingClientRect();
     return {
       cx: r.left + r.width * 0.5 - sRect.left,
       cy: r.top + r.height * 0.5 - sRect.top,
@@ -403,7 +405,23 @@ export function mount(root, ctx) {
     }
   }
 
-  function syncMemberDetailDom() {
+  // Update only page title & header breadcrumb (never destroys/rebuilds pvcEl during an animation!).
+  function syncPageMeta() {
+    const m = activeMember();
+    const en = english();
+    const crumbsNav = $('.crumbs', root);
+    if (crumbsNav) {
+      crumbsNav.innerHTML = mode === 'overview'
+        ? `<span aria-current="page">${esc(en ? 'Developer Team' : '开发者团队')}</span>`
+        : `<a href="#/team">${esc(en ? 'Developer Team' : '开发者团队')}</a><span class="sep" aria-hidden="true">/</span><span data-i18n-ignore aria-current="page">${esc(m.name)}</span>`;
+    }
+    setPageTitle(mode === 'overview'
+      ? ['开发者团队', ctx.DATA.title]
+      : ['开发者团队', { text: m.name, original: true }, ctx.DATA.title]);
+  }
+
+  // Populate the detail badge & backdrop text ONCE before revealing the badge (never at animation end).
+  function populateDetailDom() {
     if (!stageEl) return;
     const m = activeMember();
     const copy = memberCopy(m);
@@ -420,15 +438,6 @@ export function mount(root, ctx) {
       wordEl.textContent = m.name;
       wordEl.className = `team-backdrop-word ${backdropScaleClass(m.name)}`;
     }
-    const crumbsNav = $('.crumbs', root);
-    if (crumbsNav) {
-      crumbsNav.innerHTML = mode === 'overview'
-        ? `<span aria-current="page">${esc(en ? 'Developer Team' : '开发者团队')}</span>`
-        : `<a href="#/team">${esc(en ? 'Developer Team' : '开发者团队')}</a><span class="sep" aria-hidden="true">/</span><span data-i18n-ignore aria-current="page">${esc(m.name)}</span>`;
-    }
-    setPageTitle(mode === 'overview'
-      ? ['开发者团队', ctx.DATA.title]
-      : ['开发者团队', { text: m.name, original: true }, ctx.DATA.title]);
   }
 
   function renderLanyard(px, py, rad, drawFraction, lift, velX = 0) {
@@ -478,12 +487,17 @@ export function mount(root, ctx) {
     const shY = 14 + lift * 12;
     const sdL = `M ${(axL + shX * 0.7).toFixed(1)} ${ay} Q ${(midLX + shX).toFixed(1)} ${(midLY + shY).toFixed(1)} ${(endLX + shX).toFixed(1)} ${(endLY + shY).toFixed(1)}`;
     const sdR = `M ${(axR + shX * 0.7).toFixed(1)} ${ay} Q ${(midRX + shX).toFixed(1)} ${(midRY + shY).toFixed(1)} ${(endRX + shX).toFixed(1)} ${(endRY + shY).toFixed(1)}`;
-    shadowLeftEl.setAttribute('d', sdL);
-    shadowRightEl.setAttribute('d', sdR);
-    shadowLeftEl.style.strokeDashoffset = dashOffset;
-    shadowRightEl.style.strokeDashoffset = dashOffset;
+    for (const el of $$('[data-shadow-left]', svgEl)) {
+      el.setAttribute('d', sdL);
+      el.style.strokeDashoffset = dashOffset;
+    }
+    for (const el of $$('[data-shadow-right]', svgEl)) {
+      el.setAttribute('d', sdR);
+      el.style.strokeDashoffset = dashOffset;
+    }
   }
 
+  // Shared shadow + sheen formula so the final transition frame matches the first live physics frame identically!
   function applyDetailVisuals() {
     if (!pivotEl || !pvcEl || !shadowEl || !claspEl) return;
     const deg = (theta * 180) / Math.PI;
@@ -493,8 +507,8 @@ export function mount(root, ctx) {
     pivotEl.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${deg.toFixed(3)}deg)`;
 
     const scale = (1 + lift * 0.018).toFixed(4);
-    // Keep strictly parallel orthographic lines (no vanishing-point perspective distortion).
     pvcEl.style.transform = `scale(${scale})`;
+    pvcEl.style.setProperty('--stack-mix', '0');
     const sheenShift = clamp(50 + deg * 1.6 + tiltY * 3.2, 10, 90);
     pvcEl.style.setProperty('--sheen-x', `${sheenShift.toFixed(1)}%`);
 
@@ -529,122 +543,168 @@ export function mount(root, ctx) {
     }
   }
 
-  function stepTransition(now) {
+  // Remove .is-extracted instantaneously without triggering .team-stack-slot's 340ms opacity fade-in!
+  function restoreExtractedSlot(slot) {
+    if (!slot) return;
+    slot.style.transition = 'none';
+    slot.classList.remove('is-extracted');
+    void slot.offsetWidth;
+    slot.style.transition = '';
+  }
+
+  function renderTransitionAt(rawP) {
     if (!anim || !pivotEl || !pvcEl || !shadowEl || !claspEl || !detailRevealEl) return;
-    const rawP = clamp((now - anim.start) / anim.duration, 0, 1);
 
     if (anim.kind === 'enter') {
-      // Phase 1 (0..0.24): card lifts upward out of isometric stack while deck & roster float away.
-      // Phase 2 (0.18..0.58): badge unfolds upright, lanyard shoots down & silver clasp threads the slot.
-      // Phase 3 (0.20..1.00): threaded badge sweeps left → center while detail stage wipes left → right!
+      // Phase 1 (0..0.24): lift smoothly from exact hovered card position while other cards & roster float out.
+      // Phase 2 (0.14..0.62): pure orthographic unfold to upright + V-lanyard draws down & clasp clicks into slot.
+      // Phase 3 (0.16..1.00): smooth left → right sweep carrying the left-to-right clip-path wipe.
       const liftP = easeOutCubic(clamp(rawP / 0.26, 0, 1));
       const flightP = easeInOutCubic(clamp((rawP - 0.14) / 0.86, 0, 1));
-      const unfoldP = easeInOutCubic(clamp((rawP - 0.12) / 0.56, 0, 1));
+      const unfoldP = easeInOutCubic(clamp((rawP - 0.10) / 0.58, 0, 1));
       const lanyardP = easeOutCubic(clamp((rawP - 0.20) / 0.34, 0, 1));
       const claspP = easeOutCubic(clamp((rawP - 0.28) / 0.26, 0, 1));
       const wipeP = easeOutQuint(clamp((rawP - 0.22) / 0.74, 0, 1));
 
-      // Parabolic lift + left-to-right sweeping arc (swings slightly past center to carry the wipe naturally).
-      const liftY = -62 * Math.sin(liftP * Math.PI * 0.5) * (1 - flightP * 0.78);
-      const arcY = -34 * Math.sin(flightP * Math.PI);
-      const sweepOvershoot = 28 * Math.sin(clamp((rawP - 0.35) / 0.65, 0, 1) * Math.PI);
+      const liftY = -56 * Math.sin(liftP * Math.PI * 0.5) * (1 - flightP);
+      const arcY = -30 * Math.sin(flightP * Math.PI);
+      const sweepOvershoot = 24 * Math.sin(clamp((rawP - 0.34) / 0.66, 0, 1) * Math.PI);
       const curX = lerp(anim.startX, restX, flightP) + sweepOvershoot;
       const curY = lerp(anim.startY, restY, flightP) + liftY + arcY;
 
-      // Orthographic parallel-projection unfold (no perspective vanishing point — all edges stay parallel).
-      const isoX = lerp(55, 0, unfoldP);
-      const isoZ = lerp(-36, 0, unfoldP);
+      const isoX = lerp(ISO_X, 0, unfoldP);
+      const isoZ = lerp(ISO_Z, 0, unfoldP);
       const isoScale = lerp(anim.deckScale, 1, unfoldP);
-      const swingLean = -16 * Math.sin(flightP * Math.PI);
+      const swingLean = -14 * Math.sin(flightP * Math.PI);
       const curTheta = lerp(0, restAngleRad(), flightP) + (swingLean * Math.PI) / 180;
       const curDeg = (curTheta * 180) / Math.PI;
 
       pivotEl.style.opacity = '1';
       pivotEl.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0) rotate(${curDeg.toFixed(3)}deg)`;
       pvcEl.style.transform = `scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
-      pvcEl.style.setProperty('--sheen-x', `${(22 + flightP * 48).toFixed(1)}%`);
 
-      const shadowLift = 0.4 + 0.6 * Math.sin(rawP * Math.PI);
-      shadowEl.style.transform = `translate3d(${(18 + shadowLift * 18).toFixed(1)}px, ${(20 + shadowLift * 20).toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
-      shadowEl.style.filter = `blur(${(20 + shadowLift * 14).toFixed(1)}px)`;
-      shadowEl.style.opacity = (0.72 + unfoldP * 0.2).toFixed(3);
+      // Blend smoothly from stacked card finish (mix=1) to hanging finish (mix=0) — zero frame-0 or frame-N pop!
+      pvcEl.style.setProperty('--stack-mix', (1 - unfoldP).toFixed(3));
+      const endSheen = clamp(50 + curDeg * 1.6, 10, 90);
+      pvcEl.style.setProperty('--sheen-x', `${lerp(42, endSheen, unfoldP).toFixed(1)}%`);
+
+      // Match applyDetailVisuals() shadow formula identically at unfoldP=1 & rawP=1 (zero shadow snap!).
+      const sx = 20 + Math.sin(curTheta) * 8;
+      const sy = 22 + Math.abs(Math.sin(curTheta)) * 4;
+      shadowEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
+      shadowEl.style.filter = 'blur(26px)';
+      shadowEl.style.opacity = (0.92 * easeOutCubic(unfoldP)).toFixed(3);
 
       claspEl.style.opacity = claspP.toFixed(3);
-      claspEl.style.transform = `translate3d(0, ${lerp(-26, 0, claspP).toFixed(1)}px, 0) scale(${lerp(0.86, 1, claspP).toFixed(3)})`;
+      claspEl.style.transform = `translate3d(0, ${lerp(-24, 0, claspP).toFixed(1)}px, 0) scale(${lerp(0.88, 1, claspP).toFixed(3)})`;
 
-      renderLanyard(curX, curY, curTheta, lanyardP, shadowLift, (restX - anim.startX) * (1 - flightP) * 1.1);
+      const lift = clamp(Math.hypot(curX - restX, curY - restY) / 160, 0, 1);
+      renderLanyard(curX, curY, curTheta, lanyardP, lift, (restX - anim.startX) * (1 - flightP) * 0.9);
       detailRevealEl.style.setProperty('--wipe', `${(wipeP * 100).toFixed(2)}%`);
 
       if (rawP >= 1) {
-        // Hand off live rightward momentum seamlessly into the spring-pendulum physics engine!
-        x = restX;
-        y = restY;
-        vx = 145;
-        vy = 18;
-        theta = restAngleRad() - 0.05;
-        omega = -1.45;
+        // C1-continuous handoff: position & angle stay 100% IDENTICAL; only gentle momentum continues!
+        x = curX;
+        y = curY;
+        theta = curTheta;
+        vx = 95;
+        vy = 8;
+        omega = -0.95;
         anim = null;
         mode = 'detail';
         applyStageModeClasses();
-        syncMemberDetailDom();
+        syncPageMeta();
         applyDetailVisuals();
       }
       return;
     }
 
     if (anim.kind === 'leave') {
-      // Natural symmetrical return: right-to-left reverse wipe + unhook upward + smooth glide back into stack.
-      const wipeP = 1 - easeInOutCubic(clamp(rawP / 0.54, 0, 1));
-      const lanyardP = 1 - easeOutCubic(clamp(rawP / 0.36, 0, 1));
-      const claspP = 1 - easeOutCubic(clamp(rawP / 0.28, 0, 1));
-      const flightP = easeInOutCubic(clamp((rawP - 0.06) / 0.84, 0, 1));
-      const foldP = easeInOutCubic(clamp((rawP - 0.14) / 0.72, 0, 1));
+      // Staged zero-z-pop return:
+      // 0.00..0.50: right-to-left reverse wipe + lanyard & clasp retract upward.
+      // 0.04..0.72: unhooked badge glides smoothly into exact home slot (targetX, targetY) & folds orthographic flat.
+      // 0.24..0.68: lower cards (below activeIndex) + right roster softly float back in underneath the returning card.
+      // 0.72: seamless 0px handoff to homeSlot inside the deck (pivot hides, homeSlot shows identically!).
+      // 0.72..1.00: upper cards (above activeIndex) gently settle down over the returned card to close the stack!
+      const wipeP = 1 - easeInOutCubic(clamp(rawP / 0.48, 0, 1));
+      const lanyardP = 1 - easeOutCubic(clamp(rawP / 0.34, 0, 1));
+      const claspP = 1 - easeOutCubic(clamp(rawP / 0.26, 0, 1));
+      const flightP = easeInOutCubic(clamp((rawP - 0.04) / 0.68, 0, 1));
+      const foldP = easeInOutCubic(clamp((rawP - 0.08) / 0.64, 0, 1));
 
-      const arcY = -28 * Math.sin(flightP * Math.PI);
-      const curX = lerp(anim.fromX, anim.targetX, flightP);
-      const curY = lerp(anim.fromY, anim.targetY, flightP) + arcY;
-      const curTheta = lerp(anim.fromTheta, 0, flightP);
-      const curDeg = (curTheta * 180) / Math.PI;
-
-      const isoX = lerp(0, 55, foldP);
-      const isoZ = lerp(0, -36, foldP);
-      const isoScale = lerp(1, anim.deckScale, foldP);
-
-      pivotEl.style.opacity = '1';
-      pivotEl.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0) rotate(${curDeg.toFixed(3)}deg)`;
-      pvcEl.style.transform = `scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
-
-      const shadowFade = 1 - foldP * 0.45;
-      shadowEl.style.transform = `translate3d(${lerp(22, 10, foldP).toFixed(1)}px, ${lerp(24, 14, foldP).toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
-      shadowEl.style.filter = `blur(${lerp(26, 14, foldP).toFixed(1)}px)`;
-      shadowEl.style.opacity = (0.85 * shadowFade).toFixed(3);
-
-      claspEl.style.opacity = claspP.toFixed(3);
-      claspEl.style.transform = `translate3d(0, ${lerp(0, -24, 1 - claspP).toFixed(1)}px, 0) scale(${lerp(1, 0.88, 1 - claspP).toFixed(3)})`;
-
-      renderLanyard(curX, curY, curTheta, lanyardP, 0.25, 0);
       detailRevealEl.style.setProperty('--wipe', `${(wipeP * 100).toFixed(2)}%`);
 
-      // Bring the overview deck & roster gently back in as the card nears home.
-      if (rawP >= 0.34 && overviewEl && overviewEl.classList.contains('is-exiting')) {
-        overviewEl.classList.remove('is-exiting');
+      // Bring lower cards & right roster back in early (visually behind the returning card — zero overlap pop).
+      if (rawP >= 0.22 && !anim.lowerRevealed) {
+        anim.lowerRevealed = true;
+        overviewEl?.classList.remove('is-roster-hidden');
+        for (const slot of $$('[data-stack-index]', stageEl)) {
+          if (Number(slot.dataset.stackIndex) > activeIndex) slot.classList.remove('is-deck-hidden');
+        }
+      }
+
+      if (!anim.handedOff) {
+        const arcY = -24 * Math.sin(flightP * Math.PI);
+        const curX = lerp(anim.fromX, anim.targetX, flightP);
+        const curY = lerp(anim.fromY, anim.targetY, flightP) + arcY;
+        const curTheta = lerp(anim.fromTheta, 0, flightP);
+        const curDeg = (curTheta * 180) / Math.PI;
+
+        const isoX = lerp(0, ISO_X, foldP);
+        const isoZ = lerp(0, ISO_Z, foldP);
+        const isoScale = lerp(1, anim.deckScale, foldP);
+
+        pivotEl.style.opacity = '1';
+        pivotEl.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0) rotate(${curDeg.toFixed(3)}deg)`;
+        pvcEl.style.transform = `scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
+        pvcEl.style.setProperty('--stack-mix', foldP.toFixed(3));
+
+        const sx = 20 + Math.sin(curTheta) * 8;
+        const sy = 22 + Math.abs(Math.sin(curTheta)) * 4;
+        shadowEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0) scale(${isoScale.toFixed(4)}) rotateX(${isoX.toFixed(2)}deg) rotateZ(${isoZ.toFixed(2)}deg)`;
+        shadowEl.style.filter = 'blur(26px)';
+        shadowEl.style.opacity = (0.92 * (1 - easeOutCubic(foldP))).toFixed(3);
+
+        claspEl.style.opacity = claspP.toFixed(3);
+        claspEl.style.transform = `translate3d(0, ${lerp(0, -24, 1 - claspP).toFixed(1)}px, 0) scale(${lerp(1, 0.88, 1 - claspP).toFixed(3)})`;
+
+        renderLanyard(curX, curY, curTheta, lanyardP, 0, 0);
+
+        // Once the card lands at 100% exact home slot coordinates & flat orthographic state, hand off silently!
+        if (flightP >= 1 && foldP >= 1) {
+          anim.handedOff = true;
+          const homeSlot = $(`[data-stack-index="${activeIndex}"]`, stageEl);
+          restoreExtractedSlot(homeSlot);
+          pivotEl.style.opacity = '0';
+          if (svgEl) svgEl.style.opacity = '0';
+          // Now smoothly glide the upper cards (above activeIndex) down on top of the landed card!
+          for (const slot of $$('[data-stack-index]', stageEl)) {
+            if (Number(slot.dataset.stackIndex) < activeIndex) slot.classList.remove('is-deck-hidden');
+          }
+        }
       }
 
       if (rawP >= 1) {
+        if (!anim.handedOff) {
+          for (const el of $$('[data-stack-index]', stageEl)) {
+            restoreExtractedSlot(el);
+            el.classList.remove('is-deck-hidden');
+          }
+          overviewEl?.classList.remove('is-roster-hidden');
+        }
         anim = null;
         mode = 'overview';
-        for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
-        if (overviewEl) overviewEl.classList.remove('is-exiting');
         applyStageModeClasses();
-        syncMemberDetailDom();
-        // Gently highlight the card that just landed home so the eye tracks continuity.
-        const returnedSlot = $(`[data-stack-index="${activeIndex}"]`, stageEl);
-        if (returnedSlot) {
-          returnedSlot.classList.add('is-settled');
-          setTimeout(() => returnedSlot.classList.remove('is-settled'), 700);
-        }
+        syncPageMeta();
       }
     }
+  }
+
+  function stepTransition(now) {
+    if (!anim) return;
+    if (anim.start === null) anim.start = now;
+    const rawP = clamp((now - anim.start) / anim.duration, 0, 1);
+    renderTransitionAt(rawP);
   }
 
   function tick(ts) {
@@ -695,9 +755,7 @@ export function mount(root, ctx) {
       theta = clamp(theta + omega * dt, -1.05, 1.05);
     }
 
-    tiltX += (targetTiltX - tiltX) * Math.min(1, dt * 11);
     tiltY += (targetTiltY - tiltY) * Math.min(1, dt * 11);
-
     applyDetailVisuals();
   }
 
@@ -717,98 +775,155 @@ export function mount(root, ctx) {
     rafId = requestAnimationFrame(tick);
   }
 
-  function openMember(index) {
-    if (index < 0 || index >= MEMBERS.length) return;
-    if (mode === 'entering' || mode === 'leaving') return;
-    activeIndex = index;
-    dragging = false;
-    tiltX = 0;
-    tiltY = 0;
-    targetTiltX = 0;
-    targetTiltY = 0;
-
-    const m = activeMember();
-    history.replaceState(history.state, '', `#/team/${m.id}`);
-    syncMemberDetailDom();
-
-    if (reducedMotion()) {
-      mode = 'detail';
-      syncHoverUi(-1);
-      computeLayout(true);
-      applyStageModeClasses();
-      syncMemberDetailDom();
-      applyDetailVisuals();
-      return;
+  function hideOverviewForDetail() {
+    if (!stageEl) return;
+    overviewEl?.classList.add('is-roster-hidden');
+    for (const slot of $$('[data-stack-index]', stageEl)) {
+      const idx = Number(slot.dataset.stackIndex);
+      slot.classList.toggle('is-upper-card', idx < activeIndex);
+      if (idx === activeIndex) {
+        slot.classList.add('is-extracted');
+        slot.classList.remove('is-deck-hidden');
+      } else {
+        slot.classList.add('is-deck-hidden');
+        slot.classList.remove('is-extracted');
+      }
     }
+  }
 
-    // Measure the exact screen center of the chosen card in the left isometric stack BEFORE hiding it.
-    const { cx, cy } = measureStackSlotCenter(index);
+  function launchEnterFlight(index) {
+    if (destroyed || mode !== 'entering') return;
+    // Measure the EXACT current visual screen position of the card right before extracting it (0.00px jump!).
+    const { cx, cy } = measureCardCenter(index, true);
     const { centerOffsetY, deckScale } = badgeGeometry();
 
-    syncHoverUi(-1);
-    for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
     const chosenSlot = $(`[data-stack-index="${index}"]`, stageEl);
+    chosenSlot?.classList.remove('is-pre-lifting');
     chosenSlot?.classList.add('is-extracted');
-
-    mode = 'entering';
-    applyStageModeClasses();
-    if (overviewEl) overviewEl.classList.add('is-exiting');
-    if (detailRevealEl) detailRevealEl.style.setProperty('--wipe', '0%');
 
     anim = {
       kind: 'enter',
-      start: performance.now(),
-      duration: 980,
+      start: null,
+      duration: 920,
       startX: cx,
       startY: cy - centerOffsetY,
       deckScale,
     };
-    stepTransition(anim.start);
+    renderTransitionAt(0);
+  }
+
+  function openMember(index) {
+    if (index < 0 || index >= MEMBERS.length) return;
+    if (mode === 'entering' || mode === 'leaving') return;
+    clearTimeout(extractTimer);
+    activeIndex = index;
+    dragging = false;
+    tiltY = 0;
+    targetTiltY = 0;
+
+    const m = activeMember();
+    history.replaceState(history.state, '', `#/team/${m.id}`);
+    populateDetailDom();
+
+    if (reducedMotion()) {
+      mode = 'detail';
+      syncHoverUi(-1);
+      hideOverviewForDetail();
+      computeLayout(true);
+      applyStageModeClasses();
+      syncPageMeta();
+      applyDetailVisuals();
+      return;
+    }
+
+    mode = 'entering';
+    applyStageModeClasses();
+    syncPageMeta();
+    if (detailRevealEl) detailRevealEl.style.setProperty('--wipe', '0%');
+
+    if (index === 0) {
+      // Top card has no cards above it: extract instantaneously at its exact hovered pixel position!
+      const { cx, cy } = measureCardCenter(0, true);
+      const { centerOffsetY, deckScale } = badgeGeometry();
+      syncHoverUi(-1);
+      hideOverviewForDetail();
+      anim = {
+        kind: 'enter',
+        start: null,
+        duration: 920,
+        startX: cx,
+        startY: cy - centerOffsetY,
+        deckScale,
+      };
+      renderTransitionAt(0);
+      return;
+    }
+
+    // Buried card (#2..#12): keep it inside its true z-order slot while cards above it swiftly lift away (175ms),
+    // then hand off seamlessly at 0.00px with zero z-order pop!
+    syncHoverUi(-1);
+    overviewEl?.classList.add('is-roster-hidden');
+    for (const slot of $$('[data-stack-index]', stageEl)) {
+      const idx = Number(slot.dataset.stackIndex);
+      slot.classList.toggle('is-upper-card', idx < activeIndex);
+      if (idx === activeIndex) {
+        slot.classList.remove('is-deck-hidden', 'is-extracted');
+        slot.classList.add('is-pre-lifting');
+      } else {
+        slot.classList.add('is-deck-hidden');
+        slot.classList.remove('is-extracted', 'is-pre-lifting');
+      }
+    }
+    extractTimer = setTimeout(() => launchEnterFlight(index), 185);
   }
 
   function returnToOverview() {
     if (mode !== 'detail') return;
     dragging = false;
     pivotEl?.classList.remove('is-dragging');
-    targetTiltX = 0;
     targetTiltY = 0;
-    tiltX = 0;
     tiltY = 0;
 
     history.replaceState(history.state, '', '#/team');
 
     if (reducedMotion()) {
       mode = 'overview';
-      if (overviewEl) overviewEl.classList.remove('is-exiting');
-      for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
+      overviewEl?.classList.remove('is-roster-hidden');
+      for (const slot of $$('[data-stack-index]', stageEl)) {
+        restoreExtractedSlot(slot);
+        slot.classList.remove('is-deck-hidden');
+      }
       applyStageModeClasses();
-      syncMemberDetailDom();
+      syncPageMeta();
       return;
     }
 
-    // Measure the exact home slot center in the left isometric stack.
-    for (const el of $$('[data-stack-index].is-extracted', stageEl)) el.classList.remove('is-extracted');
-    const homeSlot = $(`[data-stack-index="${activeIndex}"]`, stageEl);
-    homeSlot?.classList.add('is-extracted');
-    const { cx, cy } = measureStackSlotCenter(activeIndex);
+    // Ensure overview remains cleanly hidden (all non-active cards hidden, active card extracted at its resting slot),
+    // and measure the exact un-hovered resting slot center.
+    hideOverviewForDetail();
+    const { cx, cy } = measureCardCenter(activeIndex, false);
     const { centerOffsetY, deckScale } = badgeGeometry();
 
     mode = 'leaving';
     applyStageModeClasses();
-    if (overviewEl) overviewEl.classList.add('is-exiting');
+    syncPageMeta();
 
+    // If returning to top card (#0), there are no upper cards to wait for, so shorten total duration smoothly.
+    const hasUpperCards = activeIndex > 0;
     anim = {
       kind: 'leave',
-      start: performance.now(),
-      duration: 720,
+      start: null,
+      duration: hasUpperCards ? 860 : 680,
       fromX: x,
       fromY: y,
       fromTheta: theta,
       targetX: cx,
       targetY: cy - centerOffsetY,
       deckScale,
+      lowerRevealed: false,
+      handedOff: false,
     };
-    stepTransition(anim.start);
+    renderTransitionAt(0);
   }
 
   function markInteracted() {
@@ -818,9 +933,10 @@ export function mount(root, ctx) {
   }
 
   function stackCardHtml(m, i) {
-    // Reuse the exact same PVC badge markup inside each stacked card so overview and detail share one physical card.
     const zIndex = MEMBERS.length - i;
-    return `<div class="team-stack-slot" data-stack-index="${i}" style="--stack-i:${i};--member-accent:${esc(m.accentColor)};z-index:${zIndex}">
+    const extraCls = mode === 'detail' ? (i === activeIndex ? ' is-extracted' : ' is-deck-hidden') : '';
+    const posCls = i < activeIndex ? ' is-upper-card' : '';
+    return `<div class="team-stack-slot${extraCls}${posCls}" data-stack-index="${i}" style="--stack-i:${i};--member-accent:${esc(m.accentColor)};z-index:${zIndex}">
       <button type="button" class="team-stack-card team-pvc is-stacked-card" data-open-member="${i}" aria-label="${esc(m.name)}" data-i18n-ignore>
         ${pvcCardInnerHtml(m)}
       </button>
@@ -850,8 +966,8 @@ export function mount(root, ctx) {
     root.innerHTML = `${ctx.header(crumbs, false, '')}<main class="team-page">
       <section class="team-stage" data-team-stage data-mode="${esc(mode)}" aria-label="${esc(en ? 'Developer Team' : '开发者团队')}">
 
-        <!-- Layer 1: Isometric card stack + grouped lexicographical roster -->
-        <div class="team-overview" data-team-overview data-i18n-ignore>
+        <!-- Layer 1: Orthographic parallel card stack + grouped lexicographical roster -->
+        <div class="team-overview${mode === 'detail' ? ' is-roster-hidden' : ''}" data-team-overview data-i18n-ignore>
           <div class="team-deck-zone">
             <div class="team-deck" style="--stack-count:${MEMBERS.length}">
               ${MEMBERS.map((member, i) => stackCardHtml(member, i)).join('')}
@@ -870,7 +986,7 @@ export function mount(root, ctx) {
           </div>
         </div>
 
-        <!-- Layer 2: Detail backdrop elements, wiped smoothly left → right -->
+        <!-- Layer 2: Detail backdrop elements wiped smoothly left → right -->
         <div class="team-detail-reveal" data-team-detail-reveal style="--wipe:${mode === 'detail' ? '100%' : '0%'}" data-i18n-ignore>
           <div class="team-corner team-corner-left">
             <button type="button" class="team-back-btn" data-team-back aria-label="${esc(en ? 'Back to team roster' : '返回团队名单')}">${icon('prev')}<span>${esc(en ? 'Back' : '返回')}</span></button>
@@ -884,16 +1000,15 @@ export function mount(root, ctx) {
           <p class="team-hint${hasInteracted ? ' is-hidden' : ''}" data-team-hint>${esc(en ? 'Drag or flick the badge' : '可拖拽或轻拨工牌')}</p>
         </div>
 
-        <!-- Layer 3: Dynamic V-lanyard SVG -->
+        <!-- Layer 3: Dynamic V-lanyard SVG (multi-pass soft vector shadow avoids full-viewport SVG blur stutter) -->
         <svg class="team-lanyard-svg" data-team-svg aria-hidden="true" preserveAspectRatio="none">
-          <defs>
-            <filter id="team-strap-blur" x="-30%" y="-20%" width="160%" height="150%">
-              <feGaussianBlur stdDeviation="7.5"/>
-            </filter>
-          </defs>
-          <g class="team-strap-shadows" filter="url(#team-strap-blur)">
-            <path class="team-strap-shadow" data-shadow-left pathLength="100" d=""/>
-            <path class="team-strap-shadow" data-shadow-right pathLength="100" d=""/>
+          <g class="team-strap-shadows">
+            <path class="team-strap-shadow is-outer" data-shadow-left pathLength="100" d=""/>
+            <path class="team-strap-shadow is-outer" data-shadow-right pathLength="100" d=""/>
+            <path class="team-strap-shadow is-mid" data-shadow-left pathLength="100" d=""/>
+            <path class="team-strap-shadow is-mid" data-shadow-right pathLength="100" d=""/>
+            <path class="team-strap-shadow is-core" data-shadow-left pathLength="100" d=""/>
+            <path class="team-strap-shadow is-core" data-shadow-right pathLength="100" d=""/>
           </g>
           <g class="team-straps">
             <path class="team-strap" data-strap-left pathLength="100" d=""/>
@@ -917,7 +1032,6 @@ export function mount(root, ctx) {
 
     stageEl = $('[data-team-stage]', root);
     overviewEl = $('[data-team-overview]', root);
-    rosterEl = $('[data-team-roster]', root);
     detailRevealEl = $('[data-team-detail-reveal]', root);
     pivotEl = $('[data-team-pivot]', root);
     pvcEl = $('[data-team-pvc]', root);
@@ -931,7 +1045,6 @@ export function mount(root, ctx) {
     shadowLeftEl = $('[data-shadow-left]', root);
     shadowRightEl = $('[data-shadow-right]', root);
     hintEl = $('[data-team-hint]', root);
-    crumbCurrentEl = $('.crumbs [aria-current="page"]', root);
 
     resizeObserver?.disconnect();
     if (typeof ResizeObserver === 'function' && stageEl) {
@@ -950,7 +1063,7 @@ export function mount(root, ctx) {
 
     computeLayout(resetPhysics);
     applyStageModeClasses();
-    syncMemberDetailDom();
+    syncPageMeta();
     if (mode === 'detail') applyDetailVisuals();
     startLoop();
   }
@@ -1020,7 +1133,6 @@ export function mount(root, ctx) {
     dragGrabLocalY = py - y;
     dragOffsetX = x;
     dragOffsetY = y;
-    targetTiltX = 0;
     targetTiltY = 0;
 
     pivotEl?.classList.add('is-dragging');
@@ -1059,11 +1171,8 @@ export function mount(root, ctx) {
         && event.clientY >= rect.top && event.clientY <= rect.bottom;
       if (inside) {
         const nx = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-        const ny = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
         targetTiltY = nx * 6.5;
-        targetTiltX = -ny * 5.5;
       } else {
-        targetTiltX = 0;
         targetTiltY = 0;
       }
     }
@@ -1138,6 +1247,7 @@ export function mount(root, ctx) {
     onPlatformChange() {},
     destroy() {
       destroyed = true;
+      clearTimeout(extractTimer);
       cancelAnimationFrame(rafId);
       resizeObserver?.disconnect();
       root.removeEventListener('pointerover', onPointerOver);
