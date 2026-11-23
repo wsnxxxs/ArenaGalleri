@@ -356,7 +356,7 @@ function profileExtraHtml(m) {
   if (m.avatarPos) styles.push(`object-position:${esc(m.avatarPos)}`);
   if (m.avatarScale) styles.push(`transform:scale(${Number(m.avatarScale)})`);
   const styleAttr = styles.length ? ` style="${styles.join(';')}"` : '';
-  return `${hasAvatar ? `<figure class="team-profile-avatar"><img src="${esc(m.avatar)}" alt="${esc(en ? `${m.name} avatar` : `${m.name} 头像`)}"${styleAttr} decoding="async" draggable="false" /></figure>` : ''}${hasIntro ? `<aside class="team-profile-intro" aria-label="${esc(label)}"><p class="team-profile-intro-label">${esc(label)}</p><p class="team-profile-intro-body">${lines.map((line) => esc(line)).join('<br>')}</p></aside>` : ''}`;
+  return `${hasAvatar ? `<figure class="team-profile-avatar" data-initial="${esc([...String(m.name ?? '')][0] ?? '')}"><img src="${esc(m.avatar)}" alt="${esc(en ? `${m.name} avatar` : `${m.name} 头像`)}"${styleAttr} decoding="async" draggable="false" /></figure>` : ''}${hasIntro ? `<aside class="team-profile-intro" aria-label="${esc(label)}"><p class="team-profile-intro-label">${esc(label)}</p><p class="team-profile-intro-body">${lines.map((line) => esc(line)).join('<br>')}</p></aside>` : ''}`;
 }
 
 function hasProfileExtra(m) {
@@ -1201,6 +1201,10 @@ export function mount(root, ctx) {
     detailRevealEl = $('[data-team-detail-reveal]', root);
     detailHeroEl = $('[data-team-detail-hero]', root);
     profileExtraEl = $('[data-team-profile-extra]', root);
+    // A photo that fails to load (the public repository ships without them) leaves the initial behind it, not alt text.
+    profileExtraEl?.addEventListener('error', (event) => {
+      if (event.target instanceof HTMLImageElement) event.target.remove();
+    }, true);
     pivotEl = $('[data-team-pivot]', root);
     pvcEl = $('[data-team-pvc]', root);
     shadowEl = $('[data-team-shadow]', root);

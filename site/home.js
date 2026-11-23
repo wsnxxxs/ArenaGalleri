@@ -597,7 +597,7 @@ export function mount(root, ctx) {
     </section>
     <section class="home-blind home-team" aria-labelledby="home-team-title">
       <p class="home-blind-ab home-team-mark" aria-hidden="true"><i>1</i><span>+</span><i>N</i></p>
-      <div><h2 id="home-team-title">想了解我们吗？</h2><p>亿模亿样不是一个人做出的平台，点击右侧按钮，了解开发者团队。</p></div>
+      <div><h2 id="home-team-title">想了解我们吗？</h2><p>亿模亿样不是一个人做出的平台，来认识背后的开发者团队。</p></div>
       <a class="btn" href="#/team">了解团队${icon('right')}</a>
     </section>
   </main>${ctx.footer()}`;

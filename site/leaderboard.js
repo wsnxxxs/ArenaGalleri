@@ -139,7 +139,9 @@ export function mountBoard(container, ctx) {
 
   const curatedSection = ctx.curated && ctx.sectionId ? ctx.info?.sections?.find((section) => section.id === ctx.sectionId) : null;
   const musicCurated = ctx.curated && curatedSection?.category === '音乐';
-  const hasRadars = guided && !ctx.embedded;
+  // The dimension column is an admin tool: visitors get the board without an empty column of notices.
+  const radarsWanted = guided && !ctx.embedded;
+  let hasRadars = radarsWanted && isStaff();
   const radarCategory = ctx.curated ? curatedSection?.category ?? null : ctx.category ?? ctx.task?.category ?? null;
   let radarState = { status: 'loading' }, radarRequest = null, radarDialog = null;
   const radarIdentity = () => `${platform.user?.id ?? ''}|${platform.user?.role ?? ''}`;
@@ -422,7 +424,8 @@ export function mountBoard(container, ctx) {
     const body = rows.map((row, index) => {
       const rank = index + 1;
       const m = modelOf(row);
-      return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${searchText(row, m)}">
+      const rowClass = [row.provisional ? 'is-provisional' : '', rank === 1 ? 'is-first' : ''].filter(Boolean).join(' ');
+      return `<tr${rowClass ? ` class="${rowClass}"` : ''} data-board-row="${searchText(row, m)}">
       <td class="c-rank${rank <= 3 ? ' is-top' : ''}">${pad(rank)}</td>
       <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name">${nameParts(data, row)}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
       ${radarCell(row)}
@@ -492,7 +495,7 @@ export function mountBoard(container, ctx) {
           const part = row.parts?.[c];
           return `<td class="c-part${part?.rank ? '' : ' is-missing'}">${part?.aligned != null ? `<span data-i18n-number="${Math.round(part.aligned)}">${Math.round(part.aligned)}</span>` : ''}<small>${partLabel(part)}</small></td>`;
         }).join('');
-      return `<tr class="${[`is-${group}`, row.provisional ? 'is-provisional' : ''].filter(Boolean).join(' ')}" data-board-row="${searchText(row, m)}" data-board-in="${group}">
+      return `<tr class="${[`is-${group}`, row.provisional ? 'is-provisional' : '', group === 'ranked' && row.rank === 1 ? 'is-first' : ''].filter(Boolean).join(' ')}" data-board-row="${searchText(row, m)}" data-board-in="${group}">
       ${rank}
       ${line(row, m, group === 'watch' ? reasons : partsLine(row))}
       ${radarCell(row)}
@@ -742,7 +745,13 @@ export function mountBoard(container, ctx) {
   return {
     ready: drawn ? null : loading,
     reload: load,
-    refreshIdentity() { return loadRadars(); },
+    refreshIdentity() {
+      if (hasRadars !== (radarsWanted && isStaff())) {
+        hasRadars = !hasRadars;
+        if (currentData) draw(currentData);
+      }
+      return loadRadars();
+    },
     search(value) {
       text = value;
       query = value.trim().toLowerCase();

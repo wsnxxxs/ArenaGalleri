@@ -525,7 +525,7 @@ export default {
   "推理 · 其他排行": "Reasoning · Other ranking",
   "音乐 · 其他排行": "Music · Other ranking",
   "想了解我们吗？": "Want to know who built this?",
-  "亿模亿样不是一个人做出的平台，点击右侧按钮，了解开发者团队。": "ArenaGalleri is not a one-person project — click the button on the right to meet the developer team.",
+  "亿模亿样不是一个人做出的平台，来认识背后的开发者团队。": "ArenaGalleri is not a one-person project. Meet the developer team behind it.",
   "了解团队": "Meet the team",
   "开发者团队": "Developer Team",
   "亿模亿样不是一个人做出的平台——题库策划、前端展览、盲评系统与日常维护由多位伙伴共同完成。": "ArenaGalleri is not built by one person — prompt curation, the exhibition frontend, blind evaluation, and daily operations are maintained by multiple collaborators.",

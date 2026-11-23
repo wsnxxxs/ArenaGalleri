@@ -19,7 +19,7 @@ function environment(cached = null, config = undefined, ctx = {}) {
   const state = { AbortController, DOMException, URLSearchParams, EventTarget, SAME_PROMPT_CONFIG: config,
     setTimeout(fn, ms) { const id = ++timerId; timers.set(id, { fn, ms }); return id; }, clearTimeout: id => timers.delete(id),
     document: { activeElement: null }, store: { get: () => null, set() {} },
-    $: () => null, esc: s => String(s), icon: () => '', platform: {},
+    $: () => null, esc: s => String(s), icon: () => '', platform: {}, isStaff: () => false,
     apiRemembered(path, options) {
       const read = { path, ...options, ...deferred() }; reads.push(read);
       return read.promise.then(answer => { memory = answer; return answer; });

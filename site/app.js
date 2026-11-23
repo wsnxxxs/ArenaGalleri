@@ -663,13 +663,22 @@ function draftOrnamentHtml(extraClass = '') {
   return `<span class="draft-ornament${extraClass ? ` ${extraClass}` : ''}" aria-hidden="true"><svg viewBox="0 0 280 78" fill="none"><defs><pattern id="${hatchId}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="5" stroke="var(--draft-hatch)" stroke-width="1"/></pattern><linearGradient id="${fadeId}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#000"/><stop offset="18%" stop-color="#fff"/><stop offset="94%" stop-color="#fff"/><stop offset="100%" stop-color="#000"/></linearGradient><mask id="${maskId}"><rect x="0" y="0" width="280" height="78" fill="url(#${fadeId})"/></mask></defs><g mask="url(#${maskId})" stroke="var(--draft-line)" stroke-width="0.7"><line x1="0" y1="8" x2="278" y2="8"/><line x1="0" y1="26" x2="278" y2="26"/><line x1="0" y1="54" x2="278" y2="54"/><line x1="0" y1="70" x2="278" y2="70"/><line x1="58" y1="2" x2="58" y2="76"/><line x1="128" y1="2" x2="128" y2="76"/><line x1="196" y1="2" x2="196" y2="76"/><line x1="252" y1="2" x2="252" y2="76"/></g><g stroke="var(--draft-dash)" stroke-width="0.95" stroke-dasharray="2.2 2.6" stroke-linecap="round"><line x1="94" y1="17" x2="146" y2="17"/><line x1="128" y1="17" x2="128" y2="42"/><line x1="128" y1="42" x2="146" y2="42"/></g><rect x="58" y="11" width="36" height="12" rx="2.5" fill="var(--draft-fill)" stroke="var(--draft-stroke)" stroke-width="1.05"/><line x1="64" y1="17" x2="88" y2="17" stroke="var(--draft-stroke)" stroke-width="1.1" stroke-linecap="round"/><g><rect x="192" y="10" width="60" height="42" rx="4" fill="var(--draft-fill)" stroke="var(--draft-dash)" stroke-width="1" stroke-dasharray="2.4 2.4"/><rect x="169" y="18" width="60" height="42" rx="4" fill="var(--draft-fill)" stroke="var(--draft-stroke)" stroke-width="1"/><rect x="146" y="26" width="60" height="42" rx="4" fill="var(--draft-fill)" stroke="var(--draft-stroke)" stroke-width="1.1"/><rect x="152" y="32" width="48" height="22" rx="2" fill="url(#${hatchId})" stroke="var(--draft-line)" stroke-width="0.8"/><line x1="152" y1="61" x2="174" y2="61" stroke="var(--draft-stroke)" stroke-width="1.4" stroke-linecap="round"/><rect x="184" y="58.5" width="16" height="4.8" rx="1.4" fill="var(--accent)"/></g><g stroke="var(--draft-stroke)" stroke-width="0.85"><line x1="55" y1="8" x2="61" y2="8"/><line x1="58" y1="5" x2="58" y2="11"/><line x1="249" y1="70" x2="255" y2="70"/><line x1="252" y1="67" x2="252" y2="73"/></g></svg></span>`;
 }
 
+// Section titles pair the Chinese name with an English word, as the team page does (团队 Team).
+// Neither half is translated; in English the pair trades sizes (studio.css).
+const TITLE_EN = { 题库: 'Questions', 盲评: 'Blind review', 排行榜: 'Leaderboard', 更新日志: 'Changelog', 发起题目: 'New question', 资格考试: 'Exam', 上传作品: 'Upload', 个人中心: 'Account', 维度图: 'Dimensions', 使用条款: 'Terms', 隐私政策: 'Privacy' };
+// A long question title steps down a size, so the display serif breaks into even lines instead of stranding one character.
+const titleWidth = (text) => [...String(text ?? '')].reduce((n, ch) => n + (/[\u2e80-\u9fff\uff00-\uffef]/.test(ch) ? 1 : 0.55), 0);
+const pageTitle = (title) => (TITLE_EN[title]
+  ? `<h1 class="page-title" data-i18n-ignore><span class="page-title-zh">${esc(title)}</span><span class="page-title-en" lang="en">${TITLE_EN[title]}</span></h1>`
+  : `<h1${titleWidth(title) > 9 ? ' class="is-long"' : ''}>${esc(title)}</h1>`);
+const SIDE_MOTTO = '同一份提示词，看见不同的答案。';
 // A shared two-column shell keeps every platform page in the same exhibition. The top bar is the
 // site navigation and carries the way back; the sidebar only holds this section's own views.
 function pageStart({ title, description, descriptionOriginal = false, section, meta = '', nav = '', heading = title, headingOriginal = false, caption = '', crumbs = [{ text: title }] }) {
   return `${header(crumbs, false, section)}<div class="app-layout platform-layout">
     <aside class="app-sidebar">
-      <h1>${esc(title)}</h1><p class="side-intro"${descriptionOriginal ? ' data-i18n-ignore' : ''}>${esc(description)}</p>${meta}${nav}
-      <div class="side-bottom"><p>同一份提示词，<br>看见不同的答案。</p></div>
+      ${pageTitle(title)}<p class="side-intro"${descriptionOriginal ? ' data-i18n-ignore' : ''}>${esc(description)}</p>${meta}${nav}
+      ${description === SIDE_MOTTO ? '' : '<div class="side-bottom"><p>同一份提示词，<br>看见不同的答案。</p></div>'}
     </aside><main class="workspace page"><div class="collection-heading${caption ? '' : ' has-draft'}"><h2${headingOriginal ? ' data-i18n-ignore' : ''}>${esc(heading)}</h2>${caption || draftOrnamentHtml()}</div>`;
 }
 // Views of the current section in a platform sidebar: [href, glyph, text, current, count].
@@ -694,7 +703,7 @@ function libraryStart(crumbs) {
   const domains = domainsIn(DATA.tasks, domainList(platform));
   return `${header(crumbs, false, 'questions')}<div class="app-layout home-layout">
     <aside class="app-sidebar">
-      <h1>题库</h1><p class="side-intro">${['ready', 'static'].includes(catalogState()) ? `${DATA.tasks.length} 道题目 · ${works} 件作品` : '最新题目与作品正在加载'}</p>
+      ${pageTitle('题库')}<p class="side-intro">${['ready', 'static'].includes(catalogState()) ? `${DATA.tasks.length} 道题目 · ${works} 件作品` : '最新题目与作品正在加载'}</p>
       <nav class="side-nav section-nav" aria-label="题库导航">
         ${control('side-link', 'data-home-view="tasks"', true, `${icon('grid')}全部题目${['ready', 'static'].includes(catalogState()) ? `<span class="nav-count">${DATA.tasks.length}</span>` : ''}`)}
         ${tracksOf(DATA.tasks, { alwaysInclude: CATEGORIES.map((c) => c.name) }).map((x) => `<div class="side-tree-group" data-tree-group="${esc(x.name)}" data-expanded="false">
@@ -788,12 +797,12 @@ function renderLibrary(scopes = [], fresh = true) {
       <a class="question-visual${shown?.previewMode === 'screenshot' ? ' screenshot-thumb' : shown?.previewModel || shown?.previewLoader ? ' model-thumb' : ''}" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的全部作品" tabindex="-1"${shown ? ` data-preview-id="${esc(shown.id)}"` : ''}${zoom ? ` data-preview-zoom="${zoom}"` : ''}>
         ${artwork}
       </a>
-      ${taskSolveCornerHtml(t)}${taskCuratedStarHtml(t)}
+      ${taskSolveCornerHtml(t)}
       <div class="task-body">
         <div class="question-byline"><ul class="tag-line"><li class="tag-recommendation" data-question-reason hidden></li>${tagLine(t)}</ul>
           <span class="avatar question-avatar${bySite(t) ? ' is-site' : ''}" role="img" aria-label="发布者：${esc(authorName(t))}" title="发布者：${esc(authorName(t))}">${authorAvatar(t)}</span>
         </div>
-        <h3><a href="${taskHref(t)}"><span data-i18n-ignore>${esc(t.title)}</span></a></h3>
+        <h3><a href="${taskHref(t)}">${taskCuratedStarHtml(t)}<span data-i18n-ignore>${esc(t.title)}</span></a></h3>
         <p class="summary"><span data-i18n-ignore>${esc(t.summary)}</span></p>
         <p data-i18n-ignore class="prompt-hit" data-prompt-hit hidden></p>
         <div class="question-meta">
@@ -1509,7 +1518,7 @@ function renderTask(t) {
 
   root.innerHTML = `${header([LIBRARY, { text: t.title, original: true }], false, 'questions')}<div class="app-layout task-layout">
     <aside class="app-sidebar">
-      <h1><span data-i18n-ignore>${esc(t.title)}</span></h1>
+      <h1${titleWidth(t.title) > 9 ? ' class="is-long"' : ''}><span data-i18n-ignore>${esc(t.title)}</span></h1>
       <p class="side-intro"><span data-i18n-ignore>${esc(t.summary)}</span></p>
       <p class="side-byline"><span data-i18n-ignore>${esc(authorName(t))}</span> <span>发起</span>${t.date ? ` · <span data-i18n-date="${esc(t.date)}">${formatDate(t.date)}</span>` : ''}</p>
       <ul class="tags side-tags">${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${subcategoryOf(t) ? `<li class="tag-sub"><a href="${LIBRARY.href}/${encodeURIComponent(t.category)}/${encodeURIComponent(subcategoryOf(t))}">${esc(subcategoryOf(t))}</a></li>` : ''}${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}</ul>
@@ -2424,7 +2433,7 @@ function platformOffline(name) {
   const waiting = !missing && !platform.mismatch && (!error || connecting);
   const title = PAGE_TITLES[name] ?? '展览馆';
   // The page itself explains a version mismatch, so the header notice is not repeated.
-  root.innerHTML = `${pageStart({ title, section: PAGE_SECTIONS[name], description: '同一份提示词，看见不同的答案。' })}<section class="block wrap catalog-status" aria-busy="${waiting}">
+  root.innerHTML = `${pageStart({ title, section: PAGE_SECTIONS[name], description: SIDE_MOTTO })}<section class="block wrap catalog-status" aria-busy="${waiting}">
     <h3>${platform.mismatch ? `${esc(title)}暂时不可用` : waiting ? `正在载入${esc(title)}…` : missing ? '这里需要平台服务' : `${esc(title)}暂时未能载入`}</h3>
     <p role="status">${platform.mismatch ? '作品数据与平台服务版本不一致。可能是新版本正在发布，稍后刷新即可恢复。' : waiting ? needsActivity ? '盲评与榜单统计正在加载，题库可先浏览。' : '账户信息正在加载，题库可先浏览。' : missing ? `当前地址没有可用的平台服务。连接后即可使用${esc(title)}，作品仍可浏览。` : esc(error?.message)}</p>
     <div class="empty-actions">${platform.mismatch ? '<button type="button" class="btn primary" data-reload>刷新页面</button>' : '<button type="button" class="btn primary" data-platform-retry>重新连接</button>'}<a class="btn" href="#/questions">回到题库${icon('right')}</a></div>

@@ -1,3 +1,8 @@
+## 2026-11-23 · 全站视觉按团队页语言统一（已提交，未推送、未部署）
+
+- 用户要求理解 `#/team` 的设计风格后优化整个网站。新增展示衬线 `--display`（拉丁 Iowan、中文宋体），用于侧栏标题（板块写成中英一对，如「题库 Questions」）、集合标题、题目卡片标题与首页区块标题。侧栏选中项改为朱红小点；题库卡片的解决状态改为中性底、只靠圆点区分，精选星移到标题前；排行榜能力维度列只对管理员显示，前三名大号衬线、第一名朱红；首页公告改为描边胶囊，团队卡去掉「点击右侧按钮」；成员头像加载前和失败时显示首字母。`docs/DESIGN.md` 已同步。
+- check 135/0。测试 206 项：198 通过、7 失败、1 取消，7 项与改动前同名（既有）；`leaderboard-reads` 沙箱补 `isStaff` 桩后整文件通过。build 与 check:intake 无数据权限未跑；管理员视角未登录验证。提交在 `sync/vps-trial-20261123`，未推送。[本轮归档](docs/archive/2026-11-23-site-redesign-wsnxxxs.md)
+
 ## 2026-11-23 · 试运行站成员照片与赞赏码不入库
 
 - 用户决定：`site/assets/team/*.jpg` 16 张成员照片和个人赞赏码 `site/assets/support-qr.jpg` 不进公开仓库，已从本分支历史去掉并加入 `.gitignore`。原图在服务器 `/root/private-assets/gallery-guided-trial/`，部署试运行站时构建后覆盖到产物上。本分支不合并 `main`，试运行站从本分支部署。详见 `docs/archive/2026-11-23-vps-sync-wsnxxxs.md` 文末。

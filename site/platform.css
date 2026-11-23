@@ -462,8 +462,12 @@ table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; font-va
 .board tbody tr { transition: background-color 0.2s; }
 .board tbody tr:hover { background: var(--surface); }
 .board .c-rank, .board .c-model { text-align: left; }
-.board td.c-rank { width: 3.5em; color: var(--muted); font: 400 15px var(--mono); }
-.board td.c-rank.is-top { color: var(--accent); font: 600 19px var(--serif); }
+.board td.c-rank { width: 4em; color: var(--muted); font: 400 15px var(--mono); }
+/* The podium in the team page's display serif: ink for the top three, vermilion only for first. */
+.board td.c-rank.is-top { width: 2em; color: var(--ink); font: 400 30px/1 var(--display); letter-spacing: -.03em; } /* 2em here is the 4em of the 15px cells */
+/* First place is marked on its row by rank, not by row order, so search and shared places stay right. */
+.board tr.is-first > td.c-rank.is-top { color: var(--accent); }
+.board tr:has(> td.c-rank.is-top) .board-name b { font-size: 16px; }
 .board-model { display: flex; align-items: center; gap: 10px; }
 .board-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; white-space: normal; }
 .board-name b { color: var(--ink); font-size: 14.5px; font-weight: 600; }
@@ -1263,6 +1267,7 @@ dialog.sheet.work-manage-sheet { width: min(1040px, calc(100% - 40px)); overflow
   .board th, .board td { padding-inline: 6px; }
   .board .c-range, .board .c-record, .board .c-works { display: none; }
   .board td.c-score b { font-size: 17px; }
+  .board td.c-rank.is-top { font-size: 24px; }
   .board-model .brand-mark { display: none; }
   .board.is-v3 .c-games, .board.is-v3 .c-works { display: none; }
   .board.is-v3 th.c-rate { white-space: normal; }
@@ -1549,10 +1554,12 @@ dialog.sheet.challenge-sheet { width: min(400px, calc(100% - 32px)); }
 .home-news-title { min-width: 0; max-width: 28em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-news .i { flex: none; width: 13px; height: 13px; color: var(--muted); transition: transform 0.2s; }
 .home-news:hover .i { transform: translateX(2px); }
-.home-announcement { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--accent); color: var(--inv-ink); font-size: 12.5px; font-weight: 650; white-space: nowrap; cursor: pointer; transition: filter .2s, transform .2s; }
-.home-announcement:hover { filter: brightness(1.1); transform: translateY(-1px); }
+/* The notice keeps the accent as punctuation (a dot and the date), not as a filled red pill next to the verse's own red stop. */
+.home-announcement { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 11px; border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line)); border-radius: 999px; background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--ink); font-size: 12.5px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: border-color .2s, background-color .2s, transform .2s; }
+.home-announcement:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, transparent); transform: translateY(-1px); }
 .home-announcement:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
-.home-announcement time { font: 600 12px var(--mono); }
+.home-announcement time { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); font: 500 12px var(--mono); }
+.home-announcement time::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .home-announcement .i { width: 13px; height: 13px; }
 @keyframes home-news-in { from { opacity: 0; } }
 
@@ -2001,76 +2008,29 @@ dialog.sheet.usage-sheet { width: min(720px, calc(100% - 32px)); }
   .usage-paid-row { flex-wrap: wrap; }
 }
 /* ---- Question solve status badges (guided-trial only) ---- */
-[data-solve-status="hard"] {
-  --solve-dot: #f87171;
-  --solve-fg: #fca5a5;
-  --solve-bg: rgba(239, 68, 68, 0.14);
-  --solve-pill-bg: rgba(44, 20, 20, 0.88);
-  --solve-bd: rgba(248, 113, 113, 0.34);
+/* The status is told by the dot alone, in the page's own palette: vermilion for hard, ochre while it is
+   being solved, a muted green once solved, grey for too few results. The pill is the page's neutral
+   glass, so four statuses no longer paint four colours over the artwork. */
+[data-solve-status] {
+  --solve-fg: var(--ink-2);
+  --solve-bg: var(--surface-2);
+  --solve-pill-bg: color-mix(in srgb, var(--bg) 82%, transparent);
+  --solve-bd: var(--line);
+  --solve-dot: var(--muted);
 }
-[data-solve-status="solving"] {
-  --solve-dot: #facc15;
-  --solve-fg: #fde047;
-  --solve-bg: rgba(234, 179, 8, 0.14);
-  --solve-pill-bg: rgba(44, 36, 14, 0.88);
-  --solve-bd: rgba(250, 204, 21, 0.34);
-}
-[data-solve-status="solved"] {
-  --solve-dot: #4ade80;
-  --solve-fg: #86efac;
-  --solve-bg: rgba(34, 197, 94, 0.14);
-  --solve-pill-bg: rgba(16, 40, 24, 0.88);
-  --solve-bd: rgba(74, 222, 128, 0.34);
-}
-[data-solve-status="scarce"] {
-  --solve-dot: #a8a69f;
-  --solve-fg: #c6c4bc;
-  --solve-bg: rgba(160, 158, 150, 0.14);
-  --solve-pill-bg: rgba(38, 38, 35, 0.88);
-  --solve-bd: rgba(168, 166, 159, 0.28);
-}
-html[data-theme="light"] [data-solve-status="hard"] {
-  --solve-dot: #dc2626;
-  --solve-fg: #b91c1c;
-  --solve-bg: rgba(220, 38, 38, 0.08);
-  --solve-pill-bg: rgba(254, 242, 242, 0.94);
-  --solve-bd: rgba(220, 38, 38, 0.26);
-}
-html[data-theme="light"] [data-solve-status="solving"] {
-  --solve-dot: #eab308;
-  --solve-fg: #a16207;
-  --solve-bg: rgba(234, 179, 8, 0.11);
-  --solve-pill-bg: rgba(254, 249, 231, 0.94);
-  --solve-bd: rgba(202, 138, 4, 0.32);
-}
-html[data-theme="light"] [data-solve-status="solved"] {
-  --solve-dot: #16a34a;
-  --solve-fg: #15803d;
-  --solve-bg: rgba(22, 163, 74, 0.09);
-  --solve-pill-bg: rgba(240, 253, 244, 0.94);
-  --solve-bd: rgba(22, 163, 74, 0.28);
-}
-html[data-theme="light"] [data-solve-status="scarce"] {
-  --solve-dot: #78766f;
-  --solve-fg: #57554e;
-  --solve-bg: rgba(110, 108, 101, 0.09);
-  --solve-pill-bg: rgba(243, 242, 238, 0.94);
-  --solve-bd: rgba(110, 108, 101, 0.24);
-}
+[data-solve-status="hard"] { --solve-dot: var(--accent); }
+[data-solve-status="solving"] { --solve-dot: #d3a03c; }
+[data-solve-status="solved"] { --solve-dot: #5fae7d; }
+html[data-theme="light"] [data-solve-status="solving"] { --solve-dot: #b27b12; }
+html[data-theme="light"] [data-solve-status="solved"] { --solve-dot: #2f7f52; }
 
 .task-card {
   position: relative;
 }
-.task-curated-star {
-  position: absolute; top: 10px; left: 10px; z-index: 6;
-  display: grid; place-items: center; width: 28px; height: 28px;
-  border: 1px solid var(--gold-seal-bd); border-radius: 50%;
-  background: var(--gold-seal-bg); color: var(--gold-seal);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 var(--pvc-rim), 2px 3px 0 rgb(28 27 25 / 11%), 0 4px 10px rgb(28 27 25 / 16%);
-  pointer-events: none;
-}
+/* A curated question wears a small gold star before its title, so the artwork above stays uncovered. */
+.task-curated-star { display: inline-block; width: .78em; height: .78em; margin-right: .32em; vertical-align: -.04em; color: var(--gold-seal); }
 .task-curated-star[hidden] { display: none; }
+.task-curated-star .curated-star-svg { width: 100%; height: 100%; }
 .curated-star-svg { display: block; width: 15px; height: 15px; }
 .curated-side { margin: 18px 0 0; padding: 13px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: inset 0 1px 0 var(--pvc-rim); }
 .curated-side label { display: flex; align-items: center; gap: 9px; color: var(--ink); font: 500 13px var(--sans); cursor: pointer; }
@@ -2084,8 +2044,8 @@ html[data-theme="light"] [data-solve-status="scarce"] {
 
 .solve-dot {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--solve-dot, #a8a69f);
 }
@@ -2098,26 +2058,22 @@ html[data-theme="light"] [data-solve-status="scarce"] {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 26px;
-  padding: 3px 10px;
+  min-height: 24px;
+  padding: 2px 9px 2px 8px;
   border-radius: 999px;
   border: 1px solid var(--solve-bd);
   background: var(--solve-pill-bg);
   color: var(--solve-fg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   line-height: 1.2;
   appearance: none;
   user-select: none;
   cursor: default;
   transition: filter .18s ease, border-color .18s ease, transform .12s ease;
-}
-html[data-theme="light"] .solve-corner {
-  box-shadow: 0 2px 6px rgba(20, 20, 18, 0.1);
 }
 .solve-corner.is-editable {
   cursor: pointer;
@@ -2560,13 +2516,11 @@ body.has-prompt-modal { overflow: hidden; }
   max-width: 1180px;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%), 0 22px 54px -28px rgb(0 0 0 / 72%);
-}
-:root[data-theme="light"] .home-hero-frame {
-  box-shadow: 0 1px 2px rgb(28 27 25 / 4%), 0 18px 44px -24px rgb(28 27 25 / 16%);
+  /* A sheet laid on the table rather than a card hovering over it. */
+  box-shadow: inset 0 1px 0 var(--pvc-rim);
 }
 .home-hero-track {
   display: flex;
@@ -3238,6 +3192,8 @@ body.has-prompt-modal { overflow: hidden; }
   height: clamp(144px, 14.6vw, 210px);
   border-radius: 50%;
   overflow: hidden;
+  display: grid;
+  place-items: center;
   background: var(--raised);
   box-shadow:
     12px 14px 22px rgb(16 16 15 / 14%),
@@ -3250,7 +3206,15 @@ body.has-prompt-modal { overflow: hidden; }
     14px 16px 28px rgb(0 0 0 / 52%),
     4px 6px 10px rgb(0 0 0 / 36%);
 }
+/* Until the photo arrives the circle holds the member's initial in the display serif, not an empty disc. */
+.team-profile-avatar::before {
+  content: attr(data-initial);
+  grid-area: 1 / 1;
+  color: var(--muted);
+  font: 400 clamp(52px, 5vw, 76px)/1 var(--display);
+}
 .team-profile-avatar img {
+  grid-area: 1 / 1;
   display: block;
   width: 100%;
   height: 100%;
