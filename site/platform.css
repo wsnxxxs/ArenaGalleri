@@ -122,8 +122,8 @@ dialog.sheet.auth-sheet, .auth-overlay .sheet.auth-sheet { width: min(380px, cal
 
 /* The sign-in artwork uses the existing paper, ink and theme accent. */
 .auth-entry {
-  --auth-paper: #f5f4f0;
-  --auth-ink: #1c1b19;
+  --auth-paper: #ffffff;
+  --auth-ink: #111110;
   --auth-on-accent: var(--auth-paper);
 }
 :root[data-theme="dark"] .auth-entry { --auth-on-accent: var(--auth-ink); }
@@ -2014,9 +2014,12 @@ dialog.sheet.usage-sheet { width: min(720px, calc(100% - 32px)); }
 [data-solve-status] {
   --solve-fg: var(--ink-2);
   --solve-bg: var(--surface-2);
-  --solve-pill-bg: color-mix(in srgb, var(--bg) 82%, transparent);
-  --solve-bd: var(--line);
+  --solve-pill-bg: color-mix(in srgb, var(--raised) 86%, transparent);
+  --solve-bd: rgb(20 20 18 / 14%);
   --solve-dot: var(--muted);
+}
+:root[data-theme="dark"] [data-solve-status] {
+  --solve-bd: rgb(255 255 255 / 16%);
 }
 [data-solve-status="hard"] { --solve-dot: var(--accent); }
 [data-solve-status="solving"] { --solve-dot: #d3a03c; }
@@ -2066,6 +2069,7 @@ html[data-theme="light"] [data-solve-status="solved"] { --solve-dot: #2f7f52; }
   color: var(--solve-fg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 var(--pvc-rim), 0 2px 8px rgb(16 16 15 / 11%);
   font: inherit;
   font-size: 11.5px;
   font-weight: 500;
@@ -2193,7 +2197,7 @@ html[data-theme="light"] [data-solve-status="solved"] { --solve-dot: #2f7f52; }
   object-position: 50% 0%;
   transform-origin: 50% 5%;
   scale: 1.5;
-  background: #faf9f6;
+  background: var(--raised);
 }
 :is(.question-visual, .home-window-shot, .shot-img, .slot-thumb, .work-thumb)[data-preview-zoom="audio"] > img:not(.is-poster),
 .result-media[data-preview-zoom="audio"] > a > img:not(.result-model-poster) {
@@ -2201,7 +2205,7 @@ html[data-theme="light"] [data-solve-status="solved"] { --solve-dot: #2f7f52; }
   object-position: 50% 50%;
   transform-origin: 50% 50%;
   scale: 1.5;
-  background: #faf9f6;
+  background: var(--raised);
 }
 /* ---- Sidebar tree categories & subcategories (guided-trial only) ---- */
 .side-tree-group {
@@ -2516,11 +2520,10 @@ body.has-prompt-modal { overflow: hidden; }
   max-width: 1180px;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--card-edge);
   border-radius: 18px;
-  background: var(--surface);
-  /* A sheet laid on the table rather than a card hovering over it. */
-  box-shadow: inset 0 1px 0 var(--pvc-rim);
+  background: linear-gradient(168deg, var(--raised) 0%, var(--surface) 100%);
+  box-shadow: inset 0 1px 0 var(--pvc-rim), var(--elev-2);
 }
 .home-hero-track {
   display: flex;

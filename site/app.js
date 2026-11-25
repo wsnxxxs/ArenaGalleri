@@ -621,18 +621,30 @@ const platformNotice = () => `<div class="platform-notice" role="status"><div cl
   <button type="button" class="link" data-reload>刷新页面</button>
 </div></div>`;
 function header(crumbs = [], showPreviewSetting = false, current = '', { notice = true } = {}) {
-  const nav = catalogState() !== 'static'
-    ? `<nav class="site-nav" aria-label="平台">${SITE_NAV.map(([id, text]) => `<a class="topbar-link" href="#/${id}"${id === current ? ' aria-current="page"' : ''}>${text}</a>`).join('')}</nav>`
+  const hasNav = catalogState() !== 'static';
+  const navItems = SITE_NAV.filter(([id]) => id !== 'new');
+  const publishItem = SITE_NAV.find(([id]) => id === 'new');
+  const nav = hasNav
+    ? `<nav class="site-nav" aria-label="平台">${navItems.map(([id, text]) => `<a class="topbar-link" href="#/${id}"${id === current ? ' aria-current="page"' : ''}>${text}</a>`).join('')}</nav>`
+    : '';
+  const cta = hasNav && publishItem
+    ? `<a class="topbar-link topbar-cta" href="#/${publishItem[0]}"${publishItem[0] === current ? ' aria-current="page"' : ''}>${icon('plus')}<span>${publishItem[1]}</span></a>`
     : '';
   return `<header class="topbar"><div class="wrap topbar-in">
-    <a class="brand" href="#/" aria-label="${esc(DATA.title)} · 首页">${LOGO}<span class="wordmark">${esc(DATA.title)}</span></a>
-    ${backLink('top-back')}
-    <nav class="crumbs" aria-label="面包屑">${breadcrumbTrail(crumbs)}</nav>
+    <div class="topbar-island topbar-left">
+      <a class="brand" href="#/" aria-label="${esc(DATA.title)} · 首页">${LOGO}<span class="wordmark">${esc(DATA.title)}</span></a>
+      ${backLink('top-back')}
+      <nav class="crumbs" aria-label="面包屑">${breadcrumbTrail(crumbs)}</nav>
+    </div>
     <div class="topbar-tools${showPreviewSetting ? ' has-preview-setting' : ''}${platform.available ? ' has-platform' : ''}">
-      ${nav}
-      ${platform.available ? '' : ext(DATA.repo, 'GitHub', 'topbar-link topbar-github')}
-      ${languageButton()}${themeButton()}
       ${accountControl(current === 'me')}
+      <div class="topbar-island topbar-dock">
+        ${nav}
+        ${hasNav ? '<span class="topbar-sep" aria-hidden="true"></span>' : ''}
+        ${platform.available ? '' : ext(DATA.repo, 'GitHub', 'topbar-link topbar-github')}
+        ${languageButton()}${themeButton()}
+        ${cta}
+      </div>
     </div>
   </div></header>${notice && platform.available && platform.connectionError ? `<div class="platform-notice" role="status"><div class="wrap platform-notice-in"><span class="platform-notice-mark" aria-hidden="true"></span><p><strong>连接暂时中断</strong><span>当前保留上次加载的作品与账户信息，重新连接后更新。</span></p><button type="button" class="link" data-platform-reconnect>重新连接</button></div></div>` : platform.stale && notice ? platformNotice() : ''}`;
 }
@@ -2789,6 +2801,57 @@ async function show(version, visit, scrollBack) {
   if (scrolls) scrollTo(0, scrollBack);
   return { ready: page?.ready, scrolls };
 }
+
+// BewlyBewly-style floating topbar auto-hide: tucks up on downward scroll, glides back on upward scroll.
+(() => {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  const rootEl = document.documentElement;
+  let lastY = Math.max(0, window.scrollY || 0);
+  let ticking = false;
+  const setHidden = (hide) => rootEl.classList.toggle('is-topbar-hidden', hide);
+  const canHide = () => {
+    const bar = document.querySelector('#app > .topbar:not(.sandbar)');
+    if (!bar) return false;
+    if (bar.matches(':hover') || bar.matches(':focus-within')) return false;
+    if (document.querySelector('.account-menu')) return false;
+    const cl = document.body.classList;
+    if (cl.contains('lb-open') || cl.contains('is-viewer') || cl.contains('has-prompt-modal')) return false;
+    return true;
+  };
+  const update = () => {
+    ticking = false;
+    const y = Math.max(0, window.scrollY || 0);
+    if (y <= 36) {
+      setHidden(false);
+      lastY = y;
+      return;
+    }
+    const dy = y - lastY;
+    if (dy >= 8 && y > 72 && canHide()) {
+      setHidden(true);
+      lastY = y;
+    } else if (dy <= -6) {
+      setHidden(false);
+      lastY = y;
+    } else if (!canHide()) {
+      setHidden(false);
+      lastY = y;
+    }
+  };
+  addEventListener('scroll', () => {
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(update);
+    }
+  }, { passive: true });
+  addEventListener('mousemove', (e) => {
+    if (e.clientY <= 22 && rootEl.classList.contains('is-topbar-hidden')) setHidden(false);
+  }, { passive: true });
+  addEventListener('hashchange', () => {
+    lastY = 0;
+    setHidden(false);
+  });
+})();
 
 // Signing in or out, a review or an upload: merge the new state and redraw what shows it.
 onPlatformChange((reason) => {

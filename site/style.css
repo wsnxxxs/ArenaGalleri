@@ -1,39 +1,42 @@
 /* ---- tokens ---------------------------------------------------------------------------
-   Warm paper and ink, one vermilion accent used sparingly. The inline script in
-   index.html always sets data-theme, so dark tokens only need one block. */
+   Gallery white and charcoal aligned with the #/team stage, tactile acrylic rims and one
+   vermilion accent used sparingly. The inline script in index.html always sets data-theme. */
 :root {
-  --bg: #f5f4f0;
-  --surface: #fbfaf8;
-  --surface-2: #eeede8;
+  --bg: #ffffff;
+  --surface: #f7f7f5;
+  --surface-2: #efefec;
   --raised: #ffffff;
-  --ink: #1c1b19;
-  --ink-2: #4a4843;
-  --muted: #74716a;
-  --line: #e3e1db;
-  --line-2: #d0cdc5;
+  --ink: #111110;
+  --ink-2: #3d3d3a;
+  --muted: #787773;
+  --line: #eaeae7;
+  --line-2: #d5d5d0;
   --accent: #bf3f28;
-  --accent-soft: rgb(191 63 40 / 9%);
-  --inv: #1c1b19;
-  --inv-hover: #34332f;
-  --inv-ink: #f5f4f0;
-  --glass: rgb(245 244 240 / 86%);
-  --shadow-sm: 2px 3px 0 rgb(28 27 25 / 4%), 4px 8px 18px -6px rgb(28 27 25 / 11%), 0 1px 2px rgb(28 27 25 / 5%);
-  --shadow-lg: 6px 9px 0 rgb(28 27 25 / 5%), 18px 28px 56px -14px rgb(28 27 25 / 24%), 0 3px 10px rgb(28 27 25 / 8%);
-  --elev-1: 2px 3px 0 rgb(28 27 25 / 4%), 4px 8px 18px -6px rgb(28 27 25 / 11%), 0 1px 2px rgb(28 27 25 / 5%);
-  --elev-2: 4px 6px 0 rgb(28 27 25 / 5%), 10px 18px 34px -10px rgb(28 27 25 / 17%), 0 2px 6px rgb(28 27 25 / 7%);
-  --elev-3: 6px 9px 0 rgb(28 27 25 / 5%), 18px 28px 56px -14px rgb(28 27 25 / 24%), 0 3px 10px rgb(28 27 25 / 8%);
-  --pvc-rim: rgb(255 255 255 / 78%);
-  --pvc-edge: rgb(28 27 25 / 12%);
-  --draft-line: rgb(28 27 25 / 8%);
-  --draft-stroke: rgb(28 27 25 / 34%);
-  --draft-dash: rgb(28 27 25 / 22%);
-  --draft-fill: rgb(245 244 240 / 92%);
-  --draft-hatch: rgb(28 27 25 / 8%);
+  --accent-soft: rgb(191 63 40 / 8%);
+  --inv: #111110;
+  --inv-hover: #292927;
+  --inv-ink: #ffffff;
+  --glass: rgb(255 255 255 / 85%);
+  --card-bg: linear-gradient(168deg, #ffffff 0%, #f9fafb 54%, #fcfcfb 100%);
+  --card-edge: rgb(20 20 18 / 12%);
+  --card-edge-hover: rgb(20 20 18 / 24%);
+  --shadow-sm: 0 1px 2px rgb(16 16 15 / 5%), 0 6px 16px -6px rgb(16 16 15 / 9%);
+  --shadow-lg: 0 4px 12px rgb(16 16 15 / 7%), 0 24px 50px -12px rgb(16 16 15 / 20%);
+  --elev-1: 0 1.5px 0 rgb(20 20 18 / 5.5%), 0 10px 24px -10px rgb(16 16 15 / 12%), 0 2px 6px rgb(16 16 15 / 5%);
+  --elev-2: 0 2px 0 rgb(20 20 18 / 7%), 0 16px 34px -10px rgb(16 16 15 / 16%), 0 3px 8px rgb(16 16 15 / 6%);
+  --elev-3: 0 4px 12px rgb(16 16 15 / 7%), 0 26px 54px -12px rgb(16 16 15 / 20%);
+  --pvc-rim: rgb(255 255 255 / 92%);
+  --pvc-edge: rgb(20 20 18 / 12%);
+  --draft-line: rgb(17 17 16 / 7%);
+  --draft-stroke: rgb(17 17 16 / 30%);
+  --draft-dash: rgb(17 17 16 / 18%);
+  --draft-fill: rgb(255 255 255 / 94%);
+  --draft-hatch: rgb(17 17 16 / 7%);
   --gold-seal: #c98c1e;
-  --gold-seal-bg: rgb(255 253 247 / 92%);
-  --gold-seal-bd: rgb(201 140 30 / 42%);
+  --gold-seal-bg: rgb(255 253 248 / 92%);
+  --gold-seal-bd: rgb(201 140 30 / 38%);
   --mark-bg: #ffffff;
-  --img-bg: #e9e7e1;
+  --img-bg: #f2f2ef;
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -49,38 +52,41 @@
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --bg: #121211;
-  --surface: #191918;
-  --surface-2: #222220;
-  --raised: #1e1e1c;
+  --bg: #111110;
+  --surface: #171716;
+  --surface-2: #21211f;
+  --raised: #1b1b1a;
   --ink: #ecebe6;
-  --ink-2: #bcb9b1;
-  --muted: #8d8a82;
-  --line: #2a2927;
-  --line-2: #3b3a36;
+  --ink-2: #c2c0b9;
+  --muted: #95928a;
+  --line: #252523;
+  --line-2: #383835;
   --accent: #e46a50;
   --accent-soft: rgb(228 106 80 / 13%);
   --inv: #ecebe6;
   --inv-hover: #ffffff;
-  --inv-ink: #121211;
-  --glass: rgb(18 18 17 / 86%);
-  --shadow-sm: inset 0 1px 0 rgb(255 255 255 / 5%), 2px 3px 0 rgb(0 0 0 / 28%), 6px 12px 24px -8px rgb(0 0 0 / 54%);
-  --shadow-lg: inset 0 1px 0 rgb(255 255 255 / 8%), 6px 10px 0 rgb(0 0 0 / 38%), 20px 34px 64px -12px rgb(0 0 0 / 76%), 0 0 0 1px rgb(255 255 255 / 5%);
-  --elev-1: inset 0 1px 0 rgb(255 255 255 / 5%), 2px 3px 0 rgb(0 0 0 / 28%), 6px 12px 24px -8px rgb(0 0 0 / 54%);
-  --elev-2: inset 0 1px 0 rgb(255 255 255 / 7%), 4px 6px 0 rgb(0 0 0 / 34%), 12px 22px 42px -10px rgb(0 0 0 / 66%);
-  --elev-3: inset 0 1px 0 rgb(255 255 255 / 9%), 6px 10px 0 rgb(0 0 0 / 38%), 20px 34px 64px -12px rgb(0 0 0 / 78%), 0 0 0 1px rgb(255 255 255 / 5%);
-  --pvc-rim: rgb(255 255 255 / 9%);
-  --pvc-edge: rgb(255 255 255 / 12%);
+  --inv-ink: #111110;
+  --glass: rgb(17 17 16 / 82%);
+  --card-bg: linear-gradient(165deg, rgb(31 31 29 / 94%) 0%, rgb(22 22 21 / 96%) 100%);
+  --card-edge: rgb(255 255 255 / 11%);
+  --card-edge-hover: rgb(255 255 255 / 22%);
+  --shadow-sm: inset 0 1px 0 rgb(255 255 255 / 6%), 0 2px 6px rgb(0 0 0 / 34%), 0 10px 24px -8px rgb(0 0 0 / 54%);
+  --shadow-lg: inset 0 1px 0 rgb(255 255 255 / 9%), 0 6px 16px rgb(0 0 0 / 42%), 0 24px 56px -12px rgb(0 0 0 / 78%), 0 0 0 1px rgb(255 255 255 / 5%);
+  --elev-1: inset 0 1px 0 rgb(255 255 255 / 6%), 0 2px 6px rgb(0 0 0 / 34%), 0 10px 24px -8px rgb(0 0 0 / 52%);
+  --elev-2: inset 0 1px 0 rgb(255 255 255 / 8%), 0 4px 12px rgb(0 0 0 / 40%), 0 18px 36px -10px rgb(0 0 0 / 66%);
+  --elev-3: inset 0 1px 0 rgb(255 255 255 / 10%), 0 6px 16px rgb(0 0 0 / 44%), 0 26px 56px -12px rgb(0 0 0 / 78%), 0 0 0 1px rgb(255 255 255 / 5%);
+  --pvc-rim: rgb(255 255 255 / 8%);
+  --pvc-edge: rgb(255 255 255 / 14%);
   --draft-line: rgb(236 235 230 / 8%);
   --draft-stroke: rgb(236 235 230 / 34%);
   --draft-dash: rgb(236 235 230 / 20%);
-  --draft-fill: rgb(18 18 17 / 94%);
+  --draft-fill: rgb(17 17 16 / 94%);
   --draft-hatch: rgb(236 235 230 / 8%);
   --gold-seal: #eab54c;
   --gold-seal-bg: rgb(32 28 20 / 90%);
   --gold-seal-bd: rgb(234 181 76 / 44%);
   --mark-bg: #f1f0ec;
-  --img-bg: #1f1f1d;
+  --img-bg: #1c1c1a;
   color-scheme: dark;
 }
 
@@ -91,11 +97,15 @@ html, body { max-width: 100%; overflow-x: clip; }
 [hidden] { display: none !important; }
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--ink);
   font: 15px/1.7 var(--sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+:root[data-theme="dark"] body {
+  background-image: radial-gradient(ellipse 72% 50% at 50% 0%, rgb(255 252 246 / 4.5%), transparent 72%);
+  background-attachment: fixed;
 }
 body.lb-open, body.is-viewer { overflow: hidden; }
 ::selection { background: var(--accent-soft); color: var(--ink); }

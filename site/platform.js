@@ -942,18 +942,20 @@ export function accountControl(current = false) {
   if (!platform.sessionReady) {
     if (catalogState() === 'static') return '';
     const waiting = platform.sessionConnecting || !platform.sessionError;
-    return `<div class="account" data-account><button type="button" class="account-btn" data-platform-reconnect${waiting || platform.mismatch ? ' disabled' : ''} aria-label="${waiting ? '正在连接账户' : '账户连接暂不可用，重新连接'}">${icon('user')}<span class="account-name">${waiting ? '账户连接中…' : '账户连接中断'}</span></button></div>`;
+    const label = waiting ? '正在连接账户' : '账户连接暂不可用，重新连接';
+    return `<div class="account" data-account><button type="button" class="account-btn is-connecting" data-platform-reconnect${waiting || platform.mismatch ? ' disabled' : ''} aria-label="${label}" title="${label}">${icon('user')}<span class="account-name">${waiting ? '账户连接中…' : '账户连接中断'}</span></button></div>`;
   }
   const user = platform.user;
   const name = user?.nickname || user?.name;
   if (user) return `<div class="account" data-account${current ? ' data-current' : ''}>
-    <a class="account-btn signed-in" href="#/me"${current ? ' aria-current="page"' : ''} aria-label="${esc(name)} · 个人中心"><span class="avatar" aria-hidden="true">${avatarFace(user.avatar, name)}</span><span class="account-name" data-i18n-ignore>${esc(name)}</span></a>
-    <button class="icon-btn account-navigation" data-menu aria-haspopup="true" aria-expanded="false" aria-label="打开导航菜单">${icon('menu')}</button>
+    <a class="account-btn signed-in" href="#/me"${current ? ' aria-current="page"' : ''} aria-label="${esc(name)} · 个人中心" title="${esc(name)} · 个人中心"><span class="avatar" aria-hidden="true">${avatarFace(user.avatar, name)}</span><span class="account-name" data-i18n-ignore>${esc(name)}</span></a>
+    <button class="icon-btn account-navigation" data-menu aria-haspopup="true" aria-expanded="false" aria-label="打开导航菜单" title="打开导航菜单">${icon('menu')}</button>
   </div>`;
   return `<div class="account" data-account>
-    <button class="account-btn" data-menu aria-haspopup="true" aria-expanded="false" aria-label="登录与菜单">
+    <button class="account-btn is-guest" data-menu aria-haspopup="true" aria-expanded="false" aria-label="登录与菜单" title="登录与菜单">
+      <span class="account-icon-user" aria-hidden="true">${icon('user')}</span>
+      <span class="account-icon-menu" aria-hidden="true">${icon('menu')}</span>
       <span class="account-name">账户</span>
-      ${icon('menu')}
       ${reviewCount() ? `<span class="dot" aria-hidden="true"></span>` : ''}
     </button>
   </div>`;
