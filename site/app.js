@@ -729,6 +729,7 @@ function libraryStart(crumbs) {
         <span class="side-divider" aria-hidden="true"></span>
         ${control('side-link', 'data-home-view="models"', false, `${icon('code')}模型索引${['ready', 'static'].includes(catalogState()) ? `<span class="nav-count">${models.length}</span>` : ''}`)}
       </nav>
+      <div class="side-mobile-subcats chips" data-mobile-subcats hidden></div>
       ${domains.length ? `<section class="side-section" aria-label="按领域筛选"><h2>领域</h2><div class="chips">${domains.map((d) => control('chip', `data-home-domain="${esc(d.name)}"`, false, `${esc(d.name)}<span class="nav-count">${d.tasks.length}</span>`)).join('')}</div></section>` : ''}
       <div class="side-bottom"><p>${['ready', 'static'].includes(catalogState()) ? `${vendorCount} 家厂商 · ${models.length} 个模型<br>` : ''}同一份提示词，不同的表达。</p></div>
     </aside>
@@ -1030,6 +1031,17 @@ function renderLibrary(scopes = [], fresh = true) {
       el.dataset.parentActive = String(isCat);
     });
     $$('[data-home-subcategory]').forEach((el) => el.setAttribute('aria-pressed', String(homeState.view === 'tasks' && el.dataset.parentCategory === homeState.category && el.dataset.homeSubcategory === homeState.subcategory)));
+    const mobileSubs = $('[data-mobile-subcats]', root);
+    if (mobileSubs) {
+      const activeTrack = homeState.view === 'tasks' && homeState.treeOpen && homeState.category
+        ? tracksOf(DATA.tasks, { alwaysInclude: CATEGORIES.map((c) => c.name) }).find((x) => x.name === homeState.category)
+        : null;
+      const subs = activeTrack?.subcategories ?? [];
+      mobileSubs.hidden = !subs.length;
+      mobileSubs.innerHTML = subs.length ? subs.map((sub) => sub.disabled
+        ? `<span class="chip is-disabled" aria-disabled="true">${esc(sub.label)}</span>`
+        : `<button type="button" class="chip" data-home-subcategory="${esc(sub.name)}" data-parent-category="${esc(activeTrack.name)}" aria-pressed="${sub.name === homeState.subcategory}">${esc(sub.label)}<span class="nav-count">${sub.count}</span></button>`).join('') : '';
+    }
     $$('[data-home-domain]').forEach((el) => el.setAttribute('aria-pressed', String(homeState.view === 'tasks' && el.dataset.homeDomain === homeState.domain)));
     const scopes = homeState.view === 'tasks' ? [homeState.category, homeState.subcategory, homeState.domain].filter(Boolean) : [];
     const scopeCrumbs = homeState.view === 'models' ? [{ text: '模型索引' }] : scopes.map((x) => ({ text: categoryOf(x) ? categoryLabel(x) : x }));
@@ -2821,6 +2833,7 @@ async function show(version, visit, scrollBack) {
   const update = () => {
     ticking = false;
     const y = Math.max(0, window.scrollY || 0);
+    rootEl.classList.toggle('is-topbar-scrolled', y > 10);
     if (y <= 36) {
       setHidden(false);
       lastY = y;
@@ -2849,6 +2862,7 @@ async function show(version, visit, scrollBack) {
   }, { passive: true });
   addEventListener('hashchange', () => {
     lastY = 0;
+    rootEl.classList.remove('is-topbar-scrolled');
     setHidden(false);
   });
 })();
@@ -2907,6 +2921,10 @@ try {
   initialPlatformSettled = true;
   if (!platform.available && resultSort === 'score') resultSort = 'added';
   mergePlatform();
+  if (!back) {
+    const here = placeOf(location.hash);
+    if (here.up) back = { up: here.up, text: placeOf(here.up).name, href: here.up, steps: 0 };
+  }
   // A mounted review already owns its arrival read; preserve it across startup settling.
   if (page?.review && /^#\/?review(?:\/|$)/.test(location.hash)) refreshAccountControls();
   else await route({ keepScroll: true });

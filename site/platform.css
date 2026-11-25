@@ -2305,6 +2305,41 @@ html[data-theme="light"] [data-solve-status="solved"] { --solve-dot: #2f7f52; }
   opacity: 0.55;
   cursor: not-allowed;
 }
+.side-mobile-subcats {
+  display: none;
+}
+@media (max-width: 760px) {
+  .section-nav .side-tree-group {
+    flex: none;
+    display: inline-flex;
+  }
+  .section-nav .side-tree-children-wrap {
+    display: none !important;
+  }
+  .side-mobile-subcats:not([hidden]) {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 6px calc(-1 * var(--gutter)) 0;
+    padding: 4px var(--gutter) 2px;
+  }
+  .side-mobile-subcats::-webkit-scrollbar {
+    display: none;
+  }
+  .side-mobile-subcats .chip {
+    flex: none;
+    border-radius: 999px;
+    padding: 3px 11px;
+    font-size: 12px;
+  }
+  .side-mobile-subcats .chip.is-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
 
 .tag-line .tag-sub,
 .side-tags .tag-sub {
@@ -2912,7 +2947,8 @@ body.has-prompt-modal { overflow: hidden; }
   width: 100%;
   height: clamp(640px, calc(100dvh - var(--topbar)), 920px);
   min-height: 580px;
-  overflow: hidden;
+  overflow: visible;
+  clip-path: inset(-140px 0 0 0);
   background: var(--team-bg);
   color: var(--team-ink);
   border-bottom: 1px solid var(--line);
@@ -3808,6 +3844,37 @@ body.has-prompt-modal { overflow: hidden; }
     --team-badge-w: 214px;
     --team-badge-h: 312px;
     --deck-scale: 0.72;
+  }
+  .team-overview {
+    padding: 12px 18px 34px;
+    gap: 16px;
+  }
+  .team-stage[data-has-extra="true"] .team-detail-hero {
+    height: clamp(468px, calc(100dvh - 212px), 556px);
+  }
+  .team-stage[data-has-extra="true"] .team-profile-extra {
+    display: grid;
+    grid-template-columns: 80px minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+    padding: 8px 20px 36px;
+  }
+  .team-stage[data-has-extra="true"] .team-profile-avatar {
+    align-self: center;
+    margin-right: 0;
+    width: 80px;
+    height: 80px;
+  }
+  .team-stage[data-has-extra="true"] .team-profile-avatar::before {
+    font-size: 34px;
+  }
+  .team-stage[data-has-extra="true"] .team-profile-intro-label {
+    font-size: 12.5px;
+    margin-bottom: 3px;
+  }
+  .team-stage[data-has-extra="true"] .team-profile-intro-body {
+    font-size: clamp(16px, 4.4vw, 19px);
+    line-height: 1.5;
   }
   .team-corner {
     top: 18px;

@@ -603,10 +603,10 @@ export function mount(root, ctx) {
     const collarX = px + sinT * claspLen;
     const collarY = py - cosT * claspLen;
 
-    const spread = narrow ? clamp(w * 0.088, 24, 36) : clamp(w * 0.082, 82, 126);
+    const spread = narrow ? clamp(w * 0.082, 24, 34) : clamp(w * 0.108, 108, 166);
     const axL = restX - spread;
     const axR = restX + spread;
-    const ay = -24;
+    const ay = -108;
 
     const neckHalf = narrow ? 3.2 : 3.8;
     const endLX = collarX - cosT * neckHalf;
