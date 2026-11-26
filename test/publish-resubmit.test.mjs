@@ -5,12 +5,12 @@ import vm from 'node:vm';
 
 const source = readFileSync(new URL('../site/publish.js', import.meta.url), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
-const question = { id: 'rejected', title: 'Saved title', summary: 'Summary', category: 'web', domains: ['web'], prompt: 'Prompt', templates: ['static'], resubmittable: true,
+const question = { id: 'rejected', title: 'Saved title', summary: 'Summary', category: '静态网页', subcategory: '网页', domains: ['web'], prompt: 'Prompt', templates: ['static'], resubmittable: true,
   moderation: { status: 'rejected', at: '2026-10-23T00:00:00Z', round: 1 }, references: [] };
 const answer = title => ({ question: { ...question, title }, works: [{ id: 'sample', task: 'rejected', title: 'Kept sample', modelName: 'Fixture', scene: 'https://media.test/private-preview' }] });
-function environment({ resubmit = true, aborts = false } = {}) {
+function environment({ resubmit = true, aborts = false, selectedSubcategory = question.subcategory } = {}) {
   let version = 1, html = '', timerId = 0;
-  const reads = [], timers = new Map(), notices = [], refreshes = [];
+  const reads = [], timers = new Map(), notices = [], refreshes = [], categorySelections = [];
   const fields = new Map();
   const field = name => { if (!fields.has(name)) fields.set(name, { value: '', innerHTML: '', textContent: '', hidden: false, focus() {} }); return fields.get(name); };
   const form = { querySelector: field, querySelectorAll: () => [] };
@@ -23,10 +23,12 @@ function environment({ resubmit = true, aborts = false } = {}) {
     addEventListener() {}, removeEventListener() {}, setPageTitle() {}, scrollTo() {}, referencesEnabled: () => false,
     $: (selector, node) => node.querySelector(selector), $$: (selector, node) => node.querySelectorAll(selector),
     esc: String, formatDate: String, pad: String, icon: () => '', moderationBadge: () => '', reviewVerdict: () => '',
-    categoryOf: () => ({ templates: ['static'] }), categoryField: () => '', domainField: () => '', syncDomains() {}, TEMPLATE_LABELS: {},
+    categoryOf: () => ({ templates: ['static'] }),
+    categoryField(category, subcategory) { categorySelections.push({ category, subcategory }); return ''; },
+    domainField: () => '', syncDomains() {}, TEMPLATE_LABELS: {},
     resolveApiMedia(data, endpoint) { assert.equal(endpoint, 'question'); return data; },
     requireUser: async () => true, toast: message => notices.push(message), refreshPlatform: async reason => refreshes.push(reason),
-    FormData: class { get(key) { return { title: 'New title', summary: 'Summary', prompt: 'Prompt', category: 'web' }[key]; } getAll(key) { return { domains: ['web'], templates: ['static'] }[key] ?? []; } },
+    FormData: class { get(key) { return { title: 'New title', summary: 'Summary', prompt: 'Prompt', category: question.category, subcategory: selectedSubcategory }[key]; } getAll(key) { return { domains: ['web'], templates: ['static'] }[key] ?? []; } },
     api(path, options = {}) {
       let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
       const read = { path, ...options, resolve, reject, promise }; reads.push(read);
@@ -36,7 +38,7 @@ function environment({ resubmit = true, aborts = false } = {}) {
   };
   vm.runInNewContext(source.replace(/^import .*$/gm, '').replace('export function mount', 'function mount') + '\nglobalThis.mountForTest=mount;', state);
   const page = state.mountForTest(root, { param: resubmit ? 'rejected' : null, DATA: { title: 'Fixture' }, pageStart: () => '', pageEnd: () => '' });
-  return { root, form, field, state, page, reads, timers, notices, refreshes, identity() { version++; state.platform.user = { id: 'two' }; } };
+  return { root, form, field, state, page, reads, timers, notices, refreshes, categorySelections, identity() { version++; state.platform.user = { id: 'two' }; } };
 }
 
 test('resubmission reads only its question, coalesces session events, and preserves unsaved edits and the sample preview', async () => {
@@ -48,6 +50,28 @@ test('resubmission reads only its question, coalesces session events, and preser
   e.field('[name="title"]').value = 'Unsaved edit'; e.page.onPlatformChange('session');
   assert.equal(e.reads.length, 1); assert.equal(e.field('[name="title"]').value, 'Unsaved edit');
   e.page.destroy(); assert.equal(e.timers.size, 0);
+});
+
+test('resubmission restores the saved subcategory and sends it only when changed', async () => {
+  for (const selectedSubcategory of [question.subcategory, '像素画']) {
+    const e = environment({ selectedSubcategory });
+    try {
+      e.reads[0].resolve(answer(question.title));
+      await e.page.ready;
+      assert.deepEqual(e.categorySelections.at(-1), { category: question.category, subcategory: question.subcategory });
+      e.root.onsubmit({ target: e.form, submitter: { value: 'resubmit' }, preventDefault() {} });
+      await flush();
+      const submission = e.reads[1];
+      assert.equal(submission.path, 'questions/rejected/resubmit');
+      assert.equal(submission.method, 'POST');
+      const expected = selectedSubcategory === question.subcategory ? undefined : selectedSubcategory;
+      assert.equal(submission.body.subcategory, expected);
+      submission.resolve({ question });
+      await flush();
+    } finally {
+      e.page.destroy();
+    }
+  }
 });
 
 test('old account and departed resubmission reads are aborted and cannot install their form', async () => {

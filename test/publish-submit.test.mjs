@@ -61,7 +61,7 @@ for (const mode of ['plain', 'sample']) {
 
 test('a complete question reaches the API and can be retried after a rejection', async () => {
   const question = { title: 'A question', summary: 'Compare answers', prompt: 'Build a page',
-    category: '静态网页', domains: ['计算机技术'], templates: ['static'] };
+    category: '静态网页', subcategory: '网页', domains: ['计算机技术'], templates: ['static'] };
   await withForm(question, async ({ submit, error, calls, buttons }) => {
     for (let attempt = 1; attempt <= 2; attempt++) {
       await submit('plain');

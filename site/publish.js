@@ -126,7 +126,8 @@ export function mount(root, ctx) {
       loadedOwner = owner;
       samples = data.works ?? [];
       removeSamples = false;
-      question = { title: found.title, summary: found.summary ?? '', category: found.category ?? '', domains: found.domains ?? [], prompt: found.prompt ?? '', templates: found.templates ?? [] };
+      question = { title: found.title, summary: found.summary ?? '', category: found.category ?? '', subcategory: found.subcategory ?? '',
+        domains: found.domains ?? [], prompt: found.prompt ?? '', templates: found.templates ?? [] };
       refs?.destroy();
       refs = referencesEnabled() ? referenceEditor({ refs: found.references ?? [], credit: found.referenceCredit ?? '', prompt: () => promptArea()?.value ?? question.prompt, insert: insertNote }) : null;
       showForm();
@@ -254,10 +255,12 @@ export function mount(root, ctx) {
       buttons.forEach((button) => { button.disabled = true; });
       if (original) {
         // Unchanged references stay out of the request; the server rejects a resubmission that changes nothing.
-        const { title, summary, category, domains, prompt, templates } = question;
+        const { title, summary, category, subcategory, domains, prompt, templates } = question;
         try {
           const { question: saved } = await api(`questions/${encodeURIComponent(original.id)}/resubmit`, { method: 'POST',
-            body: { title, summary, category, domains, prompt, templates, ...(refs?.changed() ? { references: refs.value(), referenceCredit: refs.credit() } : {}), removeSamples } });
+            body: { title, summary, category, domains, prompt, templates,
+              ...(subcategory !== (original.subcategory ?? '') ? { subcategory } : {}),
+              ...(refs?.changed() ? { references: refs.value(), referenceCredit: refs.credit() } : {}), removeSamples } });
           if (!current()) return false;
           toast('已重新提交，等待人工审核');
           await refreshPlatform('question');

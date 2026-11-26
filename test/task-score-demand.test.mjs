@@ -16,7 +16,8 @@ test('a score deadline shows a retry action and a late body cannot replace the f
 test('same-task redraws retain pending and completed scores, then a real departure cancels', async () => {
   const e = environment(), oldTask = { id: 'one', revision: 'old' }, freshTask = { id: 'one', revision: 'fresh' };
   Object.assign(e.state, { renderTask() {}, activatePanel() {}, location: { hash: '#/one' }, updateResultPreviews: () => Promise.resolve(),
-    previewVersion: 0, resultPreviews: null, document: { body: { classList: { remove() {} } } } });
+    previewVersion: 0, resultPreviews: null, activeResultPreviewId: null, usageView: null,
+    document: Object.assign(new EventTarget(), { body: { classList: { remove() {} } } }) });
   const sorted = [];
   e.state.applySort = (task) => sorted.push(task);
   e.state.resultSort = 'score';

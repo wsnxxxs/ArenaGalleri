@@ -18,7 +18,7 @@ test('platform recovery waits out rate limits, shares retries and keeps version 
     { headers: { 'Content-Type': 'application/json' } });
   let calls = 0;
   globalThis.fetch = async (url) => {
-    if (!url.endsWith('/catalog')) return success();
+    if (!url.endsWith('/catalog?guided=1')) return success();
     calls++;
     return new Response(JSON.stringify({ error: 'Too many reads', retryAfter: 60 }),
       { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '30' } });
@@ -37,7 +37,7 @@ test('platform recovery waits out rate limits, shares retries and keeps version 
 
     now += 60000;
     let release;
-    globalThis.fetch = (url) => { if (!url.endsWith('/catalog')) return Promise.resolve(success()); calls++; return new Promise((resolve) => { release = resolve; }); };
+    globalThis.fetch = (url) => { if (!url.endsWith('/catalog?guided=1')) return Promise.resolve(success()); calls++; return new Promise((resolve) => { release = resolve; }); };
     let changes = 0;
     const unsubscribe = onPlatformChange((reason) => { if (reason === 'reconnect') changes++; });
     scheduled.fn();

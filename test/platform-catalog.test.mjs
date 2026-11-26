@@ -167,7 +167,7 @@ test('catalog renders before delayed session, and activity starts after both wit
     globalThis.fetch = (url, options) => {
       calls.push({ url, options });
       if (url.endsWith('/session')) return session.promise;
-      if (url.endsWith('/activity')) return activity.promise;
+      if (url.endsWith('/activity?guided=1')) return activity.promise;
       return Promise.resolve(dto({ questions: [{ id: 'q' }], works: [{ task: 'q', id: 'w' }] }));
     };
     assert.equal(await connectPlatform(build), true);
@@ -175,14 +175,16 @@ test('catalog renders before delayed session, and activity starts after both wit
     assert.equal(platform.works.length, 1);
     assert.equal(platform.sessionReady, false);
     assert.equal(platform.activityReady, false);
-    assert.equal(calls.length, 2);
+    assert.deepEqual(calls.map(({ url }) => url), [
+      'https://backend.test/api/catalog?guided=1', 'https://backend.test/api/session',
+    ]);
     assert.equal(calls[0].options.credentials, 'omit');
     session.resolve(dto({ user: { id: 'alice', role: 'user' }, me: { votes: 7 } }));
     await tick();
     assert.equal(platform.sessionReady, true);
     assert.equal(platform.user.id, 'alice');
     assert.equal(platform.activityReady, false);
-    assert.equal(calls.length, 3);
+    assert.deepEqual(calls.slice(2).map(({ url }) => url), ['https://backend.test/api/activity?guided=1']);
     activity.resolve(dto({ arena: { q: { works: 4, entries: 2 } }, totals: { votes: 12 }, workAccess: [{ task: 'q', id: 'w', mine: true }] }));
     await tick();
     assert.equal(platform.activityReady, true);
@@ -194,9 +196,9 @@ test('account and role changes clear remembered private data and reject old acti
   await environment('identity', async ({ connectPlatform, refreshPlatform, platform, api, apiRemembered, recall }) => {
     let user = { id: 'alice', role: 'admin' }, delayed = null;
     globalThis.fetch = (url) => {
-      if (url.endsWith('/catalog')) return Promise.resolve(dto({ questions: [{ id: 'q' }], works: [{ task: 'q', id: 'w' }] }));
+      if (url.endsWith('/catalog?guided=1')) return Promise.resolve(dto({ questions: [{ id: 'q' }], works: [{ task: 'q', id: 'w' }] }));
       if (url.endsWith('/session')) return Promise.resolve(dto({ user, me: { votes: 1 } }));
-      if (url.endsWith('/activity')) return delayed?.promise ?? Promise.resolve(dto({ arenaModels: [{ key: 'secret' }], workAccess: [{ task: 'q', id: 'w', mine: true }] }));
+      if (url.endsWith('/activity?guided=1')) return delayed?.promise ?? Promise.resolve(dto({ arenaModels: [{ key: 'secret' }], workAccess: [{ task: 'q', id: 'w', mine: true }] }));
       if (url.endsWith('/auth/logout')) return Promise.resolve(dto());
       return Promise.resolve(dto({ secret: 1 }));
     };
@@ -233,10 +235,10 @@ test('missing split endpoints use one bootstrap and only a standalone missing AP
     const calls = [];
     globalThis.fetch = (url) => {
       calls.push(url);
-      return Promise.resolve(url.endsWith('/bootstrap') ? dto({ user: null, questions: [], works: [], arena: {} }) : dto({}, 404));
+      return Promise.resolve(url.endsWith('/bootstrap?guided=1') ? dto({ user: null, questions: [], works: [], arena: {} }) : dto({}, 404));
     };
     assert.equal(await connectPlatform(build), true); await tick();
-    assert.equal(calls.filter((url) => url.endsWith('/bootstrap')).length, 1);
+    assert.deepEqual(calls.filter((url) => url.endsWith('/bootstrap?guided=1')), ['https://backend.test/api/bootstrap?guided=1']);
     assert.equal(platform.sessionReady, true);
     assert.equal(platform.activityReady, true);
   });
@@ -248,7 +250,7 @@ test('missing split endpoints use one bootstrap and only a standalone missing AP
     assert.equal(catalogState(), 'static');
   });
   await environment('partial-deployment', async ({ connectPlatform, platform, catalogState }) => {
-    globalThis.fetch = (url) => Promise.resolve(url.endsWith('/catalog') ? dto({ questions: [], works: [] }) : dto({}, 404));
+    globalThis.fetch = (url) => Promise.resolve(url.endsWith('/catalog?guided=1') ? dto({ questions: [], works: [] }) : dto({}, 404));
     assert.equal(await connectPlatform(build), true); await tick();
     assert.equal(catalogState(), 'ready');
     assert.equal(platform.sessionConnecting, false);
@@ -262,12 +264,13 @@ test('same-account mutation supersedes pending activity with one fresh read', as
     const oldRead = pending(), newRead = pending();
     let activityCalls = 0;
     globalThis.fetch = (url) => {
-      if (url.endsWith('/catalog')) return Promise.resolve(dto({ questions: [{ id: 'q' }], works: [{ task: 'q', id: 'w' }] }));
+      if (url.endsWith('/catalog?guided=1')) return Promise.resolve(dto({ questions: [{ id: 'q' }], works: [{ task: 'q', id: 'w' }] }));
       if (url.endsWith('/session')) return Promise.resolve(dto({ user: { id: 'alice', role: 'admin' }, me: {} }));
+      if (!url.endsWith('/activity?guided=1')) return Promise.resolve(dto({}, 404));
       activityCalls++;
       return activityCalls === 1 ? oldRead.promise : newRead.promise;
     };
-    await connectPlatform(build); await tick();
+    assert.equal(await connectPlatform(build), true); await tick();
     assert.equal(activityCalls, 1);
     await refreshPlatform('review'); await tick();
     assert.equal(activityCalls, 2, 'a mutation starts exactly one replacement activity read');
@@ -287,9 +290,9 @@ test('proven session expiry immediately restores anonymous activity without a fo
   await environment('expired-session', async ({ connectPlatform, platform, api }) => {
     let activityCalls = 0;
     globalThis.fetch = (url) => {
-      if (url.endsWith('/catalog')) return Promise.resolve(dto({ questions: [], works: [] }));
+      if (url.endsWith('/catalog?guided=1')) return Promise.resolve(dto({ questions: [], works: [] }));
       if (url.endsWith('/session')) return Promise.resolve(dto({ user: { id: 'alice', role: 'admin' }, me: {} }));
-      if (url.endsWith('/activity')) { activityCalls++; return Promise.resolve(dto({ totals: { votes: 12 }, arena: {} })); }
+      if (url.endsWith('/activity?guided=1')) { activityCalls++; return Promise.resolve(dto({ totals: { votes: 12 }, arena: {} })); }
       return Promise.resolve(dto({ error: 'expired' }, 401));
     };
     await connectPlatform(build); await tick();
