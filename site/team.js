@@ -267,7 +267,7 @@ const easeOutQuint = (t) => 1 - (1 - t) ** 5;
 
 function memberIndexByParam(param) {
   if (!param) return -1;
-  const q = decodeURIComponent(String(param)).trim().toLowerCase();
+  const q = String(param).trim().toLowerCase();
   return MEMBERS.findIndex((m) => m.id.toLowerCase() === q || m.name.toLowerCase() === q);
 }
 

@@ -74,7 +74,7 @@ test('the drawer size phrase wraps between figures, never inside a figure', asyn
   const context = { ...usage, esc: (s) => String(s ?? ''), store: { get: () => null }, pricingInfo: () => Promise.resolve({ showCost: false }), isStaff: () => false, locale: () => 'zh-CN' };
   vm.runInNewContext(`${source}\nglobalThis.row = artifactRow;`, context);
   const row = context.row({ artifact: { files: 1, lines: 4472, bytes: 668_458, tokens: 319_158 } }, (b) => `${Math.round(b / 1024)} KB`);
-  assert.match(row, /<span class="usage-phrase">交付代码 4,472 行、319k token<\/span>/);
+  assert.match(row, /<span class="usage-phrase">交付代码 4,472\u00a0行、319k\u00a0token<\/span>/);
   assert.match(row, /<span>1 个文件<\/span>/);
   const { setLocale, translateText } = await import('../site/i18n.js');
   setLocale('en');

@@ -1560,7 +1560,7 @@ function renderTask(t) {
       <section class="side-prompt" aria-labelledby="side-prompt-title">
         <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
           ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button type="button" data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}"><span data-i18n-ignore>${esc(variant.label)}</span></button>`).join('')}</div>` : ''}
-          <button class="text-action side-prompt-open" type="button" data-open-prompt>浮窗查看</button><button class="text-action side-prompt-more" type="button" data-prompt-more aria-expanded="false">展开</button><button class="text-action" type="button" data-copy="short"><span data-copy-label>复制</span></button></div>
+          <button class="text-action side-prompt-open" type="button" data-open-prompt aria-haspopup="dialog" aria-expanded="${Boolean(taskState.promptOpen)}">浮窗查看</button><button class="text-action side-prompt-more" type="button" data-prompt-more aria-expanded="false">展开</button><button class="text-action" type="button" data-copy="short"><span data-copy-label>复制</span></button></div>
         ${referenceSheet(t.references, { key: t.id, credit: t.referenceCredit })}
         <pre data-i18n-ignore data-prompt-text>${linkReferences(selectedPrompt(t), t.references, t.id)}</pre>
       </section>
@@ -1620,7 +1620,7 @@ function renderTask(t) {
   const setPromptOpen = (open, { restoreFocus = false, opener = null } = {}) => {
     taskState.promptOpen = Boolean(open);
     if (promptModal) promptModal.hidden = !taskState.promptOpen;
-    openPromptBtn?.setAttribute('aria-expanded', String(taskState.promptOpen));
+    $$('[data-open-prompt]', root).forEach((button) => button.setAttribute('aria-expanded', String(taskState.promptOpen)));
     document.body.classList.toggle('has-prompt-modal', taskState.promptOpen);
     if (taskState.promptOpen) {
       if (opener) promptReturnFocus = opener;
@@ -1765,23 +1765,18 @@ function renderTask(t) {
     if (event.pointerType !== 'touch') requestCardPreview(event);
   };
   root.onfocusin = requestCardPreview;
+  return (event) => {
+    if (event.key !== 'Escape' || !taskState.promptOpen) return;
+    const lightbox = $('#lightbox');
+    if (lightbox && !lightbox.hidden) return;
+    setPromptOpen(false, { restoreFocus: true });
+  };
 }
 
 // The task page as the router sees it: its panel and selected card preview, plus board and tray cleanup.
 function taskPage(t) {
-  renderTask(t);
+  const onPromptKey = renderTask(t);
   activatePanel(/\/(?:usage|cost)$/.test(location.hash.split('#')[1]) ? 'cost' : location.hash.split('#')[2], false);
-  const onPromptKey = (event) => {
-    if (event.key !== 'Escape' || !taskState.promptOpen) return;
-    if ($('#lightbox') && !$('#lightbox').hidden) return;
-    taskState.promptOpen = false;
-    const modal = $('[data-prompt-modal]', root);
-    if (modal) modal.hidden = true;
-    const btn = $('[data-open-prompt]', root);
-    btn?.setAttribute('aria-expanded', 'false');
-    document.body.classList.remove('has-prompt-modal');
-    btn?.focus?.({ preventScroll: true });
-  };
   document.addEventListener('keydown', onPromptKey);
   return {
     scoreTask: t.id,

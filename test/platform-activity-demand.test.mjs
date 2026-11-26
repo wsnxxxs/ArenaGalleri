@@ -29,6 +29,17 @@ function backend(calls, activity = () => dto({ totals: { votes: 12 }, workAccess
   };
 }
 
+test('work reactions stay hidden when the site does not configure emoji', async () => environment('optional-reactions', async ({ platform, reactionBar }) => {
+  platform.available = true;
+  platform.activityReady = true;
+  for (const site of [null, {}, { emojis: [] }]) {
+    platform.site = site;
+    assert.equal(reactionBar('q/w'), '');
+  }
+  platform.site = { emojis: ['like'] };
+  assert.match(reactionBar('q/w'), /data-react-add/);
+}));
+
 test('catalog/session-only routes defer activity until a consuming route explicitly enters', async () => environment('route-entry', async (module) => {
   const calls = [], activity = pending();
   globalThis.fetch = backend(calls, () => activity.promise);

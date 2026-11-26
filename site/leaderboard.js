@@ -64,7 +64,7 @@ function v3Notes(s) {
   const labels = weights.map(([name]) => categoryLabel(name)).join('、');
   // A single-question board has no question threshold and no question-to-question spread (both 0).
   const single = !s.minimumTasks;
-  return `<div><dt>区间</dt><dd>名次下的小字是 ${percent(level ?? 0.95)}% 的名次范围，只有一个可能名次时不写。${single ? '分数后的 ± 是投票随机性的范围，单题榜不加换题的波动。' : `分数后的 ± 同时算了投票的随机性和换题的波动（换题按 ${s.taskSpread} 分估计），悬停分数可看两部分各有多大。`}横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits.provisionalGames ?? 30} 次的标为「暂定」。</dd></div>
+  return `<div><dt>区间</dt><dd>名次下的小字是 ${percent(level ?? 0.95)}% 的名次范围，只有一个可能名次时不写。${single ? '分数后的 ± 是投票随机性的范围，单题榜不加换题的波动。' : `分数后的 ± 同时算了投票的随机性和换题的波动（换题按 ${s.taskSpread} 分估计），悬停分数可看两部分各有多大。`}横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits?.provisionalGames ?? 30} 次的标为「暂定」。</dd></div>
     <div><dt>达标</dt><dd>${single ? `至少 ${s.minimumGames} 场、有效投票者至少 ${s.minimumEffectiveVoters} 人才排名，单题榜不看题数。` : `分类榜和领域榜上，至少 ${s.minimumGames} 场、${s.minimumTasks} 道题，比较最多的一道题不超过 ${percent(s.maxTaskShare)}%，有效投票者至少 ${s.minimumEffectiveVoters} 人才排名；单题榜不看题数。`}满 ${s.minimumGames} 场但没有达标的列入「观察区」，并写明原因。</dd></div>
     ${weights.length && !single ? `<div><dt>综合</dt><dd>综合榜把${labels}${['', '一', '两', '三', '四', '五'][weights.length] ?? weights.length}张分类榜的分数${equal ? '等权平均' : `按 ${weights.map(([, weight]) => weight).join(' / ')} 加权平均`}。各类都达标的才排名，其余列在下方并显示各类名次。</dd></div>` : ''}
     ${s.weighted ? '<div><dt>权重</dt><dd>每票按投票时的身份取基础权重，同一投票者对同一模型超过 20 场后递减。胜平负和实际胜率是原始票数。</dd></div>' : ''}`;
@@ -76,7 +76,7 @@ export const boardNotes = (open = false, curated = null, limitWorks = true, scor
   <dl>
     <div><dt>比较</dt><dd>盲评每次展示同一道题的两件作品，左右随机、身份隐藏，投票之后才揭晓模型。</dd></div>
     <div><dt>计分</dt><dd>Bradley–Terry 模型根据全部有效比较，估计每个配置被偏好的强度，「不分伯仲」计为双方各得半场。分数折算到 Elo 刻度：1000 为平均水平，高出 400 分约等于被偏好的机会高十倍。结果与投票先后顺序无关。</dd></div>
-    ${!curated && scoring?.version >= 3 ? v3Notes(scoring) : `<div><dt>区间</dt><dd>分数后的 ± 与横条表示约 95% 的不确定范围，横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits.provisionalGames ?? 30} 次的配置标为「暂定」。</dd></div>`}
+    ${!curated && scoring?.version >= 3 ? v3Notes(scoring) : `<div><dt>区间</dt><dd>分数后的 ± 与横条表示约 95% 的不确定范围，横条颜色越接近朱红，在本榜的位置越高；比较少于 ${platform.site?.limits?.provisionalGames ?? 30} 次的配置标为「暂定」。</dd></div>`}
     ${curated ? `<div><dt>范围</dt><dd>精选总榜合并全部精选题，各分区只合并本分区的题，各自重新计算，不截取总榜。只计同题比较，不平均各题分数。题目加入、移出或换分区后，下一次计算（10 分钟内）生效。</dd></div>
     <div><dt>计入</dt><dd>${curated.since ? `只统计 ${formatDate(curated.since)} 之后、投票当时为 Lv1 及以上的成员的选择` : '只统计投票当时为 Lv1 及以上的成员的选择'}；Lv0 和访客的选择只进大众榜。同一用户对同一对作品只计一次，跳过不计。同一配置（按模型时为同一模型）的两件作品之间的比较不参与计分，也不计入有效比较数。作品被标记存疑或删除后，相关投票自动移出，恢复后重新计入。</dd></div>
     <div><dt>入榜</dt><dd>模型在本榜范围内有效比较至少 21 场才入榜（总榜和每个分区分别判断，不借用大众榜的比较数）；按配置还要求该配置至少 21 场。</dd></div>
