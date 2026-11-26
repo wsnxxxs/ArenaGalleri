@@ -11,7 +11,7 @@ const { platform } = await import('../site/platform.js');
 const { mount } = await import('../site/publish.js');
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-async function withForm(values, run) {
+async function withForm(values, run, delayResponse = null) {
   const previous = { user: platform.user, site: platform.site, sessionReady: platform.sessionReady };
   const originalFormData = globalThis.FormData, originalFetch = globalThis.fetch;
   platform.user = { id: 1, role: 'user', level: 1, emailBound: true, capabilities: { canSubmitQuestion: true } };
@@ -33,6 +33,7 @@ async function withForm(values, run) {
   const calls = [];
   globalThis.fetch = async (url, options) => {
     calls.push({ url: String(url), method: options.method, body: JSON.parse(options.body) });
+    await delayResponse;
     return new Response(JSON.stringify({ error: 'Test submission rejected' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   };
   const page = mount(root, { DATA: { title: 'Gallery test' }, pageStart: () => '', pageEnd: () => '' });
@@ -71,4 +72,27 @@ test('a complete question reaches the API and can be retried after a rejection',
       assert.ok(buttons.every(button => !button.disabled), 'a rejected request must allow retrying');
     }
   });
+});
+
+test('a second submit shares the pending form state and cannot create a duplicate request', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const values = { title: 'A question', summary: 'Compare answers', prompt: 'Build a page',
+    category: '静态网页', domains: ['计算机技术'], templates: ['static'] };
+  await withForm(values, async ({ submit, calls, buttons }) => {
+    try {
+      await submit('plain');
+      assert.equal(calls.length, 1);
+      assert.ok(buttons.every(button => button.disabled));
+      await submit('plain');
+      assert.equal(calls.length, 1, 'only one request may be pending for the form');
+      release();
+      await settle();
+      assert.ok(buttons.every(button => !button.disabled));
+      await submit('plain');
+      assert.equal(calls.length, 2, 'a rejected request can still be retried');
+    } finally {
+      release();
+    }
+  }, pending);
 });

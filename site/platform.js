@@ -977,11 +977,12 @@ export function refreshAccountControls() {
 
 // ---- reactions ----------------------------------------------------------------------------
 export function reactionBar(key, { locked = false } = {}) {
-  if (!platform.available) return '';
+  const emojis = platform.site?.emojis;
+  if (!platform.available || !Array.isArray(emojis) || !emojis.length) return '';
   if (!platform.activityReady) return `<p class="fine" role="status">${platform.activityError ? '表情暂未载入 <button class="link" type="button" data-platform-reconnect>重新连接</button>' : '表情加载中…'}</p>`;
   const counts = platform.reactions.counts[key] ?? {};
   const mine = new Set(platform.reactions.mine[key] ?? []);
-  const pills = platform.site.emojis.filter((emoji) => counts[emoji]).map((emoji) => {
+  const pills = emojis.filter((emoji) => counts[emoji]).map((emoji) => {
     const own = mine.has(emoji);
     const name = stickerName(emoji);
     return `<button class="react" type="button" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${own}" aria-label="${name} ${counts[emoji]}" ${locked ? 'disabled' : ''} title="${locked ? '存疑作品不能再互动' : own ? `撤回「${name}」` : `也贴一个「${name}」`}">${sticker(emoji)}<span class="n">${counts[emoji]}</span></button>`;
@@ -1031,12 +1032,14 @@ function celebrate(key, emoji) {
 
 function openPicker(button) {
   closeMenus();
+  const emojis = platform.site?.emojis;
+  if (!Array.isArray(emojis) || !emojis.length) return;
   const key = button.dataset.key;
   const mine = new Set(platform.reactions.mine[key] ?? []);
   const picker = document.createElement('div');
   picker.className = 'menu react-picker';
   picker.setAttribute('role', 'menu');
-  picker.innerHTML = platform.site.emojis.map((emoji) => `<button type="button" role="menuitem" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${mine.has(emoji)}" aria-label="${stickerName(emoji)}" title="${stickerName(emoji)}">${sticker(emoji)}</button>`).join('');
+  picker.innerHTML = emojis.map((emoji) => `<button type="button" role="menuitem" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${mine.has(emoji)}" aria-label="${stickerName(emoji)}" title="${stickerName(emoji)}">${sticker(emoji)}</button>`).join('');
   document.body.append(picker);
   const box = button.getBoundingClientRect();
   const width = picker.offsetWidth;

@@ -362,7 +362,7 @@ export default {
   '随机排序': 'Random order', '热度（高到低）': 'Popularity (highest first)',
   '热门、新题与待探索题目穿插展示': 'A mix of popular, new and less-explored questions',
   '换一批': 'Show another batch', '热门': 'Popular', '等你来测': 'Try this question', '待探索': 'Explore', '新题': 'New',
-  '截图生成中': 'Generating screenshots', '暂无截图': 'No screenshots yet', '暂无作品': 'No works yet',
+  '暂无截图': 'No screenshots yet', '暂无作品': 'No works yet',
   '平台': 'Platform', '面包屑': 'Breadcrumbs', '有新内容，请刷新': 'New content available',
   '刷新后可查看最新作品；上传和盲评可继续使用。': 'Refresh to see the latest works. Uploads and blind review remain available.',
   '刷新页面': 'Refresh page', '重新连接': 'Reconnect', '连接暂时中断': 'Connection interrupted',

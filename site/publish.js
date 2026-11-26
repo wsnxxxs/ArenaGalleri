@@ -26,7 +26,6 @@ const sideSteps = (current, kept = null) => `<ol class="side-steps">${['题目�
 
 export function mount(root, ctx) {
   let question = blank();
-  let checking = false;
   // showing: 'form', 'upload' (the flow is on screen) or 'done'. skipGuard: the next popstate is our own back.
   let flow = null, flowTask = null, active = true, showing = 'form', skipGuard = false, proceed = null;
   // Resubmitting: the rejected question as last submitted, its sample results and whether to drop them.
@@ -214,17 +213,14 @@ export function mount(root, ctx) {
       if (event.target.closest('[data-act="toggle-samples"]')) { removeSamples = !removeSamples; $('[data-samples]', form).outerHTML = sampleField(); }
     };
     root.onkeydown = null;
-    // Resolves true once the page moved on: to the result steps, or to the submitted question.
-    proceed = async (mode, { fromHistory = false } = {}) => {
-      if (checking) return false;
+    async function submitQuestion(mode, { fromHistory = false } = {}) {
       error.textContent = '';
-      checking = true;
       try {
         if (!(await requireUser('登录后即可附带示例发起题目')) || !active) return false;
       } catch (err) { error.textContent = err.message; return false; }
-      finally { checking = false; }
       const owner = accountVersion();
       const current = () => active && owner === accountVersion() && $('.publish-form', root) === form;
+      if (!current()) return false;
       const data = new FormData(form);
       for (const [name, label] of [['title', '题目标题'], ['summary', '测试简述'], ['prompt', '完整提示词']]) {
         if (!String(data.get(name)).trim()) { error.textContent = `请填写${label}`; $(`[name="${name}"]`, form).focus(); return false; }
@@ -285,6 +281,14 @@ export function mount(root, ctx) {
         buttons.forEach((button) => { button.disabled = false; });
         return false;
       }
+    }
+    // Keep the form locked through authorization, confirmation and the write.
+    let submitting = false;
+    proceed = async (mode, options) => {
+      if (submitting) return false;
+      submitting = true;
+      try { return await submitQuestion(mode, options); }
+      finally { submitting = false; }
     };
     root.onsubmit = (event) => {
       if (event.target !== form) return;
