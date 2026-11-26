@@ -6,7 +6,8 @@ import { $, brandMark, esc, formatDate, formatTime, icon, pad, store, vendorLine
 import { api, apiRemembered, arenaScope, isStaff, levelOf, platform, pricingInfo, recall } from './platform.js';
 import { axesOf, chartedDimensions, compactRadar, scaleFor, THIN_ANSWERS } from './dimensions.js';
 import { curatedInfo, curatedKnown } from './curated.js';
-import { categoryLabel, domainsIn, domainList, domainsOf, tracksOf, votedTask } from './categories.js';
+import { CATEGORIES, benchmarkTask, categoryLabel, categoryOf, domainsIn, domainList, domainsOf, tracksOf, votedTask } from './categories.js';
+import { BACKEND_TIERS, backendTierMeta, mountBackendBoard } from './backend-board.js';
 import { textMatches } from './match.js';
 import { chartOpen, costShown, formatMoney, formatMultiple, frontier, groupCosts } from './usage.js';
 import { costTable, frontierSteps, plottable, scatter } from './cost-chart.js';
@@ -780,7 +781,7 @@ export function mountBoard(container, ctx) {
 export function mount(root, ctx) {
   const guided = globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
   const tasks = ctx.DATA.tasks.filter(votedTask);
-  const tracks = tracksOf(tasks);
+  const tracks = tracksOf(tasks, { alwaysInclude: guided ? ['文学', '静态网页', '建模', '音乐'] : [] });
   const parts = (routeParts(location.hash) ?? []).slice(1);
   // A trailing /cost opens the cost chart of the same board (#/leaderboard[/<category>][/<domain>]/cost).
   const costView = parts.at(-1) === 'cost';
@@ -796,37 +797,68 @@ export function mount(root, ctx) {
     location.replace('#/leaderboard/curated');
     return {};
   }
+  const isBackend = first === 'backend';
+  const backendTier = isBackend && second ? second.toUpperCase() : null;
+  if (isBackend && second && !['EZ', 'HD', 'IN', 'AT'].includes(backendTier)) {
+    location.replace('#/leaderboard/backend');
+    return {};
+  }
+  const backendTaskMatch = !curated && !isBackend && first
+    ? ctx.DATA.tasks.find((t) => t.id === first && benchmarkTask(t)) ?? null
+    : null;
+  if (backendTaskMatch) {
+    const matchedTier = backendTierMeta(backendTaskMatch.benchmark?.tier);
+    location.replace(matchedTier ? `#/leaderboard/backend/${matchedTier.slug}` : '#/leaderboard/backend');
+    return {};
+  }
   const sectionId = curated ? second : null;
-  const task = !curated && first ? tasks.find((t) => t.id === first) ?? null : null;
-  const track = curated ? null : task ? tracks.find((x) => x.name === task.category) ?? null : first ? tracks.find((x) => x.slug === first) ?? null : null;
+  const task = !curated && !isBackend && first ? tasks.find((t) => t.id === first) ?? null : null;
+  const track = curated || isBackend ? null : task ? tracks.find((x) => x.name === task.category) ?? null : first ? tracks.find((x) => x.slug === first) ?? null : null;
   const hasDomain = (name) => tasks.some((t) => domainsOf(t).includes(name));
-  const domain = curated || task ? null : !track && hasDomain(first) ? first : track && hasDomain(second) ? second : null;
-  if ((first && !curated && !task && !track && !domain) || (costView && (curated || task))) {
-    location.replace(task ? rankHref : '#/leaderboard');
+  const domain = curated || isBackend || task ? null : !track && hasDomain(first) ? first : track && hasDomain(second) ? second : null;
+  if ((first && !curated && !isBackend && !task && !track && !domain) || (costView && (curated || isBackend || task))) {
+    location.replace(task || isBackend ? rankHref : '#/leaderboard');
     return {};
   }
   const base = track ? `#/leaderboard/${encodeURIComponent(track.slug)}` : '#/leaderboard';
   // Tasks of the current category (and domain), in the task page's select idiom: the option text carries the count.
   const listed = track ? track.tasks.filter((t) => !domain || domainsOf(t).includes(domain)) : [];
   const taskSelect = () => track ? `<label class="result-sort">题目<select data-board-task aria-label="按题目查看">${boardTaskOptions(listed, task?.id, platform.activityReady, platform.arena)}</select></label>` : '';
-  const domains = task || curated ? [] : domainsIn(track?.tasks ?? tasks, domainList(platform));
+  const domains = task || curated || isBackend ? [] : domainsIn(track?.tasks ?? tasks, domainList(platform));
   const domainSelect = domains.length ? `<label class="result-sort">领域<select data-board-domain aria-label="按领域查看">
       <option value="">全部领域</option>
       ${domains.map((d) => `<option value="${esc(d.name)}"${d.name === domain ? ' selected' : ''}>${esc(d.name)}（${d.tasks.length} 题）</option>`).join('')}
     </select></label>` : '';
 
-  // Empty sections use their category label, not a name-based guess; existing names stay server-owned.
-  const sectionName = (section) => !section?.questionCount && section?.category ? categoryLabel(section.category) : section?.name ?? '';
+  const curatedCategoryOrder = new Map(CATEGORIES.filter((c) => c.judging === 'vote').map((c, index) => [c.name, index]));
+  const orderedCuratedSections = (list) => {
+    if (!guided) return list;
+    return [...list].sort((a, b) => {
+      const ia = a.category && curatedCategoryOrder.has(a.category) ? curatedCategoryOrder.get(a.category) : Infinity;
+      const ib = b.category && curatedCategoryOrder.has(b.category) ? curatedCategoryOrder.get(b.category) : Infinity;
+      return ia - ib;
+    });
+  };
+  const isCategorySection = (section) => guided && Boolean(section?.category && categoryOf(section.category));
+  // Guided curated sections match 大众榜 icons and category labels; production keeps its fallback names.
+  const sectionName = (section) => {
+    if (!section) return '';
+    if (isCategorySection(section)) return categoryLabel(section.category);
+    return !section?.questionCount && section?.category ? categoryLabel(section.category) : section?.name ?? '';
+  };
+  const sectionGlyph = (section) => (isCategorySection(section) ? categoryOf(section.category).glyph : 'bookmark');
+  const sectionOriginal = (section) => (isCategorySection(section) ? false : Boolean(section?.questionCount || !section?.category));
+  const curatedOverallLabel = guided ? '综合' : '总榜';
   // The guided build includes empty sections; the production navigation still hides them.
   const curatedNav = (info) => {
-    const sections = (info?.sections ?? []).filter((section) => guided || section.questionCount > 0);
+    const sections = orderedCuratedSections((info?.sections ?? []).filter((section) => guided || section.questionCount > 0));
     const total = (info?.sections ?? []).reduce((sum, section) => sum + (section.questionCount ?? 0), 0);
     const link = (href, glyph, text, current, count, original) => `<a class="side-link" href="${esc(href)}"${current ? ' aria-current="page"' : ''}>${icon(glyph)}<span${original ? ' data-i18n-ignore' : ''}>${esc(text)}</span><span class="nav-count">${count}</span></a>`;
     if (info && !total && !guided) return `<nav class="side-nav section-nav" aria-label="精选榜"><button class="side-link" type="button" disabled>${icon('rank')}总榜 · 暂无精选题</button></nav>`;
     return `<nav class="side-nav section-nav" aria-label="精选榜">${info ? [
-      `<a class="side-link" href="#/leaderboard/curated"${curated && !sectionId ? ' aria-current="page"' : ''}>${icon('rank')}总榜<span class="nav-count">${total}</span></a>`,
-      ...sections.map((section) => link(`#/leaderboard/curated/${encodeURIComponent(section.id)}`, 'bookmark', sectionName(section), section.id === sectionId, section.questionCount, Boolean(section.questionCount || !section.category))),
-    ].join('') : `<a class="side-link" href="#/leaderboard/curated"${curated && !sectionId ? ' aria-current="page"' : ''}>${icon('rank')}总榜</a>`}</nav>`;
+      `<a class="side-link" href="#/leaderboard/curated"${curated && !sectionId ? ' aria-current="page"' : ''}>${icon('rank')}${curatedOverallLabel}<span class="nav-count">${total}</span></a>`,
+      ...sections.map((section) => link(`#/leaderboard/curated/${encodeURIComponent(section.id)}`, sectionGlyph(section), sectionName(section), section.id === sectionId, section.questionCount, sectionOriginal(section))),
+    ].join('') : `<a class="side-link" href="#/leaderboard/curated"${curated && !sectionId ? ' aria-current="page"' : ''}>${icon('rank')}${curatedOverallLabel}</a>`}</nav>`;
   };
   const stat = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
 
@@ -837,7 +869,7 @@ export function mount(root, ctx) {
     const scope = e.target.closest('[data-board-domain]');
     if (scope) location.hash = scope.value ? `${base}/${encodeURIComponent(scope.value)}` : base;
   };
-  const onInput = (e) => { if (e.target.matches('[data-board-search]')) board?.search(e.target.value); };
+  const onInput = (e) => { if (e.target.matches('[data-board-search]')) board?.search?.(e.target.value); };
   root.addEventListener('change', onChange);
   root.addEventListener('input', onInput);
 
@@ -847,43 +879,74 @@ export function mount(root, ctx) {
     notesScoring = 'null';
     live?.destroy();
     board?.destroy();
+    const tierMeta = isBackend && backendTier ? backendTierMeta(backendTier) : null;
     const section = sectionId ? info?.sections.find((x) => x.id === sectionId) ?? null : null;
     const musicSection = curated && section?.category === '音乐';
-    const scopeTitle = curated ? (sectionId ? `精选 · ${sectionName(section)}` : '精选总榜')
-      : task?.title ?? (domain ? `${track ? `${track.label} · ` : ''}${domain}排行` : track ? `${track.label}排行` : '综合排行');
-    const crumbs = [{ text: '排行榜', ...(task || track || domain || curated ? { href: '#/leaderboard' } : {}) }];
-    if (curated) crumbs.push(sectionId ? { text: '精选榜', href: '#/leaderboard/curated' } : { text: '精选榜' }, ...(sectionId ? [{ text: sectionName(section), original: Boolean(section?.questionCount || !section?.category) }] : []));
+    const scopeTitle = isBackend
+      ? (tierMeta ? `${tierMeta.tier} · ${tierMeta.name}` : 'AGB-Bench v4.1 · 后端合成总榜')
+      : curated ? (sectionId ? (section ? `精选 · ${sectionName(section)}` : '精选榜') : (guided ? '精选 · 综合' : '精选总榜'))
+        : task?.title ?? (domain ? `${track ? `${track.label} · ` : ''}${domain}排行` : track ? `${track.label}排行` : '综合排行');
+    const crumbs = [{ text: '排行榜', ...(task || track || domain || curated || isBackend ? { href: '#/leaderboard' } : {}) }];
+    if (isBackend) {
+      crumbs.push(tierMeta ? { text: '后端榜', href: '#/leaderboard/backend' } : { text: '后端榜' }, ...(tierMeta ? [{ text: `${tierMeta.tier} · ${tierMeta.name}` }] : []));
+    }
+    if (curated) crumbs.push(sectionId ? { text: '精选榜', href: '#/leaderboard/curated' } : { text: '精选榜' }, ...(sectionId && section ? [{ text: sectionName(section), original: sectionOriginal(section) }] : []));
     if (track) crumbs.push(task || domain ? { text: track.label, href: base } : { text: track.label });
     if (domain) crumbs.push({ text: domain });
     if (task) crumbs.push({ text: task.title, original: true });
     const since = info?.countingStartedAt;
-    const description = !curated ? '由全部计票的盲评选择计算。分数反映作品在同题比较中被偏好的程度，区间越窄，结论越可靠。'
-      : musicSection ? '音乐精选榜暂未开放计分'
-        : sectionId ? (section?.questionCount ? `精选总榜中「${sectionName(section)}」分区的 ${section.questionCount} 道题，单独计算名次。` : '尚未挑选精选题')
-          : !info?.includesStaffHistory ? `只统计 Lv1 及以上成员（通过资格考试）在精选题上的选择，题目由管理员挑选。和大众榜分开计票${since ? `，${formatDate(since)} 起从零累计` : ''}。`
-            : `统计认证成员${since ? `自 ${formatDate(since)} 起` : ''}在精选题上的选择，并纳入普通管理员和高级管理员的历史有效票。题目由管理员挑选，和大众榜分开计票。`;
+    const description = isBackend
+      ? (tierMeta ? `离线闭卷后端工程基准 · ${tierMeta.languageLabel} · 总榜权重 ×${tierMeta.weight}` : '离线闭卷后端工程基准 · 按 EZ×1 + HD×2 + IN×1 + AT×2 合成排名（满分 600）。')
+      : !curated ? '由全部计票的盲评选择计算。分数反映作品在同题比较中被偏好的程度，区间越窄，结论越可靠。'
+        : musicSection ? '音乐精选榜暂未开放计分'
+          : sectionId ? (section?.questionCount ? `精选总榜中「${sectionName(section)}」分区的 ${section.questionCount} 道题，单独计算名次。` : '尚未挑选精选题')
+            : !info?.includesStaffHistory ? `只统计 Lv1 及以上成员（通过资格考试）在精选题上的选择，题目由管理员挑选。和大众榜分开计票${since ? `，${formatDate(since)} 起从零累计` : ''}。`
+              : `统计认证成员${since ? `自 ${formatDate(since)} 起` : ''}在精选题上的选择，并纳入普通管理员和高级管理员的历史有效票。题目由管理员挑选，和大众榜分开计票。`;
+    const backendStatsHtml = (data = null) => {
+      const rowCount = data ? (data.rows?.length ?? 0) + (data.partialRows?.length ?? data.partial?.length ?? 0) : null;
+      return stat('题集数', pad(tierMeta ? 1 : (data?.tiers?.length || BACKEND_TIERS.length)))
+        + stat('实测条目', rowCount === null ? '—' : pad(rowCount))
+        + stat('权重', tierMeta ? `×${tierMeta.weight}` : '1:2:1:2');
+    };
     root.innerHTML = `${ctx.pageStart({ title: '排行榜', section: 'leaderboard', heading: scopeTitle, headingOriginal: Boolean(task), crumbs, description,
       meta: `<dl class="side-stats" data-stats>
-          ${stat('有效比较', !curated && platform.activityReady ? pad(platform.totals.votes) : '—')}
-          ${stat('参与者', !curated && platform.activityReady ? pad(platform.totals.voters) : '—')}
+          ${isBackend ? backendStatsHtml() : `${stat('有效比较', !curated && platform.activityReady ? pad(platform.totals.votes) : '—')}${stat('参与者', !curated && platform.activityReady ? pad(platform.totals.voters) : '—')}`}
         </dl>`,
       nav: `<div class="board-nav-groups">
       <section class="board-nav-group">
         <h2 class="board-nav-title">大众榜</h2>
-        ${ctx.sideNav('大众榜', [['#/leaderboard', 'rank', '综合', !curated && !track && !task && !domain, tasks.length],
+        ${ctx.sideNav('大众榜', [['#/leaderboard', 'rank', '综合', !curated && !isBackend && !track && !task && !domain, tasks.length],
           ...tracks.map((x) => [`#/leaderboard/${encodeURIComponent(x.slug)}`, x.glyph, x.label, x === track, x.tasks.length])])}
       </section>
       <section class="board-nav-group" data-curated-nav>
         <h2 class="board-nav-title">精选榜</h2>
         ${curatedNav(info)}
       </section>
+      ${guided ? `<section class="board-nav-group">
+        <h2 class="board-nav-title">后端榜</h2>
+        ${ctx.sideNav('后端榜', [
+          ['#/leaderboard/backend', 'rank', '合成总榜', isBackend && !backendTier, '4'],
+          ...BACKEND_TIERS.map((item) => [`#/leaderboard/backend/${item.slug}`, 'terminal', `${item.tier} · ${item.languageLabel}`, isBackend && backendTier === item.tier, `×${item.weight}`]),
+        ])}
+      </section>` : ''}
     </div>` })}
     <section class="block wrap">
       <div data-board><p class="muted">正在载入榜单…</p></div>
-      ${musicSection ? '' : boardNotes(false, curated ? { since, threshold: 30 } : null, !task)}
+      ${musicSection || isBackend ? '' : boardNotes(false, curated ? { since, threshold: 30 } : null, !task)}
     </section>
   ${ctx.pageEnd()}`;
     drawn = info;
+    if (isBackend) {
+      board = mountBackendBoard($('[data-board]', root), {
+        ...ctx,
+        tier: backendTier,
+        onLoad: (data) => {
+          const stats = $('[data-stats]', root);
+          if (stats) stats.innerHTML = backendStatsHtml(data);
+        },
+      });
+      return board.ready;
+    }
     if (curated && !info) return;
     board = mountBoard($('[data-board]', root), {
       ...ctx,
@@ -913,7 +976,10 @@ export function mount(root, ctx) {
     live = watchBoardRefresh(() => board.reload());
     return board.ready;
   }
-  setPageTitle(['榜单', curated ? (sectionId ? '精选榜' : '精选总榜') : { text: task?.title ?? (domain ? `${track ? `${track.label} · ` : ''}${domain}排行` : track ? `${track.label}排行` : '综合排行'), original: Boolean(task) }, ctx.DATA.title]);
+  const initialTierMeta = isBackend && backendTier ? backendTierMeta(backendTier) : null;
+  setPageTitle(['榜单', isBackend ? (initialTierMeta ? `后端 · ${initialTierMeta.tier}` : '后端合成总榜')
+    : curated ? (sectionId ? '精选榜' : guided ? '精选 · 综合' : '精选总榜')
+      : { text: task?.title ?? (domain ? `${track ? `${track.label} · ` : ''}${domain}排行` : track ? `${track.label}排行` : '综合排行'), original: Boolean(task) }, ctx.DATA.title]);
   const known = curatedKnown();
   let ready = render(known);
   const loaded = curatedInfo().then((info) => {
@@ -933,7 +999,7 @@ export function mount(root, ctx) {
   return {
     ready,
     onPlatformChange: (reason) => {
-      if (reason === 'identity' || reason === 'session-ready') void board?.refreshIdentity();
+      if (reason === 'identity' || reason === 'session-ready') void board?.refreshIdentity?.();
       if (reason === 'activity' || reason === 'identity') {
         const select = $('[data-board-task]', root);
         if (select) select.innerHTML = boardTaskOptions(listed, select.value, platform.activityReady, platform.arena);

@@ -26,7 +26,8 @@ import { effortRank, representatives, standard, taskCover } from './featured.js'
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { boostOrder } from './work-boost.js';
 import { downloadReference, linkReferences, referenceSheet, useReferenceViewer } from './references.js';
-import { CATEGORIES, aiJudged, aiScoreOf, categoryLabel, categoryOf, createQuestionSearch, domainList, domainsIn, domainsOf, subcategoriesOf, subcategoryOf, tracksOf } from './categories.js';
+import { CATEGORIES, aiJudged, aiScoreOf, benchmarkTask, categoryLabel, categoryOf, createQuestionSearch, domainList, domainsIn, domainsOf, subcategoriesOf, subcategoryOf, tracksOf, votedTask } from './categories.js';
+import { BACKEND_TIERS, backendTierMeta } from './backend-board.js';
 import { textMatches } from './match.js';
 import { modelResolver } from './models.js';
 import { popularQuestions, recommendQuestions } from './question-recommendations.js';
@@ -725,14 +726,17 @@ function libraryStart(crumbs) {
       ${pageTitle('题库')}<p class="side-intro">${['ready', 'static'].includes(catalogState()) ? `${DATA.tasks.length} 道题目 · ${works} 件作品` : '最新题目与作品正在加载'}</p>
       <nav class="side-nav section-nav" aria-label="题库导航">
         ${control('side-link', 'data-home-view="tasks"', true, `${icon('grid')}全部题目${['ready', 'static'].includes(catalogState()) ? `<span class="nav-count">${DATA.tasks.length}</span>` : ''}`)}
-        ${tracksOf(DATA.tasks, { alwaysInclude: CATEGORIES.map((c) => c.name) }).map((x) => `<div class="side-tree-group" data-tree-group="${esc(x.name)}" data-expanded="false">
-          <button class="side-link side-tree-parent" type="button" data-home-category="${esc(x.name)}" aria-pressed="false" aria-expanded="false">${icon(x.glyph)}<span class="side-link-text">${esc(x.label)}</span><span class="side-tree-caret" aria-hidden="true">▸</span><span class="nav-count">${x.tasks.length}</span></button>
-          <div class="side-tree-children-wrap"><div class="side-tree-children" role="group" aria-label="${esc(x.label)}">
+        ${tracksOf(DATA.tasks, { alwaysInclude: CATEGORIES.map((c) => c.name) }).map((x) => {
+          const hasSubs = x.subcategories.length > 0;
+          return `<div class="side-tree-group${hasSubs ? '' : ' is-leaf'}" data-tree-group="${esc(x.name)}"${hasSubs ? ' data-expanded="false"' : ''}>
+          <button class="side-link${hasSubs ? ' side-tree-parent' : ''}" type="button" data-home-category="${esc(x.name)}" aria-pressed="false"${hasSubs ? ' aria-expanded="false"' : ''}>${icon(x.glyph)}<span class="side-link-text">${esc(x.label)}</span>${hasSubs ? '<span class="side-tree-caret" aria-hidden="true">▸</span>' : ''}<span class="nav-count">${x.tasks.length}</span></button>
+          ${hasSubs ? `<div class="side-tree-children-wrap"><div class="side-tree-children" role="group" aria-label="${esc(x.label)}">
             ${x.subcategories.map((sub) => sub.disabled
               ? `<span class="side-sublink is-disabled" aria-disabled="true"><span class="side-sublink-branch" aria-hidden="true"></span><span class="side-sublink-label">${esc(sub.label)}</span></span>`
               : `<button type="button" class="side-sublink" data-home-subcategory="${esc(sub.name)}" data-parent-category="${esc(x.name)}" aria-pressed="false"><span class="side-sublink-branch" aria-hidden="true"></span><span class="side-sublink-label">${esc(sub.label)}</span><span class="nav-count">${sub.count}</span></button>`).join('')}
-          </div></div>
-        </div>`).join('')}
+          </div></div>` : ''}
+        </div>`;
+        }).join('')}
         <span class="side-divider" aria-hidden="true"></span>
         ${control('side-link', 'data-home-view="models"', false, `${icon('code')}模型索引${['ready', 'static'].includes(catalogState()) ? `<span class="nav-count">${models.length}</span>` : ''}`)}
       </nav>
@@ -753,7 +757,11 @@ const act = (kind, href, glyph, title, note, hint = '') => (href
 const selectControl = (name, aria, options) => `<label class="result-sort">${aria}<select data-${name} aria-label="${aria}">${options}</select></label>`;
 const option = (value, text, selected, suffix = null) => `<option${suffix === null ? '' : ` data-i18n-ignore data-i18n-option-original="${esc(text)}" data-i18n-option-suffix="${esc(suffix)}"`} value="${esc(value)}"${selected ? ' selected' : ''}>${esc(text)}${suffix === null ? '' : esc(suffix)}</option>`;
 // A card names its form, then its domains.
-const tagLine = (t) => `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${subcategoryOf(t) ? `<li class="tag-sub">${esc(subcategoryOf(t))}</li>` : ''}${domainsOf(t).map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}`;
+const backendLanguages = (t) => {
+  if (Array.isArray(t?.languages) && t.languages.length) return t.languages;
+  return backendTierMeta(t?.benchmark?.tier)?.languages ?? [];
+};
+const tagLine = (t) => `${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}${benchmarkTask(t) ? backendLanguages(t).map((lang) => `<li class="tag-lang" data-i18n-ignore>${esc(lang)}</li>`).join('') : ''}${subcategoryOf(t) ? `<li class="tag-sub">${esc(subcategoryOf(t))}</li>` : ''}${domainsOf(t).map((d) => `<li class="tag-domain">${esc(d)}</li>`).join('')}`;
 function rankedTasks(tasks = DATA.tasks, now = Date.now()) {
   if (homeState.sort === 'recommended') return recommendQuestions(tasks, { now, batch: homeState.recommendationBatch, modelKey: r => registeredOf(r) ?? modelKey(r) });
   if (homeState.sort === 'popularity') return popularQuestions(tasks, { now, modelKey: r => registeredOf(r) ?? modelKey(r) });
@@ -807,11 +815,62 @@ function renderLibrary(scopes = [], fresh = true) {
     if (!answersByModel.has(id)) answersByModel.set(id, new Set());
     answersByModel.get(id).add(t.id);
   }
+  for (const t of DATA.tasks) {
+    if (!benchmarkTask(t) || !Array.isArray(t.benchmark?.rows)) continue;
+    for (const row of t.benchmark.rows) {
+      const id = registeredOf({ model: row?.model, modelName: row?.name ?? row?.modelName, vendor: row?.vendor });
+      if (!id) continue;
+      if (!answersByModel.has(id)) answersByModel.set(id, new Set());
+      answersByModel.get(id).add(t.id);
+    }
+  }
   const answeredBy = (task, id) => answersByModel.get(id)?.has(task.id) ?? false;
 
   const zoomFor = (task, result) => previewZoomKind(task, result &&
     ((result.previewMode !== 'screenshot' && (result.previewModel || result.previewLoader) && result.previewPoster) || previewScreenshotOf(task, result)));
-  const taskCards = rankedTasks(DATA.tasks, recommendationTime).map(({ task: t }) => {
+  const backendCardVisual = (t) => {
+    const b = t.benchmark ?? {};
+    const meta = backendTierMeta(b.tier);
+    const tierCode = b.tier ?? meta?.tier ?? 'BENCH';
+    const langs = backendLanguages(t);
+    const weight = b.weight ?? meta?.weight ?? 1;
+    const status = b.statusLabel ?? b.status ?? meta?.status ?? '';
+    const top3 = (Array.isArray(b.rows) ? b.rows : []).slice(0, 3);
+    return `<div class="backend-card-visual">
+      <div class="backend-card-head">
+        <span class="backend-tier-code" data-i18n-ignore>${esc(tierCode)}</span>
+        <span class="backend-card-langs">${langs.map((lang) => `<span class="tag-lang" data-i18n-ignore>${esc(lang)}</span>`).join('')}</span>
+        <span class="backend-card-weight">1:2:1:2 · ×${esc(weight)}</span>
+      </div>
+      ${status ? `<p class="backend-card-status">${esc(status)}</p>` : ''}
+      ${top3.length ? `<ol class="backend-card-top3">${top3.map((row, idx) => `<li><span class="backend-card-rank">${pad(row?.rank ?? idx + 1)}</span><span class="backend-card-model" data-i18n-ignore>${esc(row?.name ?? row?.modelName ?? '')}${row?.effort ? ` <small>${esc(row.effort)}</small>` : ''}</span><span class="backend-card-score">${row?.score != null ? Number(row.score).toFixed(2) : '—'}</span></li>`).join('')}</ol>` : '<p class="backend-card-empty">闭卷排名数据</p>'}
+    </div>`;
+  };
+  const taskCard = (t) => {
+    if (benchmarkTask(t)) {
+      const b = t.benchmark ?? {};
+      const meta = backendTierMeta(b.tier);
+      const weight = b.weight ?? meta?.weight ?? 1;
+      const rowCount = Array.isArray(b.rows) ? b.rows.length : 0;
+      return `<article class="task-card is-backend" data-task-card="${esc(t.id)}">
+      <a class="question-visual backend-thumb" href="${taskHref(t)}" aria-label="查看「${esc(t.title)}」的排名数据" tabindex="-1">
+        ${backendCardVisual(t)}
+      </a>
+      ${taskSolveCornerHtml(t)}
+      <div class="task-body">
+        <div class="question-byline"><ul class="tag-line"><li class="tag-recommendation" data-question-reason hidden></li>${tagLine(t)}</ul>
+          <span class="avatar question-avatar${bySite(t) ? ' is-site' : ''}" role="img" aria-label="发布者：${esc(authorName(t))}" title="发布者：${esc(authorName(t))}">${authorAvatar(t)}</span>
+        </div>
+        <h3><a href="${taskHref(t)}"><span data-i18n-ignore>${esc(t.title)}</span></a></h3>
+        <p class="summary"><span data-i18n-ignore>${esc(t.summary)}</span></p>
+        <p data-i18n-ignore class="prompt-hit" data-prompt-hit hidden></p>
+        <div class="question-meta">
+          <span class="question-date">闭卷基准 · 权重 ×${esc(weight)}</span>
+          <a href="${taskHref(t)}">${rowCount} 条实测${icon('next')}</a>
+        </div>
+      </div>
+    </article>`;
+    }
     const works = counted(t);
     const shown = choicesById.get(t.id).result;
     const zoom = zoomFor(t, shown);
@@ -835,7 +894,8 @@ function renderLibrary(scopes = [], fresh = true) {
         </div>
       </div>
     </article>`;
-  }).join('');
+  };
+  const taskCards = rankedTasks(DATA.tasks, recommendationTime).map(({ task: t }) => taskCard(t)).join('');
   // Publishing sits in the grid itself, as the first card, so it reads as part of the library.
   const newCard = platform.available ? `<a class="task-card task-new" href="#/new" data-task-new>
       <span class="question-visual task-new-visual" aria-hidden="true"><span class="task-new-stack"><i></i><i></i><i></i></span><span class="task-new-plus">${icon('plus')}</span></span>
@@ -939,7 +999,7 @@ function renderLibrary(scopes = [], fresh = true) {
   let matching = [], blindScope = [], blindMarkup;
   // Random pairs come from the questions in view, as far as they can be judged.
   const updateBlindAction = () => {
-    blindScope = matching.filter(task => (platform.arena[task.id]?.entries ?? 0) >= 2);
+    blindScope = matching.filter(task => votedTask(task) && (platform.arena[task.id]?.entries ?? 0) >= 2);
     const blind = $('[data-home-blind]', root);
     if (blind) {
       const html = !platform.activityReady
@@ -1040,6 +1100,7 @@ function renderLibrary(scopes = [], fresh = true) {
     $$('[data-home-panel]').forEach((el) => { el.hidden = el.dataset.homePanel !== homeState.view; });
     $$('.side-nav [data-home-view]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.homeView === homeState.view && !(el.dataset.homeView === 'tasks' && (homeState.category || homeState.subcategory || homeState.domain)))));
     $$('[data-tree-group]').forEach((group) => {
+      if (!group.querySelector('.side-tree-children-wrap')) return;
       const open = homeState.view === 'tasks' && homeState.treeOpen && group.dataset.treeGroup === homeState.category;
       group.dataset.expanded = String(open);
       group.querySelector('[data-home-category]')?.setAttribute('aria-expanded', String(open));
@@ -1831,7 +1892,70 @@ function renderTask(t) {
 }
 
 // The task page as the router sees it: its panel and selected card preview, plus board and tray cleanup.
+function renderBackendTask(t) {
+  taskState.task = t.id;
+  taskState.promptOpener = null;
+  document.body.classList.remove('has-prompt-modal');
+  const b = t.benchmark ?? {};
+  const tierCode = b.tier ? String(b.tier).toUpperCase() : null;
+  const meta = backendTierMeta(tierCode);
+  const langs = backendLanguages(t);
+  const tierLinks = BACKEND_TIERS.map((item) => {
+    const peer = DATA.tasks.find((x) => benchmarkTask(x) && String(x.benchmark?.tier ?? '').toUpperCase() === item.tier);
+    const href = peer ? taskHref(peer) : `#/leaderboard/backend/${item.slug}`;
+    const current = item.tier === tierCode;
+    return `<a class="side-link" href="${esc(href)}"${current ? ' aria-current="page"' : ''}>${icon('terminal')}<span>${esc(item.tier)} · ${esc(item.name)}</span><span class="nav-count">×${item.weight}</span></a>`;
+  }).join('');
+  root.innerHTML = `${header([LIBRARY, { text: categoryLabel(t.category), href: `${LIBRARY.href}/${encodeURIComponent(t.category)}` }, { text: t.title, original: true }], false, 'questions')}<div class="app-layout task-layout is-backend-task">
+    <aside class="app-sidebar">
+      <a class="side-link backend-back-link" href="${LIBRARY.href}/${encodeURIComponent(t.category)}">${icon('prev')}返回后端题库</a>
+      <h1${titleWidth(t.title) > 9 ? ' class="is-long"' : ''}><span data-i18n-ignore>${esc(t.title)}</span></h1>
+      <p class="side-intro"><span data-i18n-ignore>${esc(t.summary)}</span></p>
+      <ul class="tags side-tags">
+        ${t.category ? `<li class="tag-kind">${esc(categoryLabel(t.category))}</li>` : ''}
+        ${langs.map((lang) => `<li class="tag-lang" data-i18n-ignore>${esc(lang)}</li>`).join('')}
+        ${domainsOf(t).map((d) => `<li><a href="${LIBRARY.href}/${encodeURIComponent(d)}">${esc(d)}</a></li>`).join('')}
+      </ul>
+      ${taskSolveSidebarHtml(t)}
+      <div class="backend-side-cta">
+        <a class="btn primary" href="#/leaderboard/backend">查看后端合成总榜${icon('right')}</a>
+      </div>
+      <nav class="side-nav task-nav backend-tier-nav" aria-label="后端分卷">${tierLinks}</nav>
+    </aside>
+    <main class="workspace page">
+      <section class="block wrap">
+        <div id="backend-task-board" data-backend-board><p class="muted">正在载入榜单…</p></div>
+      </section>
+      <section class="block wrap backend-eval-card">
+        <h2>评测说明</h2>
+        <p>本题属于 <code data-i18n-ignore>${esc(b.suite ?? b.benchmark ?? 'AGB-Bench v4.1')}</code> 离线闭卷自动化后端工程基准，页面仅展示分卷元数据、编程语言要求（<span data-i18n-ignore>${esc(langs.join(' / ') || meta?.languageLabel || 'Python')}</span>）与实测排名数据，不公开题面原文，也不开放作品投稿与盲评投票。</p>
+      </section>
+      ${footer()}
+    </main>
+  </div>`;
+  setPageTitle([{ text: t.title, original: true }, DATA.title]);
+  let cancelled = false;
+  const ready = import('./backend-board.js').then(({ mountBackendBoard }) => {
+    const body = $('[data-backend-board]', root);
+    if (cancelled || !body || !body.isConnected) return;
+    taskBoard = mountBackendBoard(body, { ...context(), tier: tierCode, task: t });
+    return taskBoard.ready;
+  }).catch((error) => {
+    const body = $('[data-backend-board]', root);
+    if (!cancelled && body?.isConnected) void showLoadFailure(body, error, '榜单加载失败');
+  });
+  return {
+    ready,
+    destroy() {
+      cancelled = true;
+      taskBoard?.destroy?.();
+      taskBoard = null;
+      document.body.classList.remove('has-tray');
+    },
+  };
+}
 function taskPage(t) {
+  if (typeof benchmarkTask === 'function' && benchmarkTask(t)) return renderBackendTask(t);
   const onPromptKey = renderTask(t);
   activatePanel(/\/(?:usage|cost)$/.test(location.hash.split('#')[1]) ? 'cost' : location.hash.split('#')[2], false);
   document.addEventListener('keydown', onPromptKey);
@@ -2579,7 +2703,7 @@ const PAGE_NAMES = { questions: '题库', arena: '盲评' };
 function placeOf(hash) {
   const [p = '', a] = (routeParts(hash) ?? [hash]);
   const t = DATA.tasks.find((x) => x.id === p);
-  if (t && !a) return { key: p, name: '题目', up: LIBRARY.href };
+  if (t && !a) return { key: p, name: '题目', up: benchmarkTask(t) ? `${LIBRARY.href}/${encodeURIComponent(t.category)}` : LIBRARY.href };
   if (t) return { key: a === 'exhibition' || a === 'sandtable' ? `${p}/stage` : `${p}/view`, up: taskHref(t) };
   if (p === 'submit' && DATA.tasks.some((x) => x.id === a)) return { key: `submit/${a}`, up: `#/${a}` };
   if (p === 'arena' && a) return { key: `arena/${a}`, up: '#/arena' };

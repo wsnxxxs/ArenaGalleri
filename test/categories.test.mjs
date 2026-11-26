@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createQuestionSearch, matchesQuery, searchMatch } from '../site/categories.js';
+import { benchmarkTask, createQuestionSearch, matchesQuery, pdfTask, publishableCategories, searchMatch, subcategoriesOf, templatesOf, votedTask } from '../site/categories.js';
 
 const task = { title: '黑洞', summary: '事件视界', category: '建模', domains: ['天文'], tags: ['Legacy'],
   prompt: '用 Three.js 模拟引力透镜，\n并用 OrbitControls 控制视角', promptVariants: [{ id: 'short', prompt: '加入 WebGPU 后处理' }] };
@@ -30,4 +30,28 @@ test('a library search reuses prompt text across queries and keeps prompt snippe
   assert.equal(search('webgpu')(question).snippet.hit, 'WebGPU');
   assert.equal(search('threejs CSS')(question), null);
   assert.equal(reads, 1);
+});
+
+test('design subcategories include PDF instead of office formats and search indexes backend/PDF fields', () => {
+  assert.deepEqual(subcategoriesOf('静态网页').map((s) => s.name), ['网页', '像素画', 'PDF']);
+  const pdfQuestion = { title: '排版报告', summary: '学术简报', category: '静态网页', subcategory: 'PDF', domains: ['工程技术'] };
+  assert.equal(pdfTask(pdfQuestion), true);
+  assert.deepEqual(templatesOf(pdfQuestion), ['pdf']);
+  assert.equal(matchesQuery(pdfQuestion, 'PDF'), true);
+
+  const backendQuestion = {
+    id: 'agb-v41-hd',
+    title: '底层系统卷',
+    summary: '高并发与内存管理',
+    category: '后端',
+    languages: ['Go', 'C'],
+    languageLabel: 'Go + C',
+    benchmark: { tier: 'HD' },
+    domains: ['计算机技术'],
+  };
+  assert.equal(benchmarkTask(backendQuestion), true);
+  assert.equal(votedTask(backendQuestion), false);
+  assert.deepEqual(templatesOf(backendQuestion), []);
+  assert.equal(publishableCategories().some((c) => c.name === '后端'), false);
+  for (const query of ['后端', 'HD', 'Go', 'C']) assert.equal(matchesQuery(backendQuestion, query), true, query);
 });

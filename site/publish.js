@@ -63,14 +63,16 @@ export function mount(root, ctx) {
   const newEditor = () => (referencesEnabled() ? referenceEditor({ prompt: () => promptArea()?.value ?? question.prompt, insert: insertNote }) : null);
   let refs = newEditor();
 
-  // Formats follow the category: a text question takes text, web and 3D questions one HTML file.
+  // Formats follow the category: a text question takes text, PDF subcategory takes a single PDF, web and 3D take one HTML file.
   function formatField() {
     const category = categoryOf(question.category);
     if (!category) return '<span class="field-label">允许的提交格式 *</span><p class="fine">选择题目类型后显示可用格式。</p>';
-    const [only] = category.templates;
-    if (category.templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '直接粘贴原文，或上传 .txt / .md 文件，站内按统一版式展示；Markdown 支持表格与 LaTeX 公式。' : only === 'audio' ? '必须只上传一个 .mp3 音频文件（不接受压缩包或其他音频格式）；双盲测试将使用统一播放器展示播放键、进度条与全程频谱。' : '上传单个 .html 文件，资源需写进页面。'}</p>`;
+    const isPdf = question.category === '静态网页' && question.subcategory === 'PDF';
+    const templates = isPdf ? ['pdf'] : category.templates;
+    const [only] = templates;
+    if (templates.length === 1) return `<span class="field-label">提交格式</span><input type="hidden" name="templates" value="${only}"><p class="format-fixed">${esc(TEMPLATE_LABELS[only])}</p><p class="fine">${only === 'text' ? '直接粘贴原文，或上传 .txt / .md 文件，站内按统一版式展示；Markdown 支持表格与 LaTeX 公式。' : only === 'audio' ? '必须只上传一个 .mp3 音频文件（不接受压缩包或其他音频格式）；双盲测试将使用统一播放器展示播放键、进度条与全程频谱。' : only === 'pdf' ? '必须只上传一个 .pdf 文件，不接受 .html 或其他格式。' : '上传单个 .html 文件，资源需写进页面。'}</p>`;
     return `<span class="field-label">允许的提交格式 *</span><div class="format-options">
-      ${category.templates.map((value) => `<label><input type="checkbox" name="templates" value="${value}"${question.templates.includes(value) ? ' checked' : ''}>${TEMPLATE_LABELS[value]}</label>`).join('')}
+      ${templates.map((value) => `<label><input type="checkbox" name="templates" value="${value}"${question.templates.includes(value) ? ' checked' : ''}>${TEMPLATE_LABELS[value]}</label>`).join('')}
     </div>`;
   }
 
@@ -126,7 +128,7 @@ export function mount(root, ctx) {
       samples = data.works ?? [];
       removeSamples = false;
       question = { title: found.title, summary: found.summary ?? '', category: found.category ?? '', subcategory: found.subcategory ?? '',
-        domains: found.domains ?? [], prompt: found.prompt ?? '', templates: found.templates ?? [] };
+        domains: found.domains ?? [], prompt: found.prompt ?? '', templates: found.category === '静态网页' && found.subcategory === 'PDF' ? ['pdf'] : (found.templates ?? []) };
       refs?.destroy();
       refs = referencesEnabled() ? referenceEditor({ refs: found.references ?? [], credit: found.referenceCredit ?? '', prompt: () => promptArea()?.value ?? question.prompt, insert: insertNote }) : null;
       showForm();
@@ -166,7 +168,7 @@ export function mount(root, ctx) {
           <label class="field"><span class="field-label">测试简述 *${changedMark('summary')}</span><textarea class="input" name="summary" required maxlength="400" rows="3" placeholder="需要完成什么？能测出模型的哪些能力？">${esc(question.summary)}</textarea></label>
           ${categoryField(question.category, question.subcategory)}
           ${domainField(platform, question.domains)}
-          <label class="field"><span class="field-label">完整提示词 *${changedMark('prompt')}</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="${question.category === '音乐' ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。'}">${esc(question.prompt)}</textarea><p class="fine music-prompt-guide" data-music-prompt-guide${question.category === '音乐' ? '' : ' hidden'}><b>音乐题提示词要求：</b>提示词中须明确要求模型导出单个 <code>.mp3</code> 音频文件。<button class="link" type="button" data-act="insert-mp3-note">插入导出 MP3 要求</button></p><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
+          <label class="field"><span class="field-label">完整提示词 *${changedMark('prompt')}</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="${question.category === '音乐' ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : question.category === '静态网页' && question.subcategory === 'PDF' ? '粘贴完整提示词，并明确要求模型生成并导出为单个 .pdf 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。'}">${esc(question.prompt)}</textarea><p class="fine music-prompt-guide" data-music-prompt-guide${question.category === '音乐' ? '' : ' hidden'}><b>音乐题提示词要求：</b>提示词中须明确要求模型导出单个 <code>.mp3</code> 音频文件。<button class="link" type="button" data-act="insert-mp3-note">插入导出 MP3 要求</button></p><p class="fine music-prompt-guide" data-pdf-prompt-guide${question.category === '静态网页' && question.subcategory === 'PDF' ? '' : ' hidden'}><b>PDF 题提示词要求：</b>建议在提示词中明确要求模型生成并导出为单个 <code>.pdf</code> 文件。<button class="link" type="button" data-act="insert-pdf-note">插入导出 PDF 要求</button></p><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
           ${refs ? '<div data-ref-host></div>' : ''}
           <div class="field" data-formats>${formatField()}</div>
           ${original ? sampleField() : ''}
@@ -188,30 +190,59 @@ export function mount(root, ctx) {
       for (const name of original ? ['title', 'summary', 'prompt'] : []) $(`[data-changed="${name}"]`, form).hidden = $(`[name="${name}"]`, form).value.trim() === (original[name] ?? '').trim();
     };
     markChanged();
+    const syncCategoryHints = () => {
+      const isMusic = question.category === '音乐';
+      const isPdf = question.category === '静态网页' && question.subcategory === 'PDF';
+      const musicNotice = $('[data-music-category-notice]', form);
+      if (musicNotice) musicNotice.toggleAttribute?.('data-selected', isMusic);
+      const pdfNotice = $('[data-pdf-subcategory-notice]', form);
+      if (pdfNotice) {
+        pdfNotice.hidden = !isPdf;
+        pdfNotice.toggleAttribute?.('data-selected', isPdf);
+      }
+      const guide = $('[data-music-prompt-guide]', form);
+      if (guide) guide.hidden = !isMusic;
+      const pdfGuide = $('[data-pdf-prompt-guide]', form);
+      if (pdfGuide) pdfGuide.hidden = !isPdf;
+      const area = $('[name="prompt"]', form);
+      if (area) area.placeholder = isMusic ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。'
+        : isPdf ? '粘贴完整提示词，并明确要求模型生成并导出为单个 .pdf 文件。'
+          : '粘贴所有参与模型需要使用的同一份完整提示词。';
+    };
     root.oninput = (event) => { if (event.target.matches('[name="prompt"]')) refs?.advise(); markChanged(); };
     root.onchange = (event) => {
       if (event.target.matches('[name="domains"]')) { syncDomains(form); error.textContent = ''; return; }
-      if (event.target.matches('[name="subcategory"]')) { question.subcategory = event.target.value; error.textContent = ''; return; }
+      if (event.target.matches('[name="subcategory"]')) {
+        question.subcategory = event.target.value;
+        if (question.category === '静态网页') {
+          question.templates = question.subcategory === 'PDF' ? ['pdf'] : ['static'];
+          $('[data-formats]', form).innerHTML = formatField();
+        }
+        syncCategoryHints();
+        error.textContent = '';
+        return;
+      }
       if (!event.target.matches('[name="category"]')) return;
       question.category = event.target.value;
       const enabledSubs = subcategoriesOf(question.category).filter((s) => !s.disabled);
       if (!enabledSubs.some((s) => s.name === question.subcategory)) question.subcategory = enabledSubs[0]?.name ?? '';
       const subHost = $('[data-subcategory-picker]', form);
       if (subHost) subHost.innerHTML = subcategoryFieldHtml(question.category, question.subcategory);
-      question.templates = [...categoryOf(question.category).templates];
+      question.templates = question.category === '静态网页' && question.subcategory === 'PDF'
+        ? ['pdf']
+        : [...categoryOf(question.category).templates];
       $('[data-formats]', form).innerHTML = formatField();
-      const isMusic = question.category === '音乐';
-      const musicNotice = $('[data-music-category-notice]', form);
-      if (musicNotice) musicNotice.toggleAttribute('data-selected', isMusic);
-      const guide = $('[data-music-prompt-guide]', form);
-      if (guide) guide.hidden = !isMusic;
-      const area = $('[name="prompt"]', form);
-      if (area) area.placeholder = isMusic ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。';
+      syncCategoryHints();
       error.textContent = '';
     };
     root.onclick = (event) => {
       if (event.target.closest('[data-act="insert-mp3-note"]')) {
         insertNote('请通过代码制作完整音乐，并导出为单个标准的 .mp3 音频文件。');
+        error.textContent = '';
+        return;
+      }
+      if (event.target.closest('[data-act="insert-pdf-note"]')) {
+        insertNote('请生成并导出为单个标准的 .pdf 文档文件。');
         error.textContent = '';
         return;
       }
@@ -238,11 +269,19 @@ export function mount(root, ctx) {
         return false;
       }
       if (!data.getAll('domains').length) { error.textContent = '请选择所属领域'; $('[name="domains"]', form).focus(); return false; }
-      if (!data.getAll('templates').length) { error.textContent = '请至少选择一种提交格式'; return false; }
+      const category = String(data.get('category'));
+      const subcategory = String(data.get('subcategory') ?? '').trim();
+      const rawTemplates = data.getAll('templates');
+      const templates = category === '静态网页' && subcategory === 'PDF'
+        ? ['pdf']
+        : category === '静态网页' && (subcategory === '网页' || subcategory === '像素画')
+          ? ['static']
+          : rawTemplates;
+      if (!templates.length) { error.textContent = '请至少选择一种提交格式'; return false; }
       if (refs?.blocker()) { error.textContent = refs.blocker(); return false; }
       const before = JSON.stringify(question);
-      question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), category: String(data.get('category')), subcategory: String(data.get('subcategory') ?? '').trim(), domains: data.getAll('domains'), prompt: String(data.get('prompt')).trim(),
-        templates: data.getAll('templates'), ...(refs?.value().length ? { references: refs.value(), referenceCredit: refs.credit() } : {}) };
+      question = { title: String(data.get('title')).trim(), summary: String(data.get('summary')).trim(), category, subcategory, domains: data.getAll('domains'), prompt: String(data.get('prompt')).trim(),
+        templates, ...(refs?.value().length ? { references: refs.value(), referenceCredit: refs.credit() } : {}) };
       if (mode === 'sample') { enterSample({ fromHistory, changed: before !== JSON.stringify(question) }); return true; }
       const kept = flow?.kept();
       if (kept && !(await confirmDialog({ title: '单独提交题目？', message: `已附上的示例结果「${kept.file}」会被丢弃，题目单独进入审核。`, confirm: '丢弃示例并提交' }))) return false;
@@ -322,7 +361,7 @@ export function mount(root, ctx) {
     if (!fromHistory) history.pushState({ ...history.state, publish: 'sample' }, '');
     showing = 'upload';
     if (!flow) { showUpload(); scrollTo({ top: 0 }); return; }
-    Object.assign(flowTask, { title: question.title, category: question.category, prompt: question.prompt, templates: question.templates });
+    Object.assign(flowTask, { title: question.title, category: question.category, subcategory: question.subcategory, prompt: question.prompt, templates: question.templates });
     if (flow.resume()) { $('[data-sample-notice]', root)?.scrollIntoView({ block: 'center' }); return; }
     scrollTo({ top: 0 });
     if (changed) toast('题目信息已更新，示例结果已保留');
@@ -379,7 +418,7 @@ export function mount(root, ctx) {
       <div class="step-body question-brief">
         <h3 data-i18n-ignore>${esc(question.title)}</h3>
         <p data-i18n-ignore>${esc(question.summary)}</p>
-        <p class="work-meta">${[esc(categoryLabel(question.category)), ...question.domains.map(esc), question.templates.map((t) => TEMPLATE_LABELS[t]).join(' / ')].join(' · ')}</p>
+        <p class="work-meta">${[esc(categoryLabel(question.category)), question.subcategory ? esc(question.subcategory) : '', ...question.domains.map(esc), question.templates.map((t) => TEMPLATE_LABELS[t]).join(' / ')].filter(Boolean).join(' · ')}</p>
         ${refs ? referenceSheet(refs.previews(), { key: 'new-question', download: false }) : ''}
         <details class="prompt-peek"><summary>${icon('guide')}完整提示词 · 示例结果需按它生成</summary><pre>${esc(question.prompt)}</pre></details>
       </div>
@@ -447,7 +486,7 @@ export function mount(root, ctx) {
   }
 
   function showUpload() {
-    flowTask = { id: NEW_QUESTION, title: question.title, category: question.category, prompt: question.prompt, templates: question.templates, promptVariants: [] };
+    flowTask = { id: NEW_QUESTION, title: question.title, category: question.category, subcategory: question.subcategory, prompt: question.prompt, templates: question.templates, promptVariants: [] };
     flow = uploadFlow(root, ctx, {
       task: flowTask,
       draftTask: NEW_QUESTION,
