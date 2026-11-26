@@ -1,6 +1,6 @@
 // A slow iframe keeps its recovery controls until its document actually loads. Replacing a
 // pane or leaving cancels both deadlines and the delayed reveal of the previous document.
-export function watchViewerFrame(frame, { onLoaded, onSlow, timeout = 45_000, revealDelay = 500 }) {
+export function watchViewerFrame(frame, { onLoaded, onSlow, timeout = 45_000, revealDelay = 0 }) {
   let stopped = false, loaded = false, slow = false, reveal;
   const deadline = setTimeout(showSlow, timeout);
   function showSlow() {

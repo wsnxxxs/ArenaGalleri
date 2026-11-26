@@ -24,7 +24,7 @@ import { effortRank, representatives, standard, taskCover } from './featured.js'
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
 import { boostOrder } from './work-boost.js';
 import { downloadReference, linkReferences, referenceSheet, useReferenceViewer } from './references.js';
-import { aiJudged, aiScoreOf, categoryLabel, categoryOf, domainList, domainsIn, domainsOf, searchMatch, tracksOf, votedTask } from './categories.js';
+import { aiJudged, aiScoreOf, categoryLabel, categoryOf, createQuestionSearch, domainList, domainsIn, domainsOf, tracksOf, votedTask } from './categories.js';
 import { textMatches } from './match.js';
 import { modelResolver } from './models.js';
 import { popularQuestions, recommendQuestions } from './question-recommendations.js';
@@ -297,9 +297,11 @@ function renderLibrary(scopes = [], fresh = true) {
   const controller = new AbortController();
   const recommendationTime = Date.now();
   let previews = null, destroyed = false, activePreviewKey = null;
-  const tasksById = new Map(DATA.tasks.map(task => [task.id, task]));
-  const choices = DATA.tasks.map((task) => ({ task, result: taskCover(task, platform.featured?.[task.id]?.cover) }));
-  const choicesById = new Map(choices.map(choice => [choice.task.id, choice]));
+  let search = createQuestionSearch();
+  const choicesById = new Map(DATA.tasks.map(task => {
+    const featured = platform.featured?.[task.id]?.cover ?? null;
+    return [task.id, { task, featured, result: taskCover(task, featured) }];
+  }));
   const artworkFor = (t, shown, eager = false) => shown?.previewMode === 'screenshot'
     ? img(screenshotOf(shown), shown.title, 'question-screenshot-preview', eager)
     : shown?.previewModel || shown?.previewLoader
@@ -428,52 +430,61 @@ function renderLibrary(scopes = [], fresh = true) {
     </main></div>`;
   // While searching, questions matched by their own words come first and those matched only inside
   // a prompt follow, each showing the stretch of prompt that matched; the chosen sort holds within each.
-  let blindScope = [];
-  const filterTasks = () => {
-    let count = 0;
-    const promptOnly = new Set();
-    const matching = [];
-    blindScope = [];
-    for (const card of $$('[data-task-card]', root)) {
-      const task = tasksById.get(card.dataset.taskCard);
-      const match = searchMatch(task, homeState.query);
-      card.hidden = Boolean(!match || (homeState.category && task.category !== homeState.category) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.model && (homeState.unanswered ? answeredBy(task, homeState.model) : !answeredBy(task, homeState.model))));
-      const hit = $('[data-prompt-hit]', card);
-      hit.hidden = !match?.snippet;
-      if (match?.snippet) {
-        const { before, hit: word, after } = match.snippet;
-        hit.innerHTML = `<span>提示词</span>${esc(before)}<mark>${esc(word)}</mark>${esc(after)}`;
-        promptOnly.add(task.id);
-      }
-      if (!card.hidden) {
-        count++;
-        matching.push(task);
-        if (votedTask(task) && (platform.arena[task.id]?.entries ?? 0) >= 2) blindScope.push(task);
-      }
-    }
-    // Random pairs come from the questions in view, as far as they can be judged.
+  const list = $('.task-list', root), cards = $$('[data-task-card]', list);
+  const rows = new Map(cards.map(card => {
+    const choice = choicesById.get(card.dataset.taskCard);
+    return [choice.task.id, { task: choice.task, choice, card, hit: $('[data-prompt-hit]', card), reason: $('[data-question-reason]', card), reasonText: '' }];
+  }));
+  let matching = [], blindScope = [], blindMarkup;
+  // Random pairs come from the questions in view, as far as they can be judged.
+  const updateBlindAction = () => {
+    blindScope = matching.filter(task => votedTask(task) && (platform.arena[task.id]?.entries ?? 0) >= 2);
     const blind = $('[data-home-blind]', root);
     if (blind) {
-      blind.innerHTML = homeState.category === '音乐'
+      const html = homeState.category === '音乐'
         ? act('judge', '', AB, '参与盲评', '暂未开放', '音乐分区暂未开放盲评')
         : !platform.activityReady
           ? act('judge', '', AB, '参与盲评', platform.activityError ? '统计暂未载入 <button class="link" type="button" data-platform-reconnect>重新连接</button>' : '统计加载中…') : blindScope.length
           ? act('judge', `#/arena/random`, AB, '参与盲评', `可盲评 ${blindScope.reduce((sum, t) => sum + platform.arena[t.id].works, 0)} 件`)
           : act('judge', '', AB, '参与盲评', '暂无可评的题', '当前范围内没有两个模型配置以上的盲评池');
+      if (blindMarkup !== html) { blind.innerHTML = html; blindMarkup = html; }
     }
+  };
+  const filterTasks = () => {
+    const matchTask = search(homeState.query);
+    const promptOnly = new Set();
+    matching = [];
+    for (const row of rows.values()) {
+      const { task, card, hit } = row;
+      const excluded = (homeState.category && task.category !== homeState.category) || (homeState.domain && !domainsOf(task).includes(homeState.domain)) || (homeState.model && (homeState.unanswered ? answeredBy(task, homeState.model) : !answeredBy(task, homeState.model)));
+      const match = excluded ? null : matchTask(task);
+      card.toggleAttribute('hidden', !match);
+      const snippet = match?.snippet;
+      hit.toggleAttribute('hidden', !snippet);
+      if (snippet) {
+        const { before, hit: word, after } = snippet;
+        const html = `<span>提示词</span>${esc(before)}<mark>${esc(word)}</mark>${esc(after)}`;
+        if (row.snippet !== html) { hit.innerHTML = html; row.snippet = html; }
+        promptOnly.add(task.id);
+      }
+      if (match) matching.push(task);
+    }
+    updateBlindAction();
+    const count = matching.length;
     // Mix within the filtered result set and keep direct search hits before prompt-only hits.
     const ranked = [...rankedTasks(matching.filter(t => !promptOnly.has(t.id)), recommendationTime),
       ...rankedTasks(matching.filter(t => promptOnly.has(t.id)), recommendationTime)];
     const reasons = new Map(ranked.map(({ task, reason }) => [task.id, reason]));
-    const shown = new Set(matching.map(t => t.id));
-    const order = [...ranked.map(row => row.task), ...DATA.tasks.filter(t => !shown.has(t.id))];
-    const list = $('.task-list', root), cards = $$('[data-task-card]', list);
-    const cardsById = new Map(cards.map(card => [card.dataset.taskCard, card]));
-    if (order.some((t, i) => cards[i].dataset.taskCard !== t.id)) list.append(...order.map(t => cardsById.get(t.id)));
-    for (const card of cards) {
-      const reason = $('[data-question-reason]', card), text = recommendationLabels[reasons.get(card.dataset.taskCard)];
-      reason.hidden = !text;
-      reason.textContent = text ?? '';
+    const visible = $$('[data-task-card]:not([hidden])', list);
+    if (ranked.some(({ task }, i) => visible[i].dataset.taskCard !== task.id)) {
+      list.append(...ranked.map(({ task }) => rows.get(task.id).card));
+    }
+    for (const row of rows.values()) {
+      const text = recommendationLabels[reasons.get(row.task.id)] ?? '';
+      if (row.reasonText === text) continue;
+      row.reason.toggleAttribute('hidden', !text);
+      row.reason.textContent = text;
+      row.reasonText = text;
     }
     $('[data-question-recommendation]').hidden = homeState.sort !== 'recommended' || count === 0;
     $('#h-tasks').innerHTML = [homeState.category ? `<span>${esc(categoryLabel(homeState.category))}</span>` : '', homeState.domain ? `<span>${esc(homeState.domain)}</span>` : '', homeState.model ? `<span data-i18n-ignore>${esc(MODELS.get(homeState.model)?.name)}</span>` : '', homeState.model && homeState.unanswered ? '<span>尚未回答</span>' : ''].filter(Boolean).join(' · ') || '全部题目';
@@ -534,7 +545,6 @@ function renderLibrary(scopes = [], fresh = true) {
     const address = [LIBRARY.href, ...(homeState.view === 'models' ? ['models'] : scopes.map(encodeURIComponent))].join('/');
     if (location.hash !== address) history.replaceState(history.state, '', address);
     previews?.setPaused(homeState.view !== 'tasks');
-    deferredMedia.refresh(root);
   };
   // Cards that stay move to their new places and new matches fade in (motion.js).
   const reflow = () => flip(root, filter, '.task-card, .dir-row');
@@ -542,7 +552,7 @@ function renderLibrary(scopes = [], fresh = true) {
     if (event.target.matches('[data-home-search]')) homeState.query = event.target.value;
     else if (event.target.matches('[data-model-search]')) homeState.modelQuery = event.target.value;
     else return;
-    reflow();
+    filter();
   };
   root.onchange = (event) => {
     const el = event.target;
@@ -577,7 +587,7 @@ function renderLibrary(scopes = [], fresh = true) {
     settleImages();
   }, { capture: true, signal: controller.signal });
   filter();
-  window.addEventListener('localechange', filter, { signal: controller.signal });
+  window.addEventListener('localechange', () => { search = createQuestionSearch(); filter(); }, { signal: controller.signal });
   setPageTitle(['题库', DATA.title]);
   async function loadPreviews(choice) {
     const result = choice?.result;
@@ -609,6 +619,32 @@ function renderLibrary(scopes = [], fresh = true) {
     if (card && !card.hidden && homeState.view === 'tasks') loadPreviews(choicesById.get(card.dataset.taskCard));
   };
   return {
+    onPlatformChange(reason) {
+      if (reason !== 'activity') { void route({ keepScroll: true }); return; }
+      updateBlindAction();
+      for (const { task, card, choice } of rows.values()) {
+        const featured = platform.featured?.[task.id]?.cover ?? null;
+        if (choice.featured === featured) continue;
+        choice.featured = featured;
+        const result = taskCover(task, featured);
+        if (choice.result === result) continue;
+        if (choice.result && activePreviewKey === `${task.id}/${choice.result.id}`) {
+          previews?.destroy();
+          previews = null;
+          activePreviewKey = null;
+        }
+        choice.result = result;
+        const artwork = $('.question-visual', card);
+        const screenshot = result?.previewMode === 'screenshot';
+        artwork.classList.toggle('screenshot-thumb', Boolean(screenshot));
+        artwork.classList.toggle('model-thumb', Boolean(!screenshot && (result?.previewModel || result?.previewLoader)));
+        if (result) artwork.dataset.previewId = result.id;
+        else delete artwork.dataset.previewId;
+        artwork.innerHTML = artworkFor(task, result);
+      }
+      const lead = $('.task-card:not([hidden]) .question-visual img', root);
+      if (lead) lead.fetchPriority = 'high';
+    },
     destroy() { destroyed = true; controller.abort(); previews?.destroy(); activePreviewKey = null; },
   };
 }
@@ -1001,7 +1037,7 @@ function renderTask(t) {
   root.oninput = (e) => {
     if (!e.target.matches('[data-work-search]')) return;
     taskState.query = e.target.value;
-    flip(root, () => filterResults(t));
+    filterResults(t);
     updateResultPreviews(t);
   };
 
@@ -1958,10 +1994,15 @@ function mergePlatform() {
   mergedCatalog = { works: platform.works, questions: platform.questions, state: catalogState() };
   if (!['ready', 'static'].includes(catalogState())) { DATA.tasks = []; return; }
   const listed = platform.available ? new Map(platform.questions.map((q) => [q.id, q])) : null;
+  const listedWorks = new Map();
+  if (listed) for (const work of platform.works) {
+    if (!listedWorks.has(work.task)) listedWorks.set(work.task, []);
+    listedWorks.get(work.task).push(work);
+  }
   const ids = [...[...PACK.keys()].filter((id) => !listed || listed.has(id)), ...(listed ? [...listed.keys()].filter((id) => !PACK.has(id)) : [])];
   DATA.tasks = ids.map((id) => {
     const pack = PACK.get(id);
-    const works = listed ? platform.works.filter((w) => w.task === id) : [...pack.works.values()];
+    const works = listed ? (listedWorks.get(id) ?? []) : [...pack.works.values()];
     // Reference images come from the API when it holds them, otherwise from the pack.
     const own = listed?.get(id)?.references?.length ? listed.get(id) : pack?.task;
     return stable(tasksById, id, {

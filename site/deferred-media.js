@@ -8,7 +8,7 @@ export function createDeferredMedia(doc = document, { margin = 240 } = {}) {
     ...(node.querySelectorAll?.('img[data-media-src]') ?? []),
   ];
   function load(image) {
-    if (stopped || !pending.has(image) || doc.hidden || !image.isConnected || !image.getClientRects().length) return;
+    if (stopped || !pending.has(image) || doc.hidden || !image.isConnected) return;
     const card = image.closest('.home-deck .home-window');
     if (card && !card.hasAttribute('data-front') && !card.hasAttribute('data-media-warm')) return;
     const rect = image.getBoundingClientRect();
@@ -20,7 +20,7 @@ export function createDeferredMedia(doc = document, { margin = 240 } = {}) {
   }
   const observer = new IntersectionObserver(changes => {
     for (const change of changes) {
-      if (change.isIntersecting) { nearby.add(change.target); load(change.target); }
+      if (change.isIntersecting && pending.has(change.target)) { nearby.add(change.target); load(change.target); }
       else nearby.delete(change.target);
     }
   }, { rootMargin: `${margin}px` });
@@ -39,13 +39,14 @@ export function createDeferredMedia(doc = document, { margin = 240 } = {}) {
       if (!image.complete) image.removeAttribute('src');
     }
   }
+  function loadNearby() {
+    if (stopped || doc.hidden) return;
+    for (const image of nearby) load(image);
+  }
   function refresh(node = doc) {
     if (stopped) return;
     enroll(node);
-    for (const image of pending) {
-      if (!image.isConnected) { pending.delete(image); nearby.delete(image); observer.unobserve(image); }
-      else if (nearby.has(image)) load(image);
-    }
+    loadNearby();
   }
   // The portal cover must wait for the first visible images even when its first animation frame
   // runs before the normal observer callback. A zero-margin pass excludes offscreen/hidden media.
@@ -63,7 +64,7 @@ export function createDeferredMedia(doc = document, { margin = 240 } = {}) {
     });
   }
   function queue() {
-    if (!scheduled && !stopped) scheduled = requestAnimationFrame(() => { scheduled = 0; refresh(); });
+    if (!scheduled && !stopped && nearby.size) scheduled = requestAnimationFrame(() => { scheduled = 0; loadNearby(); });
   }
   const mutations = new MutationObserver(records => {
     for (const record of records) if (record.type === 'childList') {

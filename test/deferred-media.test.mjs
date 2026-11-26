@@ -4,7 +4,7 @@ import { createDeferredMedia } from '../site/deferred-media.js';
 
 function fixture() {
   const original = Object.fromEntries(['IntersectionObserver', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'innerHeight', 'innerWidth'].map(key => [key, globalThis[key]]));
-  let intersect, mutate, scheduled;
+  let intersect, mutate, scheduled, scans = 0;
   const observed = new Set();
   globalThis.IntersectionObserver = class { constructor(callback) { intersect = callback; } observe(image) { observed.add(image); } unobserve(image) { observed.delete(image); } disconnect() { observed.clear(); } };
   globalThis.MutationObserver = class { constructor(callback) { mutate = callback; } observe() {} disconnect() {} };
@@ -12,18 +12,17 @@ function fixture() {
   globalThis.cancelAnimationFrame = () => { scheduled = null; };
   globalThis.innerHeight = 900; globalThis.innerWidth = 1440;
   const images = [];
-  const doc = Object.assign(new EventTarget(), { hidden: false, documentElement: {}, querySelectorAll: () => images });
+  const doc = Object.assign(new EventTarget(), { hidden: false, documentElement: {}, querySelectorAll: () => { scans++; return images; } });
   const add = (src, { top = 0, left = 0, visible = true, card = null } = {}) => {
     let current;
     const image = { dataset: { mediaSrc: src }, isConnected: true, complete: false, starts: 0, visible, card,
       matches: () => true, querySelectorAll: () => [], closest() { return this.card; },
       hasAttribute: name => name === 'src' && current !== undefined,
-      getClientRects() { return this.visible ? [{}] : []; },
-      getBoundingClientRect: () => ({ top, left, bottom: top + 100, right: left + 100, width: 100, height: 100 }),
+      getBoundingClientRect() { return { top, left, bottom: top + 100, right: left + 100, width: this.visible ? 100 : 0, height: this.visible ? 100 : 0 }; },
       removeAttribute() { current = undefined; }, get src() { return current; }, set src(value) { current = value; this.starts++; } };
     images.push(image); return image;
   };
-  return { doc, add, nearby: image => intersect([{ target: image, isIntersecting: true }]),
+  return { doc, add, get scans() { return scans; }, nearby: image => intersect([{ target: image, isIntersecting: true }]),
     leave: image => intersect([{ target: image, isIntersecting: false }]),
     change: () => mutate([{ type: 'attributes' }]), flush: () => { const next = scheduled; scheduled = null; next?.(); },
     remove: image => { image.isConnected = false; images.splice(images.indexOf(image), 1); mutate([{ type: 'childList', removedNodes: [image], addedNodes: [] }]); },
@@ -42,6 +41,7 @@ test('media waits for viewport intersection, panel visibility and a visible docu
     assert.equal(panel.starts, 0, 'opening a hidden tab does not start requests in a background page');
     f.doc.hidden = false; f.doc.dispatchEvent(new Event('visibilitychange')); f.flush();
     assert.equal(panel.starts, 1);
+    assert.equal(f.scans, 1, 'panel and visibility changes do not rescan the document');
     media.refresh(); f.nearby(first); f.nearby(panel);
     assert.equal(first.starts, 1); assert.equal(panel.starts, 1, 'returning never assigns the same loaded src again');
   } finally { media?.destroy(); f.restore(); }

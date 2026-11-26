@@ -6,7 +6,7 @@ const wait = () => new Promise(resolve => setTimeout(resolve, 20));
 test('viewer timeout offers recovery without revealing a pending frame, and a late load recovers', async () => {
   const frame = new EventTarget();
   let slow = 0, loaded = 0;
-  const stop = watchViewerFrame(frame, { onSlow: () => slow++, onLoaded: () => loaded++, timeout: 5, revealDelay: 0 });
+  const stop = watchViewerFrame(frame, { onSlow: () => slow++, onLoaded: () => loaded++, timeout: 5 });
   await wait();
   assert.equal(slow, 1);
   assert.equal(loaded, 0, 'elapsed time never substitutes for load');

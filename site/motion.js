@@ -95,7 +95,7 @@ export function scene(root, { navigation = false, from = '' } = {}) {
   const moving = !still();
   const placeholder = root.querySelector(PLACEHOLDER);
   const fresh = moving && (navigation || Boolean(placeholder));
-  const kind = from ? 'navigate' : !moving || !placeholder ? null
+  const kind = !moving ? null : from ? 'navigate' : !placeholder ? null
     : from === '' ? placeholder.matches('.static-intro') && !document.documentElement.dataset.entry ? 'open' : null
       : from === null ? 'swap' : null;
   // What a loading screen and its page both show stays still; only what is new rises in.

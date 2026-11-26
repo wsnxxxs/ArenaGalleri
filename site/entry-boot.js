@@ -54,29 +54,33 @@
     else addEventListener('DOMContentLoaded', () => { mount(); resolve(); }, { once:true });
   });
   const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
-  function imageReady(img) {
-    img.loading = 'eager';
-    const decoded = () => img.naturalWidth ? (img.decode ? img.decode() : Promise.resolve()) : Promise.reject(new Error('Image failed'));
-    if (img.complete) return decoded();
-    return new Promise((resolve, reject) => {
-      img.addEventListener('load', () => decoded().then(resolve, reject), { once:true });
-      img.addEventListener('error', reject, { once:true });
+  async function settleMedia(root, prepareImages) {
+    await nextFrame();
+    await prepareImages(root);
+    if (phase !== 'settling') return;
+    const images = [...root.querySelectorAll('img[src]')].filter(img => {
+      const rect = img.getBoundingClientRect();
+      return rect.width && rect.height && rect.top < innerHeight && rect.bottom > 0 && rect.left < innerWidth && rect.right > 0;
     });
+    await Promise.allSettled([document.fonts?.ready, ...images.map(img => {
+      img.loading = 'eager';
+      return img.decode?.();
+    })]);
   }
   async function ready(root, { prepareImages = () => {} } = {}) {
     if (phase !== 'loading') return;
     phase = 'settling';
     try {
       await domReady;
-      await nextFrame();
-      await prepareImages(root);
-      // Wait for the visible first-screen images, including Gallery's lazy deck cards.
-      const images = [...root.querySelectorAll('img')].filter(img => {
-        if (!img.hasAttribute('src')) return false;
-        const rect = img.getBoundingClientRect();
-        return rect.width && rect.height && rect.top < innerHeight && rect.bottom > 0 && rect.left < innerWidth && rect.right > 0;
-      });
-      await Promise.all([document.fonts.ready, ...images.map(imageReady)]);
+      // Artwork and fonts get a short head start. A broken or slow image can finish in place
+      // without keeping the whole app covered and inert.
+      let mediaTimer;
+      try {
+        await Promise.race([
+          settleMedia(root, prepareImages),
+          new Promise(resolve => { mediaTimer = setTimeout(resolve, 750); }),
+        ]);
+      } finally { clearTimeout(mediaTimer); }
       await nextFrame();
       await nextFrame();
       if (phase !== 'settling') return;
@@ -84,7 +88,7 @@
       clearTimeout(deadline);
       delete html.dataset.entry;
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (!reduced) await cover.animate([{ transform:'translateX(0)' }, { transform:`translateX(${gallery ? '-' : ''}100%)` }], { duration:650, easing:'cubic-bezier(.65,0,.25,1)', fill:'forwards' }).finished;
+      if (!reduced && cover.animate) await cover.animate([{ transform:'translateX(0)' }, { transform:`translateX(${gallery ? '-' : ''}100%)` }], { duration:650, easing:'cubic-bezier(.65,0,.25,1)', fill:'forwards' }).finished.catch(() => {});
       cover.remove();
       style.remove();
       if (appRoot) appRoot.inert = false;
