@@ -584,15 +584,22 @@ const RELOAD = '<button type="button" class="btn primary" data-reload>刷新页�
 // modules that link against old ones. The build writes this tab's ?v= to version.json; when they
 // differ, only a full reload helps, and it keeps the address.
 const loadedVersion = new URL(import.meta.url).searchParams.get('v');
-async function loadFailure(error, title) {
-  if (loadedVersion) {
-    try {
-      const res = await fetch('version.json', { cache: 'no-store' });
-      const { assets } = res.ok ? await res.json() : {};
-      if (assets && assets !== loadedVersion) return { updated: true, title: '页面已更新', text: '网站已发布新版本，这个标签页仍是旧版。刷新后会回到当前页面。' };
-    } catch { /* fall through to the original error */ }
-  }
-  return { updated: false, title, text: error?.message ?? String(error) };
+async function showLoadFailure(container, error, title, backLink = '') {
+  const details = `<p></p><div class="${backLink ? 'empty-actions' : 'board-empty-actions'}">${RELOAD}${backLink}</div>`;
+  container.innerHTML = backLink ? `<h1></h1>${details}`
+    : `<div class="board-empty"><p class="board-empty-title"></p>${details}</div>`;
+  const [heading, message] = (backLink ? container : container.firstElementChild).children;
+  heading.textContent = title;
+  message.textContent = error?.message ?? String(error);
+  if (!loadedVersion) return;
+  try {
+    const res = await fetch('version.json', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+    const { assets } = res.ok ? await res.json() : {};
+    if (assets && assets !== loadedVersion && heading.isConnected) {
+      heading.textContent = '页面已更新';
+      message.textContent = '网站已发布新版本，这个标签页仍是旧版。刷新后会回到当前页面。';
+    }
+  } catch { /* The original error and reload action are already visible. */ }
 }
 const settleImages = () => {
   deferredMedia.refresh(root);
@@ -1200,7 +1207,7 @@ function renderLibrary(scopes = [], fresh = true) {
 }
 
 // ---- task -----------------------------------------------------------------------------
-const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, promptOpen: false, variants: new Map(), open: new Set(), view: store.get('task-view') === 'family' ? 'family' : 'featured' };
+const taskState = { task: null, cond: null, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: null, promptOpener: null, variants: new Map(), open: new Set(), view: store.get('task-view') === 'family' ? 'family' : 'featured' };
 const selectedVariant = (t) => variantsOf(t).find((variant) => variant.id === taskState.promptVariant);
 const selectedPrompt = (t) => selectedVariant(t)?.prompt ?? t.prompt;
 // Each model leads with one work (per review group); its other works follow, folded until opened.
@@ -1213,12 +1220,13 @@ function coverLead(t) {
   return new Set(t.results.filter((r) => r.status === 'verified').map(modelKey)).size >= 3 ? cover : null;
 }
 // A tagged cover keeps the lead when the reader switches its prompt version.
-const isLead = (lead, r) => Boolean(lead) && (r.id === lead.id || Boolean(r.promptVariant && lead.promptVariant && variantKey(r) === variantKey(lead)));
-function foldOrder(t, results) {
-  const lead = coverLead(t);
+const isLead = (t, lead, r) => Boolean(lead) && (r.id === lead.id
+  || (lead.promptVariant && r.promptVariant && variantKey(r) === variantKey(lead)
+    && variantChoices(t, r).some((choice) => choice.result?.id === lead.id)));
+function foldOrder(t, results, lead) {
   const leads = new Set();
   for (const status of new Set(results.map((r) => r.status))) {
-    const featured = { ...platform.featured?.[t.id]?.models, ...(lead && status === 'verified' ? { [modelKey(lead)]: results.find((r) => isLead(lead, r))?.id } : {}) };
+    const featured = { ...platform.featured?.[t.id]?.models, ...(lead && status === 'verified' ? { [modelKey(lead)]: results.find((r) => isLead(t, lead, r))?.id } : {}) };
     const picks = representatives(results.filter((r) => r.status === status), modelKey, featured);
     picks.forEach((r) => leads.add(r));
   }
@@ -1227,7 +1235,7 @@ function foldOrder(t, results) {
   const ahead = (r) => r.status === 'verified' && modelKey(r) === modelKey(lead);
   return [...ordered.filter(ahead), ...ordered.filter((r) => !ahead(r))];
 }
-const displayedResults = (t) => boostOrder(foldOrder(t, groupVariantResults(t, sortedResults(t), taskState.variants)), { sort: resultSort, vendorOf });
+const displayedResults = (t, lead = coverLead(t)) => boostOrder(foldOrder(t, groupVariantResults(t, sortedResults(t), taskState.variants), lead), { sort: resultSort, vendorOf });
 function resultVariantButtons(t, r, pane = null) {
   const choices = variantChoices(t, r);
   if (!choices.length) return '';
@@ -1372,8 +1380,7 @@ async function mountTaskBoard() {
     if (!body.isConnected) return;
     taskBoard = mountBoard(body, { ...context(), task: t, embedded: true });
   } catch (error) {
-    const failure = await loadFailure(error, '榜单加载失败');
-    if (body.isConnected) body.innerHTML = `<div class="board-empty"><p class="board-empty-title">${failure.title}</p><p>${esc(failure.text)}</p><div class="board-empty-actions">${RELOAD}</div></div>`;
+    if (body.isConnected) void showLoadFailure(body, error, '榜单加载失败');
   }
 }
 // The usage view loads with the price table and the server's switch for amounts (task-usage.js).
@@ -1397,8 +1404,7 @@ async function mountTaskUsage() {
     $('[data-go="cost"] [data-usage-label]')?.replaceChildren('花费');
     if (/\/usage$/.test(location.hash.split('#')[1])) history.replaceState(history.state, '', `#${location.hash.split('#')[1].replace(/\/usage$/, '/cost')}`);
   } catch (error) {
-    const failure = await loadFailure(error, '用量加载失败');
-    if (body.isConnected) body.innerHTML = `<div class="board-empty"><p class="board-empty-title">${failure.title}</p><p>${esc(failure.text)}</p><div class="board-empty-actions">${RELOAD}</div></div>`;
+    if (body.isConnected) void showLoadFailure(body, error, '用量加载失败');
   }
 }
 
@@ -1424,12 +1430,11 @@ function adminPoolLine(t, pool) {
 }
 
 // The model is the card's title; the work's own name follows in grey. Summaries stay in the guide.
-function resultCard(t, r) {
+function resultCard(t, r, coverWork) {
   const m = modelOf(r);
   const screenshotPreview = !hasModelPreview(r);
   const screenshot = previewScreenshotOf(t, r);
-  const coverWork = coverLead(t);
-  const lead = isLead(coverWork, r);
+  const lead = isLead(t, coverWork, r);
   const zoom = screenshotPreview ? previewZoomKind(t, screenshot) : '';
   return `<article class="result${screenshotPreview ? ' is-screenshot-preview' : ''}${lead ? ' is-lead' : ''}" data-vendor="${esc(vendorOf(r))}" data-model="${esc(modelKey(r))}" data-id="${esc(r.id)}" data-status="${r.status}">
     <div class="result-media"${zoom ? ` data-preview-zoom="${zoom}"` : ''}>
@@ -1459,19 +1464,20 @@ const GROUPS = [
   { status: 'unverified', title: '未验证', note: '等待管理员核验 · 可以浏览和贴表情，暂不参与盲评' },
   { status: 'questioned', title: '存疑', note: '核验存疑 · 仅供参考，不参与互动与盲评' },
 ];
-function resultGroup(t, g, items) {
+function resultGroup(t, g, items, coverWork) {
   const head = `<div class="group-head"><h3>${g.title}<span class="group-count" data-group-count>${items.length}</span></h3><p>${g.note}</p>${g.status === 'questioned' ? `<span class="group-toggle" aria-hidden="true"><span class="when-open">收起</span><span class="when-closed">展开</span>${icon('next')}</span>` : ''}</div>`;
-  const grid = `<div class="result-grid" data-group="${g.status}">${items.map((r) => resultCard(t, r)).join('')}</div>`;
+  const grid = `<div class="result-grid" data-group="${g.status}">${items.map((r) => resultCard(t, r, coverWork)).join('')}</div>`;
   return g.status === 'questioned'
     ? `<details class="result-group is-questioned" data-group-wrap><summary>${head}</summary>${grid}</details>`
     : `<section class="result-group" data-group-wrap>${head}${grid}</section>`;
 }
 function resultGroups(t) {
-  const sorted = displayedResults(t);
-  if (t.results.every((r) => r.status === 'verified')) return `<div class="result-grid" data-group="verified">${sorted.map((r) => resultCard(t, r)).join('')}</div>`;
+  const coverWork = coverLead(t);
+  const sorted = displayedResults(t, coverWork);
+  if (t.results.every((r) => r.status === 'verified')) return `<div class="result-grid" data-group="verified">${sorted.map((r) => resultCard(t, r, coverWork)).join('')}</div>`;
   return GROUPS.map((g) => {
     const items = sorted.filter((r) => r.status === g.status);
-    return items.length ? resultGroup(t, g, items) : '';
+    return items.length ? resultGroup(t, g, items, coverWork) : '';
   }).join('');
 }
 
@@ -1488,7 +1494,8 @@ const familyShown = (t) => taskState.view === 'family' && hasLineage(t);
 // a product line stays together and runs Gemini 3.1 → 3.7 → 3.8 → 4.x, then each effort low to max.
 const lineage = (a, b) => modelOf(a).name.localeCompare(modelOf(b).name, 'en', { numeric: true, sensitivity: 'base' }) || effortRank(a) - effortRank(b);
 function familyView(t) {
-  const shown = displayedResults(t);
+  const coverWork = coverLead(t);
+  const shown = displayedResults(t, coverWork);
   const vendors = new Map();
   for (const r of shown.filter((item) => item.status !== 'questioned')) vendors.set(vendorOf(r), [...(vendors.get(vendorOf(r)) ?? []), r]);
   const models = (list) => new Set(list.map(modelKey)).size;
@@ -1500,9 +1507,9 @@ function familyView(t) {
   const questioned = shown.filter((r) => r.status === 'questioned');
   return `<div class="family-list">${rows.map(({ vendor, list }) => `<section class="family" data-family${vendor ? '' : ' data-family-rest'}>
       <header class="family-head">${vendor ? brandMark(modelOf(list[0]), 'brand-mark') : ''}<h3>${vendor ? esc(vendor) : '其他厂商'}</h3><p data-family-count></p></header>
-      <div class="family-strip">${list.map((r) => resultCard(t, r)).join('')}</div>
+      <div class="family-strip">${list.map((r) => resultCard(t, r, coverWork)).join('')}</div>
     </section>`).join('')}</div>
-    ${questioned.length ? resultGroup(t, GROUPS[2], questioned) : ''}`;
+    ${questioned.length ? resultGroup(t, GROUPS[2], questioned, coverWork) : ''}`;
 }
 const viewControl = (t) => !hasLineage(t) ? '' : `<div class="seg task-view" role="group" aria-label="作品排列">${[['featured', '精选', '每个模型先看一件代表作'], ['family', '同门', '按厂商分组，同一家按系列与版本排开']]
   .map(([value, text, hint]) => `<button data-task-view="${value}" aria-pressed="${value === (familyShown(t) ? 'family' : 'featured')}" title="${hint}">${text}</button>`).join('')}</div>`;
@@ -1552,7 +1559,7 @@ function showCardUsage(t) {
 }
 function renderTask(t) {
   if (taskState.task !== t.id) {
-    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, promptOpen: false, variants: new Map(), open: new Set() });
+    Object.assign(taskState, { task: t.id, vendor: '', harness: '', provider: '', query: '', picks: [], promptVariant: variantsOf(t)[0]?.id, promptOpener: null, variants: new Map(), open: new Set() });
     document.body.classList.remove('has-prompt-modal');
     taskScores = new Map();
   }
@@ -1571,7 +1578,7 @@ function renderTask(t) {
   const works = counted(t);
   const pool = platform.arena[t.id];
   const promptNote = t.promptPending ? '提示词暂未公开' : t.references?.length ? `查看题面 · 附参考图 ${t.references.length}` : '查看完整题面';
-  const promptBtn = `<button type="button" class="task-act is-prompt" data-open-prompt aria-haspopup="dialog" aria-expanded="${Boolean(taskState.promptOpen)}"><span class="task-act-mark" aria-hidden="true">${icon('file')}</span><span><b>提示词</b><small>${promptNote}</small></span></button>`;
+  const promptBtn = `<button type="button" class="task-act is-prompt" data-open-prompt="actions" aria-haspopup="dialog" aria-expanded="${Boolean(taskState.promptOpener)}"><span class="task-act-mark" aria-hidden="true">${icon('file')}</span><span><b>提示词</b><small>${promptNote}</small></span></button>`;
   const actions = `<div class="task-acts">
     ${promptBtn}
     ${platform.available ? `${aiJudged(t) ? act('judge', '', icon('reason'), 'AI 评分', '暂未开放', '推理题由 AI 评分，不参与盲评和排行榜')
@@ -1600,7 +1607,7 @@ function renderTask(t) {
       <section class="side-prompt" aria-labelledby="side-prompt-title">
         <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
           ${variantsOf(t).length ? `<div class="seg" role="group" aria-label="提示词版本">${variantsOf(t).map((variant) => `<button type="button" data-prompt-variant="${esc(variant.id)}" aria-pressed="${variant.id === taskState.promptVariant}"><span data-i18n-ignore>${esc(variant.label)}</span></button>`).join('')}</div>` : ''}
-          <button class="text-action side-prompt-open" type="button" data-open-prompt aria-haspopup="dialog" aria-expanded="${Boolean(taskState.promptOpen)}">浮窗查看</button><button class="text-action side-prompt-more" type="button" data-prompt-more aria-expanded="false">展开</button><button class="text-action" type="button" data-copy="short"><span data-copy-label>复制</span></button></div>
+          <button class="text-action side-prompt-open" type="button" data-open-prompt="sidebar" aria-haspopup="dialog" aria-expanded="${Boolean(taskState.promptOpener)}">浮窗查看</button><button class="text-action side-prompt-more" type="button" data-prompt-more aria-expanded="false">展开</button><button class="text-action" type="button" data-copy="short"><span data-copy-label>复制</span></button></div>
         ${referenceSheet(t.references, { key: t.id, credit: t.referenceCredit })}
         <pre data-i18n-ignore data-prompt-text>${linkReferences(selectedPrompt(t), t.references, t.id)}</pre>
       </section>
@@ -1638,7 +1645,7 @@ function renderTask(t) {
     </section>` : ''}${usageSection(t)}
     ${footer()}</main></div>
   <div class="tray" role="region" aria-label="对比栏" hidden></div>
-  <div class="prompt-overlay" data-prompt-modal role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title"${taskState.promptOpen ? '' : ' hidden'}>
+  <div class="prompt-overlay" data-prompt-modal role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title"${taskState.promptOpener ? '' : ' hidden'}>
     <div class="prompt-sheet">
       <div class="prompt-sheet-head">
         <div class="prompt-sheet-title"><h2 id="prompt-modal-title">提示词</h2><p class="prompt-sheet-sub" data-i18n-ignore>${esc(t.title)}</p></div>
@@ -1655,28 +1662,27 @@ function renderTask(t) {
     </div>
   </div>`;
   const promptModal = $('[data-prompt-modal]', root);
-  const openPromptBtn = $('.task-acts [data-open-prompt]', root);
-  let promptReturnFocus = null;
-  const setPromptOpen = (open, { restoreFocus = false, opener = null } = {}) => {
-    taskState.promptOpen = Boolean(open);
-    if (promptModal) promptModal.hidden = !taskState.promptOpen;
-    $$('[data-open-prompt]', root).forEach((button) => button.setAttribute('aria-expanded', String(taskState.promptOpen)));
-    document.body.classList.toggle('has-prompt-modal', taskState.promptOpen);
-    if (taskState.promptOpen) {
-      if (opener) promptReturnFocus = opener;
-      if (promptModal) deferredMedia.refresh(promptModal);
-      $('[data-close-prompt]', root)?.focus?.({ preventScroll: true });
-    } else if (restoreFocus) {
-      (promptReturnFocus ?? openPromptBtn)?.focus?.({ preventScroll: true });
-      promptReturnFocus = null;
+  const promptButtons = $$('[data-open-prompt]', root);
+  const setPromptOpen = (opener = null) => {
+    const previous = taskState.promptOpener;
+    taskState.promptOpener = opener?.dataset.openPrompt ?? null;
+    const open = Boolean(opener);
+    promptModal.hidden = !open;
+    promptButtons.forEach((button) => button.setAttribute('aria-expanded', String(open)));
+    for (const el of root.children) if (el !== promptModal) el.inert = open;
+    document.body.classList.toggle('has-prompt-modal', open);
+    if (open) {
+      deferredMedia.refresh(promptModal);
+      $('[data-close-prompt]', promptModal).focus({ preventScroll: true });
+    } else {
+      promptButtons.find((button) => button.dataset.openPrompt === previous)?.focus({ preventScroll: true });
     }
   };
   let promptBackdropDown = false;
   promptModal?.addEventListener('pointerdown', (event) => {
     promptBackdropDown = event.target === promptModal;
   });
-  document.body.classList.toggle('has-prompt-modal', Boolean(taskState.promptOpen));
-  if (taskState.promptOpen && promptModal) deferredMedia.refresh(promptModal);
+  if (taskState.promptOpener) setPromptOpen(promptButtons.find((button) => button.dataset.openPrompt === taskState.promptOpener));
   setPageTitle([{ text: t.title, original: true }, DATA.title]);
   void loadMetrics().then((info) => { showTaskUsage(t); if (info.supported) showCardUsage(t); });
   syncTaskView(t);
@@ -1711,11 +1717,11 @@ function renderTask(t) {
       $$('[data-prompt-text]', root).forEach((node) => { node.innerHTML = promptHtml; });
     }
     const opener = e.target.closest('[data-open-prompt]');
-    if (opener) { setPromptOpen(true, { opener }); return; }
-    if (e.target.closest('[data-close-prompt]')) { setPromptOpen(false, { restoreFocus: true }); return; }
-    if (promptModal && taskState.promptOpen && e.target === promptModal && promptBackdropDown) {
+    if (opener) { setPromptOpen(opener); return; }
+    if (e.target.closest('[data-close-prompt]')) { setPromptOpen(); return; }
+    if (promptModal && taskState.promptOpener && e.target === promptModal && promptBackdropDown) {
       promptBackdropDown = false;
-      setPromptOpen(false, { restoreFocus: true });
+      setPromptOpen();
       return;
     }
     promptBackdropDown = false;
@@ -1737,11 +1743,14 @@ function renderTask(t) {
     const resultVariant = e.target.closest('[data-result-variant]');
     if (resultVariant && resultVariant.dataset.variantResult) {
       const card = resultVariant.closest('.result'), previousId = card.dataset.id;
+      if (previousId === resultVariant.dataset.variantResult) return;
+      const restoreFocus = document.activeElement === resultVariant;
       const result = t.results.find((item) => item.id === resultVariant.dataset.variantResult);
       taskState.variants.set(variantKey(result), result.id);
       taskState.picks = taskState.picks.map((id) => id === previousId ? result.id : id);
-      card.outerHTML = resultCard(t, result);
+      card.outerHTML = resultCard(t, result, coverLead(t));
       applySort(t); filterResults(t); syncPicks(t); settleImages(); updateResultPreviews(t);
+      if (restoreFocus) $(`[data-result-variant][data-variant-result="${CSS.escape(result.id)}"][aria-pressed="true"]`, root)?.focus({ preventScroll: true });
     }
     const preview = e.target.closest('[data-preview-mode]');
     if (preview) {
@@ -1806,10 +1815,18 @@ function renderTask(t) {
   };
   root.onfocusin = requestCardPreview;
   return (event) => {
-    if (event.key !== 'Escape' || !taskState.promptOpen) return;
-    const lightbox = $('#lightbox');
-    if (lightbox && !lightbox.hidden) return;
-    setPromptOpen(false, { restoreFocus: true });
+    if (!taskState.promptOpener || event.defaultPrevented || lightbox.isOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setPromptOpen();
+    } else if (event.key === 'Tab') {
+      const buttons = $$('button:not(:disabled), a[href]', promptModal).filter((el) => el.getClientRects().length);
+      const first = buttons[0], last = buttons.at(-1);
+      if (document.activeElement === (event.shiftKey ? first : last)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+      }
+    }
   };
 }
 
@@ -1824,7 +1841,7 @@ function taskPage(t) {
     destroy({ keepTaskScores = false } = {}) {
       document.removeEventListener('keydown', onPromptKey);
       if (!keepTaskScores) {
-        taskState.promptOpen = false;
+        taskState.promptOpener = null;
         document.body.classList.remove('has-prompt-modal');
         cancelTaskScores();
       }
@@ -1857,23 +1874,37 @@ function filterResults(t) {
   // A filter or search lists every match; otherwise each model shows its lead work. 同门 lists them all.
   const filtering = Boolean(taskState.vendor || taskState.harness || taskState.provider || taskState.query.trim());
   const unfolded = filtering || familyShown(t);
-  const leads = new Map(), folded = new Set();
+  const matches = new Set(shown.map((r) => r.id));
+  const groups = new Map(), groupByWork = new Map();
   for (const r of displayed) {
-    if (!leads.has(foldKey(r))) leads.set(foldKey(r), { id: r.id, more: 0 });
-    else { leads.get(foldKey(r)).more++; folded.add(r.id); }
+    const key = foldKey(r);
+    if (!groups.has(key)) groups.set(key, { key, first: r, count: 0 });
+    const group = groups.get(key);
+    group.count++;
+    groupByWork.set(r.id, group);
   }
-  const ids = new Set(shown.filter((r) => unfolded || !folded.has(r.id) || taskState.open.has(foldKey(r))).map((r) => r.id));
   $$('.result').forEach((el) => {
-    el.hidden = !ids.has(el.dataset.id);
-    $('[data-fold]', el)?.remove();
-    const r = displayed.find((item) => item.id === el.dataset.id);
-    const lead = r && leads.get(foldKey(r));
-    const open = Boolean(r) && !unfolded && Boolean(lead?.more) && taskState.open.has(foldKey(r));
-    // An opened model's cards share one edge so the group reads as a unit.
+    const id = el.dataset.id;
+    const group = groupByWork.get(id);
+    const first = group?.first.id === id;
+    const open = !unfolded && group?.count > 1 && taskState.open.has(group.key);
+    el.hidden = !matches.has(id) || (!unfolded && !first && !open);
     el.classList.toggle('is-fold-open', open);
-    if (unfolded || !lead?.more || lead.id !== r.id) return;
-    const name = modelOf(r).name;
-    $('.result-model', el).insertAdjacentHTML('beforeend', `<button class="fold-chip" data-fold="${esc(foldKey(r))}" aria-expanded="${open}" aria-label="${open ? `收起 ${esc(name)} 的其余作品` : `展开 ${esc(name)} 的另外 ${lead.more} 件作品`}" title="${open ? '收起' : `同一模型的另外 ${lead.more} 件作品（其他档位或版本）`}">${open ? '收起' : `+${lead.more} 件`}</button>`);
+    let button = $('[data-fold]', el);
+    if (unfolded || !first || group.count < 2) { button?.remove(); return; }
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'fold-chip';
+      button.dataset.fold = group.key;
+      $('.result-model', el).append(button);
+    }
+    const more = group.count - 1;
+    const name = modelOf(group.first).name;
+    button.setAttribute('aria-expanded', String(open));
+    button.setAttribute('aria-label', open ? `收起 ${name} 的其余作品` : `展开 ${name} 的另外 ${more} 件作品`);
+    button.title = open ? '收起' : `同一模型的另外 ${more} 件作品（其他档位或版本）`;
+    button.textContent = open ? '收起' : `+${more} 件`;
   });
   // The cover is drawn large only over the full list; a filter or search shows plain matches.
   $$('.result-grid').forEach((grid) => grid.classList.toggle('is-filtering', filtering));
@@ -1885,7 +1916,6 @@ function filterResults(t) {
     $('[data-family-count]', row).textContent = `${new Set(cards.map((el) => el.dataset.model)).size} 个模型 · ${cards.length} 件作品`;
   });
   $$('[data-group-wrap]').forEach((wrap) => {
-    const matches = new Set(shown.map((r) => r.id));
     wrap.hidden = !$$('.result', wrap).some((el) => !el.hidden);
     $('[data-group-count]', wrap).textContent = $$('.result', wrap).filter((el) => matches.has(el.dataset.id)).length;
   });
@@ -1961,7 +1991,7 @@ function openCompareLightbox(t, resultId) {
     if (grid) { grid.innerHTML = shotGrid(t); settleImages(); }
     const next = items(taskState.cond);
     return { items: next, index: Math.max(0, next.findIndex((x) => x.id === item.id)) };
-  });
+  }, { returnFocus: (item) => $(`#shot-grid [data-shot="${CSS.escape(item.id)}"]`, root) });
 }
 
 // ---- lightbox -------------------------------------------------------------------------
@@ -1980,6 +2010,7 @@ const lightbox = (() => {
   let index = 0;
   let vertical = null;
   let lastFocus = null;
+  let returnFocus = null;
   let label = '';
   let closing = null;
   // Stepping slides the next picture in from the side it came from.
@@ -2007,7 +2038,12 @@ const lightbox = (() => {
     el.getAnimations({ subtree: true }).forEach((animation) => animation.cancel());
     document.body.classList.remove('lb-open');
     resultPreviews?.setPaused(Boolean($('#results')?.hidden));
-    lastFocus?.focus();
+    const target = lastFocus?.isConnected ? lastFocus : returnFocus?.(items[index]);
+    target?.focus();
+    lastFocus = null;
+    returnFocus = null;
+    vertical = null;
+    items = [];
   };
   // Closing on request fades the picture away; a page change closes at once.
   const close = (fade = false) => {
@@ -2058,12 +2094,13 @@ const lightbox = (() => {
   });
   return {
     // strip: show every item as a thumbnail under the picture; label: what the count counts.
-    open(list, i = 0, onVertical = null, { strip: withStrip = false, label: name = '' } = {}) {
+    open(list, i = 0, onVertical = null, { strip: withStrip = false, label: name = '', returnFocus: findFocus = null } = {}) {
       if (!list.length) return;
       if (closing) finish();
       items = list;
       index = i;
       vertical = onVertical;
+      returnFocus = findFocus;
       label = name;
       strip.hidden = !withStrip || list.length < 2;
       el.classList.toggle('has-strip', !strip.hidden);
@@ -2816,9 +2853,9 @@ async function show(version, visit, scrollBack) {
           if (version !== routeVersion) return;
           page = module.mount(root, { ...context(), route: platformPage, param: a ?? null });
         } catch (error) {
-          const failure = await loadFailure(error, '页面加载失败');
           if (version !== routeVersion) return;
-          root.innerHTML = `${header()}<main class="page wrap empty-page"><h1>${failure.title}</h1><p>${esc(failure.text)}</p><div class="empty-actions">${RELOAD}${failure.updated ? '' : '<a class="btn" href="#/">回到首页</a>'}</div></main>`;
+          root.innerHTML = `${header()}<main class="page wrap empty-page"></main>`;
+          void showLoadFailure($('main', root), error, '页面加载失败', '<a class="btn" href="#/">回到首页</a>');
         }
       }
     } else if (!t && !initialPlatformSettled) {
@@ -2836,9 +2873,9 @@ async function show(version, visit, scrollBack) {
         // The 3D views keep the works they opened with; a review elsewhere shows on the next visit.
         page = { destroy: () => stage.destroy(), onPlatformChange() {} };
       } catch (error) {
-        const failure = await loadFailure(error, '展厅加载失败');
         if (version !== routeVersion) return;
-        root.innerHTML = `<main class="empty-page wrap"><h1>${failure.title}</h1><p>${esc(failure.text)}</p><div class="empty-actions">${RELOAD}${failure.updated ? '' : `<a class="btn" href="${taskHref(t)}">返回作品</a>`}</div></main>`;
+        root.innerHTML = '<main class="empty-page wrap"></main>';
+        void showLoadFailure($('main', root), error, '展厅加载失败', `<a class="btn" href="${taskHref(t)}">返回作品</a>`);
       }
     } else if (!inViewer) page = taskPage(t);
     else if (!works.length) notFound(`「${t.title}」下没有 id 为「${a}」的作品。`);
