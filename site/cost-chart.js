@@ -24,7 +24,7 @@ export function scatter(all, { x = 'multiple', connect = false, currency = 'CNY'
   const xTicks = [];
   for (let d = 10 ** Math.floor(Math.log10(lo)), n = 0; d <= hi && n < 12; d *= 10, n++) for (const m of [1, 2, 5]) if (d * m >= lo && d * m <= hi) xTicks.push(d * m);
   const yTicks = []; for (let v = yLo; v <= yHi && yTicks.length < 40; v += yStep) yTicks.push(v);
-  const xLabel = (v) => x === 'multiple' ? formatMultiple(v).replace(/\.?0+×$/, '×') : formatMoney(v, currency, fx);
+  const xLabel = (v) => x === 'multiple' ? formatMultiple(v).replace(/(\.\d*?[1-9])0+×$/, '$1×').replace(/\.0+×$/, '×') : formatMoney(v, currency, fx);
   const front = points.filter((p) => p.frontier).sort((a, b) => a.x - b.x);
   const steps = front.slice(1).map((p, i) => `L${px(p.x).toFixed(1)},${py(front[i].y).toFixed(1)} L${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
   const byModel = new Map();

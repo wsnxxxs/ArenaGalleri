@@ -11,7 +11,7 @@ const chunk = (first, last) => source.slice(source.indexOf(first), source.indexO
 function environment(timeout) {
   let version = 1;
   const reads = [], notices = [], deadlines = [];
-  const e = { alive: true, DOMException, AbortController, voteController: null, state: { match: { id: 'current' }, busy: false, counted: 0, tally: {} },
+  const e = { alive: true, DOMException, AbortController, voteController: null, readyRequest: null, state: { match: { id: 'current' }, busy: false, counted: 0, tally: {} },
     accountVersion: () => version, platform: { user: { id: 'one' }, me: { votes: 10 }, totals: { votes: 20 } },
     task: { id: 'task' }, stopGate() {}, levelOf: () => 1, curatedKnown: () => null,
     canVote: () => true, canSkip: () => true, update() {}, drawBar() {}, syncGate() {}, live() {}, status() {}, prefetch() { e.prefetches++; }, prefetches: 0,
@@ -103,11 +103,11 @@ test('zero hold still requires both works to be ready and visited on mobile', ()
   assert.equal(e.gate.skipWait(), 0);
 });
 
-test('an immediate vote waits for the in-flight readiness write within its own deadline', async () => {
-  for (const timedOut of [false, true]) {
+test('a vote waits for the in-flight readiness write even when the local countdown has expired', async () => {
+  for (const [minViewSeconds, timedOut] of [[0, false], [5, false], [0, true]]) {
     const { e, reads } = environment(timedOut ? 0 : undefined);
     const ready = deferred();
-    e.state.match.minViewSeconds = 0;
+    e.state.match.minViewSeconds = minViewSeconds;
     e.readyRequest = ready.promise;
     const sending = e.voteForTest('a');
     await Promise.resolve();
@@ -182,4 +182,17 @@ test('usage read late redraws only the reveal still on screen, with one read for
     assert.equal(reads, 1);
     assert.equal(drawn.length, leave ? 0 : 2);
   }
+});
+
+test('holding an answer key acts once until a new keypress', () => {
+  const picks = [];
+  const e = { guided: true, state: { match: {} }, $: (selector) => selector === '#lightbox' ? { hidden: true } : null,
+    bothReady: () => true, voteWait: () => 0, canVote: () => true, answer: (pick) => picks.push(pick) };
+  vm.runInNewContext(chunk('  const onKey =', '\n  document.addEventListener') + '\nglobalThis.press = onKey;', e);
+  const event = { key: 'a', target: { matches: () => false }, preventDefault() {} };
+  e.press(event);
+  e.press({ ...event, repeat: true });
+  assert.deepEqual(picks, ['a']);
+  e.press({ ...event, key: 'd' });
+  assert.deepEqual(picks, ['a', 'b']);
 });

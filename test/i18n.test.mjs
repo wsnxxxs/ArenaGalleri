@@ -26,6 +26,21 @@ test('a {term} slot translates a known interface phrase and leaves other text to
   setLocale('zh-CN');
 });
 
+test('unknown names and dollar characters survive template translation', () => {
+  setLocale('en');
+  for (const unchanged of ['constructor', '__proto__', 'toString']) {
+    assert.equal(translateText(unchanged), unchanged);
+    assert.equal(t(unchanged), unchanged);
+  }
+  const preview = translateText('在线预览：Model');
+  for (const suffix of ['$&', '$$', "$'", '$`']) {
+    const name = `Model ${suffix}`;
+    const source = `  在线预览：${name}  `;
+    assert.equal(translateText(source), `  ${preview} ${suffix}  `);
+  }
+  setLocale('zh-CN');
+});
+
 test('copy is matched as a whole phrase and Chinese switches back without changing content', () => {
   setLocale('en');
   assert.equal(translateText('作品原文中包含登录两个字'), '作品原文中包含登录两个字');

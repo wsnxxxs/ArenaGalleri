@@ -143,3 +143,36 @@ test('widened scales label only rings that stay apart, keeping 1000', async () =
     assert.ok(scale.ticks.length > labels.length || scale.ticks.length <= 3, 'rings stay every 400 even when not all are labelled');
   }
 });
+
+test('a malformed dimension response offers a retry that can load the chart', async () => {
+  const original = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener,
+    fetch: globalThis.fetch, SAME_PROMPT_CONFIG: globalThis.SAME_PROMPT_CONFIG };
+  globalThis.document = Object.assign(new EventTarget(), { baseURI: 'https://gallery.test/' });
+  globalThis.window = new EventTarget();
+  globalThis.addEventListener = globalThis.window.addEventListener.bind(globalThis.window);
+  globalThis.SAME_PROMPT_CONFIG = { apiBaseUrl: 'https://backend.test/api/' };
+  let reads = 0;
+  const valid = { categories: [], dimensions: [], entries: [], totals: { pairs: 0, answered: 0, voters: 0 } };
+  globalThis.fetch = async () => Response.json(reads++ ? valid : {});
+  const { platform } = await import('../site/platform.js');
+  const previous = platform.user;
+  platform.user = { id: 'fixture', role: 'admin' };
+  const root = Object.assign(new EventTarget(), { innerHTML: '', querySelector: () => null });
+  let view;
+  try {
+    const { mount } = await import('../site/dimensions.js');
+    view = mount(root, { pageStart: () => '', pageEnd: () => '', sideNav: () => '' });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(root.innerHTML, /服务暂时不可用[^]*data-dims-retry/);
+    const retry = new Event('click');
+    Object.defineProperty(retry, 'target', { value: { closest: selector => selector === '[data-dims-retry]' } });
+    root.dispatchEvent(retry);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(root.innerHTML, /还没有测试票/);
+    assert.equal(reads, 2);
+  } finally {
+    view?.destroy();
+    platform.user = previous;
+    Object.assign(globalThis, original);
+  }
+});

@@ -5,7 +5,7 @@ import { memberChips, memberList, memberResults, membersState, openMember } from
 import { accountVersion, api, apiRemembered, arenaText, autoRejected, avatarFace, byStaff, canDecide, levelBadge, levelOf, confirmDialog, injected, isSenior, isStaff, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, recall, refreshPlatform, requireUser, reviewCount, reviewVerdict, riskLabels, ROLE_LABELS, setFaces, statusBadge, toast, updateRememberedReviewWork } from './platform.js';
 import { effortOptions, onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { openWorkManagement } from './work-management.js';
-import { CATEGORIES, TEMPLATE_LABELS, categoryLabel, categoryOf, domainsOf, matchesQuery, subcategoriesOf, subcategoryOf } from './categories.js';
+import { CATEGORIES, TEMPLATE_LABELS, benchmarkTask, categoryLabel, categoryOf, domainsOf, matchesQuery, subcategoriesOf, subcategoryOf } from './categories.js';
 import { categoryField, domainField, subcategoryFieldHtml, syncDomains } from './question-fields.js';
 import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
@@ -220,8 +220,10 @@ function workRow(ctx, w, { bucket = null, questions = [], picked } = {}) {
 
 // Authors correct their own description until an admin has reviewed the work.
 function editWork(ctx, w) {
+  const owner = accountKey();
   const task = ctx.DATA.tasks.find((t) => t.id === w.task);
   const sheet = openDialog({
+    accountBound: true,
     title: '编辑作品信息',
     className: 'edit-work-sheet',
     body: `<form class="submit-form" data-edit-form novalidate>
@@ -240,9 +242,11 @@ function editWork(ctx, w) {
     const { body, error: problem } = readWorkFields(form, task);
     if (!body) return void (error.textContent = problem);
     const button = $('[type="submit"]', form);
+    if (button.disabled || owner !== accountKey()) return;
     button.disabled = true;
     try {
       await api(`works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}`, { method: 'PATCH', body });
+      if (owner !== accountKey()) return;
       sheet.close();
       toast('作品信息已保存');
       await refreshPlatform('edit');
@@ -257,6 +261,7 @@ async function removeWork(w, { admin, onChanged }) {
   const owner = accountKey();
   const verified = w.status === 'verified';
   const ok = await confirmDialog({
+    accountBound: true,
     title: '下架这件作品？',
     message: `「${w.title}」会从展厅和盲评中下架。${verified ? '已计入的盲评票继续保留在榜单中；' : ''}没有对局记录的作品会同时删除文件。${admin ? '操作会记入审核记录。' : ''}`,
     confirm: '下架',
@@ -310,15 +315,18 @@ function questionRow(ctx, question) {
 }
 
 async function removeQuestion(question) {
+  const owner = accountKey();
   const ok = await confirmDialog({
+    accountBound: true,
     title: '删除这道题？',
     message: `「${question.title}」会被删除，无法恢复。未公开的题目会连同示例结果一起撤回；已经有人作答的题目不能删除。`,
     confirm: '删除',
     danger: true,
   });
-  if (!ok) return false;
+  if (!ok || owner !== accountKey()) return false;
   try {
     await api(`questions/${encodeURIComponent(question.id)}`, { method: 'DELETE' });
+    if (owner !== accountKey()) return true;
     toast('题目已删除');
     await refreshPlatform('question');
     return true;
@@ -409,8 +417,10 @@ const AVATAR_NAMES = { teapot: '茶壶', bunny: '兔子', cube: '立方体', cur
 
 // The avatar library opens from the profile picture; a pick is saved to the account.
 function pickAvatar() {
+  const owner = accountKey();
   let chosen = platform.user.avatar;
   const sheet = openDialog({
+    accountBound: true,
     title: '更换头像',
     className: 'avatar-sheet',
     body: `<p class="sheet-text">从展馆的小住客里挑一位，它会代替你出现在菜单、个人中心和你发起的题目上。</p>
@@ -432,9 +442,10 @@ function pickAvatar() {
     save.textContent = '保存中…';
     try {
       await api('me', { method: 'PATCH', body: { avatar: chosen } });
+      if (owner !== accountKey()) return;
       sheet.close();
       await refreshPlatform('profile');
-      toast('头像已更换');
+      if (owner === accountKey()) toast('头像已更换');
     } catch (error) {
       const line = $('[data-avatar-error]', sheet.el);
       line.textContent = error.message;
@@ -465,8 +476,9 @@ const uploadButton = (quota) => `<button class="btn sm" type="button" data-uploa
 
 // Uploads always belong to a question, so the personal center asks which one first.
 function pickTask(ctx) {
-  const tasks = ctx.DATA.tasks.filter((t) => t.acceptsUploads);
+  const tasks = ctx.DATA.tasks.filter((t) => t.acceptsUploads && !benchmarkTask(t));
   const sheet = openDialog({
+    accountBound: true,
     title: '上传到哪道题？',
     className: 'upload-pick-sheet',
     body: tasks.length
@@ -593,14 +605,17 @@ function mine(root, ctx) {
     event.preventDefault();
     const button = form.querySelector('button[type="submit"]');
     const errorLine = form.querySelector('[data-profile-error]');
+    if (button.disabled) return;
+    const owner = accountKey();
     button.disabled = true;
     button.textContent = '保存中…';
     errorLine.hidden = true;
     try {
       await api('me', { method: 'PATCH', body: { nickname: new FormData(form).get('nickname') } });
+      if (owner !== accountKey()) return;
       state.editing = false;
       await refreshPlatform('profile');
-      toast('昵称已保存');
+      if (owner === accountKey()) toast('昵称已保存');
     } catch (error) {
       errorLine.textContent = error.message;
       errorLine.hidden = false;
@@ -708,8 +723,9 @@ async function saveMeta(w, meta) {
   if (!Object.keys(meta).length) return false;
   const owner = accountKey();
   const { work } = await api(`admin/works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}/meta`, { method: 'POST', body: meta });
+  if (owner !== accountKey()) return false;
   Object.assign(w, work);
-  if (owner === accountKey()) updateRememberedReviewWork(w);
+  updateRememberedReviewWork(w);
   return true;
 }
 
@@ -722,6 +738,7 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
   // Most works here are not in the gallery yet; those only open their preview.
   const shown = ctx.inGallery(w.task, w.id);
   const sheet = openDialog({
+    accountBound: true,
     title: '核验作品',
     className: 'review-sheet',
     body: `<div class="review">
@@ -767,6 +784,7 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
   const form = $('form', sheet.el);
   const editor = reviewEditor(form, task, w);
   sheet.el.addEventListener('click', async (e) => {
+    if (form.inert || owner !== accountKey()) return;
     if (e.target.closest('a[href^="#"]')) { sheet.close(); return; }
     if (e.target.closest('[data-open-content]') && canDecide(w)) { sheet.close(); openContent(ctx, w, { questions, onChanged }); return; }
     const decide = e.target.closest('[data-decide]');
@@ -776,9 +794,8 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
     }
     const error = $('.form-error:not(.field-error)', form);
     if (e.target.closest('[data-save-meta]')) {
-      const button = e.target.closest('[data-save-meta]');
       error.textContent = '';
-      button.disabled = true;
+      form.inert = true;
       try {
         const saved = await editor.save(editor.collect());
         if (owner !== accountKey()) { sheet.close(); return; }
@@ -788,13 +805,13 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
       } catch (err) {
         error.textContent = err.message;
       }
-      button.disabled = false;
+      form.inert = false;
       return;
     }
     if (!decide || !canDecide(w)) return;
     const status = decide.dataset.decide;
     if (status === 'off') {
-      $$('[data-decide]', form).forEach((b) => { b.disabled = true; });
+      form.inert = true;
       try {
         const { work } = await setFaces(w.task, w.id, FACE_ACTIONS.hide[1]);
         if (owner !== accountKey()) { sheet.close(); return; }
@@ -806,7 +823,7 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
         await refreshPlatform('review');
       } catch (error) {
         $('.form-error:not(.field-error)', form).textContent = error.message;
-        $$('[data-decide]', form).forEach((b) => { b.disabled = false; });
+        form.inert = false;
       }
       return;
     }
@@ -822,13 +839,13 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
       $('.review-meta', form).open = true;
       return;
     }
-    $$('[data-decide]', form).forEach((b) => { b.disabled = true; });
+    form.inert = true;
     try {
       if (await editor.save(meta)) onChanged?.(w);
       if (owner !== accountKey()) { sheet.close(); return; }
       const { work } = await api(`works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}/review`, { method: 'POST', body });
-      Object.assign(w, work);
       if (owner !== accountKey()) { sheet.close(); return; }
+      Object.assign(w, work);
       updateRememberedReviewWork(w);
       onChanged?.(w);
       sheet.close();
@@ -837,7 +854,7 @@ export function openReview(ctx, w, { questions = [], onChanged, onDecided } = {}
       await refreshPlatform('review');
     } catch (error) {
       $('.form-error:not(.field-error)', form).textContent = error.message;
-      $$('[data-decide]', form).forEach((b) => { b.disabled = false; });
+      form.inert = false;
     }
   });
 }
@@ -851,6 +868,7 @@ function openContent(ctx, w, { questions = [], onChanged, onDecided } = {}) {
   const task = listed ?? questions.find((q) => q.id === w.task);
   const source = m.source === 'human' ? `人工 · ${m.reviewer ?? ''}` : m.status === 'pending' ? '自动审核进行中' : `自动 · ${m.model ?? '6 Luna'}`;
   const sheet = openDialog({
+    accountBound: true,
     title: '审核内容',
     className: 'review-sheet',
     body: `<div class="review">
@@ -886,11 +904,12 @@ function openContent(ctx, w, { questions = [], onChanged, onDecided } = {}) {
   const form = $('form', sheet.el);
   const editor = reviewEditor(form, task, w);
   sheet.el.addEventListener('click', async (e) => {
+    if (form.inert || owner !== accountKey()) return;
     const error = $('.form-error:not(.field-error)', form);
     const save = e.target.closest('[data-save-meta]');
     if (save) {
       error.textContent = '';
-      save.disabled = true;
+      form.inert = true;
       try {
         const saved = await editor.save(editor.collect());
         if (owner !== accountKey()) { sheet.close(); return; }
@@ -900,7 +919,7 @@ function openContent(ctx, w, { questions = [], onChanged, onDecided } = {}) {
       } catch (err) {
         error.textContent = err.message;
       }
-      save.disabled = false;
+      form.inert = false;
       return;
     }
     const act = e.target.closest('[data-content-act]')?.dataset.contentAct;
@@ -916,15 +935,15 @@ function openContent(ctx, w, { questions = [], onChanged, onDecided } = {}) {
       $('.review-meta', form).open = true;
       return;
     }
-    $$('[data-content-act]', form).forEach((b) => { b.disabled = true; });
+    form.inert = true;
     const path = `works/${encodeURIComponent(w.task)}/${encodeURIComponent(w.id)}/moderation`;
     try {
       if (await editor.save(meta)) onChanged?.(w);
       if (owner !== accountKey()) { sheet.close(); return; }
       const { work } = act === 'retry' ? await api(`${path}/retry`, { method: 'POST' })
         : await api(path, { method: 'POST', body: { status: act, reason: reason || '人工复核通过' } });
-      Object.assign(w, work);
       if (owner !== accountKey()) { sheet.close(); return; }
+      Object.assign(w, work);
       updateRememberedReviewWork(w);
       onChanged?.(w);
       sheet.close();
@@ -933,7 +952,7 @@ function openContent(ctx, w, { questions = [], onChanged, onDecided } = {}) {
       await refreshPlatform('review');
     } catch (err) {
       error.textContent = err.message;
-      $$('[data-content-act]', form).forEach((b) => { b.disabled = false; });
+      form.inert = false;
     }
   });
 }
@@ -1068,6 +1087,7 @@ function decideQuestion(q, status, current = () => true) {
   return new Promise((resolve) => {
     let saved = false;
     const sheet = openDialog({
+      accountBound: true,
       title: status === 'approved' ? '通过这道题？' : '拒绝这道题',
       className: status === 'approved' ? 'edit-work-sheet' : 'confirm-sheet',
       onClose: () => resolve(saved),
@@ -1094,6 +1114,7 @@ function decideQuestion(q, status, current = () => true) {
       const domains = $$('[name="domains"]:checked', form).map((box) => box.value);
       if (status === 'approved' && !domains.length) { error.textContent = '请选择所属领域'; return; }
       const button = $('[type="submit"]', form);
+      if (button.disabled || owner !== accountKey()) return;
       button.disabled = true;
       try {
         const templates = pdfTemplates(q, category, subcategory);
@@ -1127,6 +1148,7 @@ function editQuestion(q, works = [], current = () => true) {
   return new Promise((resolve) => {
     let saved = false;
     const sheet = openDialog({
+      accountBound: true,
       title: '编辑题目',
       className: 'edit-work-sheet',
       onClose: () => { refs?.destroy(); resolve(saved); },
@@ -1173,6 +1195,7 @@ function editQuestion(q, works = [], current = () => true) {
       if (refs?.changed()) Object.assign(body, { references: refs.value(), referenceCredit: refs.credit() });
       if (!Object.keys(body).length) return sheet.close();
       const button = $('[type="submit"]', form);
+      if (button.disabled || owner !== accountKey()) return;
       button.disabled = true;
       try {
         await api(`admin/questions/${encodeURIComponent(q.id)}/meta`, { method: 'POST', body });
@@ -1610,7 +1633,8 @@ function review(root, ctx) {
     const [label, faces, done] = FACE_ACTIONS[action];
     switchingFaces = true;
     try {
-      if (works.length > 1 && !(await confirmDialog({ title: `${label} ${works.length} 件？`, message: works.map((w) => `「${w.title}」`).join('、'), confirm: label }))) return;
+      if (works.length > 1 && !(await confirmDialog({ accountBound: true, title: `${label} ${works.length} 件？`, message: works.map((w) => `「${w.title}」`).join('、'), confirm: label }))) return;
+      if (!active || owner !== accountKey()) return;
       if (works.length > 1) await api('admin/works/batch-face-settings', { method: 'POST', body: { works: works.map(({ task, id }) => ({ task, id })), ...faces } });
       else {
         const { work } = await setFaces(works[0].task, works[0].id, faces);
@@ -1660,6 +1684,7 @@ function review(root, ctx) {
     }
     const name = (item) => esc(item.title) + (tab === 'questions' ? '' : ` <span>${esc(item.modelName ?? '')}</span>`);
     const sheet = openDialog({
+      accountBound: true,
       title: `${label} ${items.length} ${unit}`,
       className: 'confirm-sheet bulk-sheet',
       body: `<form novalidate>
@@ -1692,6 +1717,7 @@ function review(root, ctx) {
       const body = tab === 'questions' ? { ids: items.map((q) => q.id), status, reason }
         : { works: ready.map(({ task, id }) => ({ task, id })), status, reason, ...(Object.keys(meta).length ? { meta } : {}) };
       const button = $('[type="submit"]', form);
+      if (button.disabled || owner !== accountKey()) return;
       button.disabled = true;
       let results = [];
       try {
@@ -1715,6 +1741,7 @@ function review(root, ctx) {
       if (failed.length) {
         const title = (r) => items.find((item) => keyOf(item) === resultKey(r))?.title ?? r.id;
         openDialog({
+          accountBound: true,
           title: `${succeeded} ${unit}${done}，${failed.length} ${unit}未处理`,
           className: 'confirm-sheet bulk-sheet',
           body: `<p class="sheet-text">未处理的仍保持选中，可以单独打开处理。</p>
@@ -1748,7 +1775,7 @@ function review(root, ctx) {
       }
       if (decide && !(await decideQuestion(q, decide.dataset.qDecide, () => active))) return true;
       if (remove) {
-        if (!(await confirmDialog({ title: '删除这道题？', message: `「${q.title}」会从题库中移除并写入审核记录${q.works ? `，${q.works} 件作品随之删除` : ''}。已有投票的题目不能删除。`, confirm: '删除', danger: true }))) return true;
+        if (!(await confirmDialog({ accountBound: true, title: '删除这道题？', message: `「${q.title}」会从题库中移除并写入审核记录${q.works ? `，${q.works} 件作品随之删除` : ''}。已有投票的题目不能删除。`, confirm: '删除', danger: true }))) return true;
         if (!active || owner !== accountKey()) return true;
         await api(path, { method: 'DELETE' });
         if (active && owner === accountKey()) toast('题目已删除');

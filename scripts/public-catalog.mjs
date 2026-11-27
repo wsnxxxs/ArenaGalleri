@@ -30,11 +30,14 @@ export function publicCatalog(data, buildInfo) {
   };
 }
 
-// Build diagnostics and source maps stay in the private input, never in dist/.
+// The Nginx policy also blocks these names on older deployments. Exclude them
+// from the static artifact itself, including nested files from local packages.
 export function publishablePackageFile(path) {
-  const normalized = path.replaceAll('\\', '/');
-  const name = normalized.split('/').at(-1);
-  return !['data.json', '.datapack-source.json', 'assets/scenes/posters.json', 'assets/brands/README.md'].includes(normalized)
-    && name !== 'build-info.json'
-    && !/\.map$/i.test(name);
+  const normalized = path.replaceAll('\\', '/').toLowerCase();
+  const parts = normalized.split('/');
+  const name = parts.at(-1);
+  return !['data.json', 'assets/brands/readme.md'].includes(normalized)
+    && !parts.some(part => part === '.git' || part === '.env' || part.startsWith('.env.'))
+    && !['.datapack-source.json', 'datapack.json', 'integration.json', 'build-info.json', 'posters.json', '.ds_store'].includes(name)
+    && !name.endsWith('.map');
 }

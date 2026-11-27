@@ -1,4 +1,4 @@
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, lstatSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,13 @@ const validate = (packageRoot) => {
   const { errors } = checkDatapack(packageRoot, resolve(root, 'site'));
   if (errors.length) throw new Error(`Invalid datapack:\n${errors.join('\n')}`);
 };
+
+// Archive extraction accepts regular files and directories. Enforce the same
+// contract for local directories before the installer reads or writes provenance.
+if (localSource && (lstatSync(localSource).isSymbolicLink() ||
+    readdirSync(localSource, { recursive: true, withFileTypes: true }).some(entry => entry.isSymbolicLink()))) {
+  throw new Error('Local datapack must contain regular files and directories without symbolic links');
+}
 
 const cached = readSource(target);
 let validCache = false;

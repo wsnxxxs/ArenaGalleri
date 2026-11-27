@@ -10,6 +10,8 @@
 // cached input inside their input totals, so the cached part is taken out; reasoning is part of
 // output. Formats are checked against today's tool output and may drift; unknown text gives null.
 
+import { SOURCES } from './usage.js';
+
 const FIELDS = ['input', 'cacheRead', 'cacheWrite', 'output', 'reasoning', 'requests', 'durationSec'];
 const SUFFIX = { k: 1e3, m: 1e6, b: 1e9, 万: 1e4, 亿: 1e8 };
 
@@ -19,21 +21,33 @@ export function parseAmount(text) {
   if (!raw) return undefined;
   const match = raw.replace(/,(?=\d{3}(\D|$))/g, '').match(/^(\d+(?:\.\d+)?|\.\d+)([kKmMbB万亿])?$/);
   if (!match) return null;
-  return Number(match[1]) * (match[2] ? SUFFIX[match[2].toLowerCase()] : 1);
+  const amount = Number(match[1]) * (match[2] ? SUFFIX[match[2].toLowerCase()] : 1);
+  return Number.isFinite(amount) ? amount : null;
 }
 const count = (value) => { const n = parseAmount(value); return n == null ? null : Math.round(n); };
 const whole = (n) => (Number.isFinite(n) && n >= 0 ? Math.round(n) : undefined);
 const tidy = (usage) => Object.fromEntries(FIELDS.filter((key) => Number.isFinite(usage[key])).map((key) => [key, key === 'durationSec' ? usage[key] : Math.round(usage[key])]));
 const add = (sum, part) => { for (const key of FIELDS) if (Number.isFinite(part[key])) sum[key] = (sum[key] ?? 0) + part[key]; return sum; };
 
-// "35m 7.9s", "1h 2m 3s", "7.9s", "16:20" → seconds.
+// "35m 7.9s", "1h 2m 3s", "500ms", "16:20" → seconds.
 export function parseDuration(text) {
   const raw = String(text ?? '').trim();
   const clock = raw.match(/^(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)$/);
-  if (clock) return (Number(clock[1] ?? 0) * 3600) + Number(clock[2]) * 60 + Number(clock[3]);
-  const parts = [...raw.matchAll(/(\d+(?:\.\d+)?)\s*(h|hr|hours?|m|min|minutes?|s|sec|seconds?|小时|分钟|分|秒)/gi)];
-  if (!parts.length) return null;
-  return parts.reduce((sum, [, n, unit]) => sum + Number(n) * (/^(h|小时)/i.test(unit) ? 3600 : /^(m|分)/i.test(unit) ? 60 : 1), 0);
+  if (clock) {
+    if (+clock[3] >= 60 || (clock[1] != null && +clock[2] >= 60)) return null;
+    const seconds = Number(clock[1] ?? 0) * 3600 + Number(clock[2]) * 60 + Number(clock[3]);
+    return Number.isFinite(seconds) ? seconds : null;
+  }
+  const piece = /(\d+(?:\.\d+)?)\s*(milliseconds?|ms|毫秒|hours?|hrs?|h|小时|minutes?|mins?|m|分钟|分|seconds?|secs?|s|秒)\s*/giy;
+  let seconds = 0;
+  while (piece.lastIndex < raw.length) {
+    const match = piece.exec(raw);
+    if (!match) return null;
+    const unit = match[2].toLowerCase();
+    const factor = /^(ms|milli|毫秒)/.test(unit) ? 0.001 : /^(h|小时)/.test(unit) ? 3600 : /^(m|分)/.test(unit) ? 60 : 1;
+    seconds += Number(match[1]) * factor;
+  }
+  return raw && Number.isFinite(seconds) ? seconds : null;
 }
 
 // ---- tool summaries (plain text) ----------------------------------------------------------
@@ -72,7 +86,8 @@ function codexLine(text) {
 const has = (o, ...keys) => o && typeof o === 'object' && keys.every((key) => Number.isFinite(o[key]));
 const RECOGNISERS = [
   // The site's own record, as the backfill scripts print it.
-  ['site', (o) => has(o, 'output') && ('input' in o || 'cacheRead' in o) && !('output_tokens' in o),
+  ['site', (o) => (has(o, 'output') && ('input' in o || 'cacheRead' in o) && !('output_tokens' in o))
+    || (Object.hasOwn(SOURCES, o.source) && FIELDS.some((key) => has(o, key))),
     (o) => Object.fromEntries(FIELDS.map((key) => [key, Number.isFinite(o[key]) ? o[key] : undefined]))],
   // Codex session totals; input_tokens counts cached input too.
   ['codex', (o) => has(o, 'input_tokens', 'output_tokens') && 'cached_input_tokens' in o,
@@ -101,7 +116,7 @@ function collect(value, found = [], depth = 0) {
     found.push({ codexTotal: value.total_token_usage });
     return found;
   }
-  for (const [kind, test, read] of RECOGNISERS) if (test(value)) { found.push({ kind, usage: read(value) }); return found; }
+  for (const [kind, test, read] of RECOGNISERS) if (test(value)) { found.push({ kind, usage: read(value), source: value.source }); return found; }
   for (const child of Object.values(value)) collect(child, found, depth + 1);
   return found;
 }
@@ -138,6 +153,7 @@ function fromJson(values) {
   }
   const kinds = new Set(found.map((item) => item.kind));
   const usage = tidy(found.reduce((sum, item) => add(sum, item.usage), {}));
+  if (kinds.size === 1 && kinds.has('site') && Object.hasOwn(SOURCES, found[0].source) && found.every((item) => item.source === found[0].source)) usage.source = found[0].source;
   // Several API responses are several requests; a single site record keeps its own count.
   if (!kinds.has('site') && found.length > 1) usage.requests = found.length;
   if (!kinds.has('site') && found.length === 1) usage.requests = 1;

@@ -8,7 +8,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const data = (tag = 'fresh') => ({ by: 'config', rows: [], unranked: [], totals: { votes: 3, voters: 2 }, tag });
 
-function environment(cached = null, config = undefined, ctx = {}) {
+function environment(cached = null, config = undefined, ctx = {}, globals = {}) {
   const reads = [], rendered = [], attributes = new Map(), timers = new Map();
   let timerId = 0, memory = cached;
   const container = Object.assign(new EventTarget(), {
@@ -23,13 +23,13 @@ function environment(cached = null, config = undefined, ctx = {}) {
     apiRemembered(path, options) {
       const read = { path, ...options, ...deferred() }; reads.push(read);
       return read.promise.then(answer => { memory = answer; return answer; });
-    }, recall: () => memory,
+    }, recall: () => memory, ...globals,
   };
   vm.runInNewContext(source.replace(/^import .*$/gm, '').replace(/^export /gm, '') + '\nglobalThis.mountBoardForTest = mountBoard;', state);
   const board = state.mountBoardForTest(container, { embedded: false, onData: value => rendered.push(value), ...ctx });
-  const click = selector => {
+  const click = (selector, dataset = { boardUnit: 'model' }) => {
     const event = new Event('click');
-    Object.defineProperty(event, 'target', { value: { closest: query => query === selector ? { dataset: { boardUnit: 'model' } } : null } });
+    Object.defineProperty(event, 'target', { value: { closest: query => query === selector ? { dataset } : null } });
     container.dispatchEvent(event);
   };
   return { board, reads, rendered, container, attributes, timers, click };
@@ -94,4 +94,60 @@ test('the guided trial build reads the next scoring for public boards and the cu
   const formal = environment();
   assert.equal(formal.reads[0].path, 'leaderboard?by=config', 'the formal build keeps the current endpoint and unit');
   for (const e of [overall, scoped, curated, formal]) e.board.destroy();
+});
+
+test('losing staff access closes an open dimension dialog and cancels pending dimension reads', async () => {
+  const platform = { user: { id: 'staff', role: 'admin' } };
+  const dialogs = [], radars = [];
+  const document = {
+    activeElement: null,
+    createElement: () => Object.assign(new EventTarget(), {
+      setAttribute() {}, showModal() { this.open = true; }, close() { this.open = false; }, remove() { this.removed = true; },
+    }),
+    body: { append: (dialog) => dialogs.push(dialog) },
+  };
+  const e = environment(null, { guidedVoting: true }, { category: '文学', modelOf: row => row }, {
+    platform, document, isStaff: () => platform.user?.role === 'admin',
+    api: (path, options) => { const read = { ...options, ...deferred() }; radars.push(read); return read.promise; },
+    chartedDimensions: items => items, compactRadar: () => '', axesOf: () => [], scaleFor: () => ({ min: 900, max: 1500 }),
+    categoryLabel: String, pad: String, brandMark: () => '', vendorLine: () => '',
+  });
+  try {
+    const row = { key: 'm', model: 'm', modelName: 'Model', works: 5, games: 21, score: 1000, interval: 30 };
+    e.reads[0].resolve({ ...data(), rows: [row] });
+    radars[0].resolve({ by: 'config', dimensions: [], entries: [] });
+    await e.board.ready;
+    e.click('[data-board-radar]', { boardRadar: 'm' });
+    assert.equal(dialogs[0]?.open, true);
+    platform.user = null;
+    await e.board.refreshIdentity();
+    assert.equal(dialogs[0].removed, true);
+    assert.doesNotMatch(e.container.innerHTML, /data-board-radar-key/);
+
+    platform.user = { id: 'other', role: 'admin' };
+    const pending = e.board.refreshIdentity();
+    assert.equal(radars.length, 2);
+    platform.user = null;
+    await e.board.refreshIdentity();
+    assert.equal(radars[1].signal.aborted, true);
+    radars[1].resolve({ by: 'config', dimensions: [], entries: [] });
+    await pending;
+    assert.doesNotMatch(e.container.innerHTML, /data-board-radar-key/);
+  } finally { e.board.destroy(); }
+});
+
+test('signing in during a cached curated board refresh updates its actions even for an unchanged response', async () => {
+  const cached = { ...data(), audience: 'curated', scope: { taskIds: ['q'] } };
+  let level = -1;
+  const e = environment(cached, undefined, { curated: true }, { levelOf: () => level });
+  try {
+    assert.match(e.container.innerHTML, /data-auth="login"/);
+    level = 1;
+    const refresh = e.board.refreshIdentity();
+    assert.match(e.container.innerHTML, /data-curated-arena/);
+    assert.equal(e.reads.length, 1);
+    e.reads[0].resolve(structuredClone(cached));
+    await refresh;
+    assert.doesNotMatch(e.container.innerHTML, /data-auth="login"/);
+  } finally { e.board.destroy(); }
 });

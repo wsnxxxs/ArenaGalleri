@@ -3473,6 +3473,12 @@ body.has-prompt-modal { overflow: hidden; }
   outline: 2px solid var(--member-accent, var(--accent));
   outline-offset: 4px;
 }
+@media (prefers-reduced-motion: reduce) {
+  .team-badge-pivot .team-pvc, .team-badge-pivot .team-clasp {
+    cursor: default;
+    touch-action: auto;
+  }
+}
 
 .team-pvc-header {
   flex: none;

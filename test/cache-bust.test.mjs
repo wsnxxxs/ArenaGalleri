@@ -77,7 +77,9 @@ test('the same frontend commit gets a new version when runtime configuration cha
     writeFileSync(join(second.dist, 'runtime-config.js'), 'globalThis.SAME_PROMPT_CONFIG = { apiBaseUrl: "https://two.example/api/" };');
     const version2 = cacheBustSite(second.dist, second.site, 'same-sha');
     assert.notEqual(version1, version2);
+    const firstHtml = readFileSync(join(first.dist, 'index.html'), 'utf8');
     assert.equal(version1, cacheBustSite(first.dist, first.site, 'same-sha'));
+    assert.equal(readFileSync(join(first.dist, 'index.html'), 'utf8'), firstHtml);
   } finally {
     rmSync(first.root, { recursive: true, force: true });
     rmSync(second.root, { recursive: true, force: true });

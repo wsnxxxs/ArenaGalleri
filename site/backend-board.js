@@ -81,7 +81,7 @@ function formatBrs(row) {
     const label = raw.label ?? raw.status ?? '';
     const value = raw.value ?? raw.score;
     if (label && value != null) return `${esc(label)} · ${esc(value)}`;
-    return esc(label || value || '—');
+    return esc(label || (value ?? '—'));
   }
   if (typeof raw === 'number' && Number.isFinite(raw)) {
     const pct = raw > 0 && raw <= 1 ? raw * 100 : raw;

@@ -32,3 +32,26 @@ test('with the amount fields hidden, a loaded paid amount and currency go back u
   assert.doesNotMatch(source.slice(source.indexOf('export function usageEntryHtml'), source.indexOf('// What the fields say')), /usage_paidAmount|usage_paidCurrency/);
   assert.match(source, /want = costShown\(pricingNow\(\)\)/);
 });
+
+test('the stored baseline blocks editing until read and never fills an editor for another account', async () => {
+  const source = readFileSync(new URL('../site/usage-entry.js', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('export async function loadInto'), source.indexOf('// The drawer')).replace('export ', '');
+  let version = 1, answer;
+  const context = { accountVersion: () => version, loadPricing: async () => ({}),
+    readUsage: () => new Promise(resolve => { answer = resolve; }) };
+  vm.runInNewContext(body, context);
+  const fills = [], loading = [];
+  const entry = { setLoading: value => loading.push(value), refresh() {}, fill: record => fills.push(record), showMeta() {} };
+  const first = context.loadInto(entry, 'q', 'w');
+  assert.deepEqual(loading, [true]);
+  answer({ usage: { source: 'bill', requests: 7 } });
+  assert.equal(await first, true);
+  assert.deepEqual(fills, [{ source: 'bill', requests: 7 }]);
+  assert.deepEqual(loading, [true, false]);
+  const second = context.loadInto(entry, 'q', 'w');
+  version++;
+  answer({ usage: { source: 'log', requests: 8 } });
+  assert.equal(await second, false);
+  assert.equal(fills.length, 1);
+  assert.equal(loading.at(-1), true);
+});

@@ -340,14 +340,18 @@ export function mount(root, ctx) {
       const next = await api(`arena/guided/dimensions?by=${unit}${category === 'all' ? '' : `&category=${encodeURIComponent(category)}`}`);
       if (destroyed || id !== request) return;
       if (!isStaff()) return gate();
+      if (!Array.isArray(next?.dimensions) || !Array.isArray(next.entries) || !next.totals) {
+        throw new Error('服务暂时不可用，请稍后重试。');
+      }
       data = next;
+      render();
     } catch (error) {
       if (destroyed || id !== request) return;
       if (error.code === 'guided-staff-only' || [401, 403].includes(error.status)) return gate();
       data = null;
       failure = error;
+      render();
     }
-    render();
   }
 
   function hideTip() {

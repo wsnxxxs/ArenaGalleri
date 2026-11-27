@@ -6,6 +6,7 @@ import {
   CATEGORIES,
   TEMPLATE_LABELS,
   benchmarkTask,
+  catalogQuestionsForBuild,
   categoryOf,
   matchesQuery,
   pdfTask,
@@ -105,6 +106,8 @@ test('backend category, PDF subcategory, helpers and terminal icon match specifi
 
     assert.equal(pdfTask(pdf), true);
     assert.equal(pdfTask(web), false);
+    assert.equal(subcategoryOf({ category: '静态网页', templates: ['pdf'] }), 'PDF');
+    assert.equal(subcategoryOf({ category: '建模', templates: ['pdf'] }), '');
     assert.deepEqual(templatesOf(pdf), ['pdf']);
     assert.deepEqual(templatesOf(web), ['static']);
     assert.deepEqual(templatesOf(bench), []);
@@ -121,6 +124,15 @@ test('backend category, PDF subcategory, helpers and terminal icon match specifi
     for (const kw of ['Python', 'EZ', '后端']) assert.equal(matchesQuery(bench, kw), true, kw);
     assert.equal(matchesQuery(pdf, 'PDF'), true);
   });
+});
+
+test('the ordinary catalog omits benchmark questions even when they are present in its input', () => {
+  const online = { id: 'standard', category: '静态网页' };
+  const backend = { id: 'backend', category: '后端' };
+  const benchmarkOnly = { id: 'future', benchmarkOnly: true };
+  const tasks = [online, backend, benchmarkOnly];
+  assert.deepEqual(catalogQuestionsForBuild(tasks, false), [online]);
+  assert.deepEqual(catalogQuestionsForBuild(tasks, true), tasks);
 });
 
 test('backend-board renders 1:2:1:2 composite mode, partial rows, unreliable toggle, and single-tier fallback', async () => {
@@ -221,7 +233,7 @@ test('backend-board renders 1:2:1:2 composite mode, partial rows, unreliable tog
           languages: ['Go', 'C'],
           status: '深水区分化',
           rows: [
-            { rank: 1, name: 'SystemsModel', vendor: 'LabX', effort: 'Ultra', harness: 'CLI', score: 88.4, brs: '0.94', tokens: 6_200_000, note: 'Go+C 通过' },
+            { rank: 1, name: 'SystemsModel', vendor: 'LabX', effort: 'Ultra', harness: 'CLI', score: 88.4, brs: { value: 0 }, tokens: 6_200_000, note: 'Go+C 通过' },
           ],
         },
       },
@@ -236,6 +248,7 @@ test('backend-board renders 1:2:1:2 composite mode, partial rows, unreliable tog
       assert.match(tierContainer.innerHTML, /SystemsModel/);
       assert.match(tierContainer.innerHTML, /88\.40/);
       assert.match(tierContainer.innerHTML, /BRS 健康度/);
+      assert.match(tierContainer.innerHTML, /<td class="c-brs">0<\/td>/);
     } finally {
       tierBoard.destroy();
     }

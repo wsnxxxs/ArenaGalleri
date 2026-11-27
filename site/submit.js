@@ -494,6 +494,7 @@ export function uploadFlow(root, ctx, options) {
     if (!file || state.uploading) return;
     if (file.size > maxBytes()) { state.error = `文件超过 ${formatBytes(maxBytes())} 上限`; return draw(); }
     if (!FILES[state.template].pattern.test(file.name)) { state.error = FILES[state.template].error; return draw(); }
+    draftRead++;
     Object.assign(state, { uploading: true, progress: 0, loaded: 0, total: file.size, error: '', notice: null });
     draw();
     const xhr = createUploadRequest(`drafts?task=${encodeURIComponent(draftTask)}&name=${encodeURIComponent(file.name)}&template=${state.template}`);
@@ -516,6 +517,7 @@ export function uploadFlow(root, ctx, options) {
       if (xhr.status === 200 && data.draft) {
         state.draft = resolveApiMedia(data.draft, 'draft');
         state.draftTemplate = state.template;
+        state.resumable = null;
         startTrial();
       } else {
         state.error = data.error ?? `上传失败（${xhr.status}）`;
@@ -634,6 +636,7 @@ export function uploadFlow(root, ctx, options) {
   const followVisibility = () => { if (document.hidden) stopFollow(); else follow(true); };
 
   async function submit(form) {
+    if (state.submitting || state.result) return;
     const owner = accountVersion();
     const error = $('.form-error:not(.field-error)', form);
     error.textContent = '';
@@ -648,13 +651,17 @@ export function uploadFlow(root, ctx, options) {
     button.disabled = true;
     label.textContent = '提交中…';
     state.submitting = true;
+    const main = form.closest?.('.submit-main');
+    if (main) main.inert = true;
     try {
       const payload = { ...body, draftId: state.draft.id, confirmed: true, cover: state.cover, trial: trialSummary() };
       const result = options.submit ? await options.submit(payload) : await api('works', { method: 'POST', body: payload });
       if (!active || owner !== accountVersion()) return;
       if (measured.usage && result.work) {
         try { await saveUsage(result.work.task ?? task.id, result.work.id, measured.usage); }
-        catch (err) { toast(`作品已提交，用量没有保存：${err.message}。可在「管理 · 全部作品」里补录。`); }
+        catch (err) {
+          if (active && owner === accountVersion()) toast(`作品已提交，用量没有保存：${err.message}。可在「管理 · 全部作品」里补录。`);
+        }
         if (!active || owner !== accountVersion()) return;
       }
       Object.assign(state, { result, work: result.work, resultOwner: owner, polls: 0, fields: null, usage: {} });
@@ -671,22 +678,30 @@ export function uploadFlow(root, ctx, options) {
       button.disabled = false;
       label.textContent = idle;
     } finally {
+      if (main) main.inert = false;
       state.submitting = false;
     }
   }
 
   // A draft survives leaving the page for its 24-hour lifetime; offer to pick it up again.
+  // Old servers omit the format on a draft; the same filename rules apply to their files.
+  const draftFormat = (draft) => draft?.template ?? templates.find((type) => FILES[type]?.pattern.test(draft?.sourceName));
+  let draftRead = 0;
   async function findDraft() {
-    if (!platform.user) return;
+    if (!platform.user || state.draft || state.uploading || state.result) return;
+    const run = ++draftRead;
     try {
       const { draft } = await api(`drafts?task=${encodeURIComponent(draftTask)}`);
-      if (active && draft && !state.draft && !state.uploading) { state.resumable = draft; draw(); }
+      if (!active || run !== draftRead || state.draft || state.uploading || state.result) return;
+      const next = draft && templates.includes(draftFormat(draft)) ? draft : null;
+      if (next || state.resumable) { state.resumable = next; draw(); }
     } catch { /* an older API has no draft lookup */ }
   }
 
   // The page handlers belong to the flow while it is on screen; a resume takes them back.
   function bind() {
     root.onclick = (e) => {
+      if (state.submitting) return;
       const copy = e.target.closest('[data-copy-prompt]');
       if (copy) {
         e.preventDefault();
@@ -721,10 +736,14 @@ export function uploadFlow(root, ctx, options) {
       }
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'resume') {
-        Object.assign(state, { draft: resolveApiMedia(state.resumable, 'draft'), draftTemplate: state.resumable.template ?? state.template, resumable: null, error: '', notice: null });
+        const format = draftFormat(state.resumable);
+        if (!state.resumable || !templates.includes(format)) return;
+        draftRead++;
+        Object.assign(state, { draft: resolveApiMedia(state.resumable, 'draft'), template: format, draftTemplate: format, resumable: null, error: '', notice: null });
         startTrial();
         draw();
       } else if (act === 'drop-draft') {
+        draftRead++;
         api(`drafts/${state.resumable.id}`, { method: 'DELETE' }).catch(() => {});
         state.resumable = null;
         draw();
@@ -797,6 +816,7 @@ export function uploadFlow(root, ctx, options) {
   findDraft();
   return {
     uploading: () => state.uploading,
+    submitting: () => state.submitting,
     finished: () => Boolean(state.result),
     // What a suspended flow holds, for the page shown instead of it.
     kept: () => (state.draft && !state.result ? { file: state.draft.sourceName, confirmed: state.confirmed,

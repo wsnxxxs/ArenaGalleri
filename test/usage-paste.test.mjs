@@ -13,9 +13,14 @@ test('amounts accept k, M, thousands separators and 万, and reject anything els
   assert.equal(parseAmount(''), undefined);
   assert.equal(parseAmount('12x'), null);
   assert.equal(parseAmount('-5'), null);
+  assert.equal(parseAmount('9'.repeat(310)), null);
   assert.equal(parseDuration('16m 20.1s'), 980.1);
   assert.equal(parseDuration('1h 2m 3s'), 3723);
   assert.equal(parseDuration('16:20'), 980);
+  assert.equal(parseDuration('750ms'), 0.75);
+  assert.equal(parseDuration('1 minute 2 seconds'), 62);
+  assert.equal(parseDuration('12 miles'), null);
+  assert.equal(parseDuration('1:99'), null);
   assert.equal(parseDuration('16 分 20 秒'), 980);
 });
 
@@ -75,7 +80,8 @@ test('Gemini thoughts count as output and as its reasoning part; cached content 
 
 test('the site\'s own record is read as is, and unknown text is not guessed', () => {
   const site = recognize('{"input": 31000, "cacheRead": 1620000, "output": 61000, "reasoning": 23000, "requests": 41, "durationSec": 980, "source": "log"}');
-  assert.deepEqual([site.kind, site.usage], ['site', { input: 31_000, cacheRead: 1_620_000, output: 61_000, reasoning: 23_000, requests: 41, durationSec: 980 }]);
+  assert.deepEqual([site.kind, site.usage], ['site', { input: 31_000, cacheRead: 1_620_000, output: 61_000, reasoning: 23_000, requests: 41, durationSec: 980, source: 'log' }]);
+  assert.deepEqual(recognize('{"source": "bill", "requests": 5}').usage, { source: 'bill', requests: 5 });
   assert.equal(recognize('hello world'), null);
   assert.equal(recognize('{"tokens": 5}'), null);
   assert.equal(recognize(''), null);

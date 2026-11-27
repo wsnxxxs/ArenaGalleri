@@ -83,21 +83,25 @@ export function artifactRow(work, formatBytes) {
 // The works of the question that count in its comparison on this metric.
 function counted(task, metric) {
   return (task?.results ?? []).filter((r) => r.usage && !exclusion(r, metric, pricing, r.model))
-    .map((r) => ({ id: r.id, value: valueOf(r, metric, pricing, r.model) })).filter((item) => finite(item.value) && item.value > 0);
+    .map((r) => ({ id: r.id, value: valueOf(r, metric, pricing, r.model) }));
 }
 
 // The question's counted works on a log scale: this work solid, the median dashed (§5.2 同题位置).
 function position(task, work, metric) {
   const items = counted(task, metric);
   const mid = taskMedian(items.map((item) => item.value));
-  if (!mid) return '';
+  if (mid == null) return '';
   const own = items.find((item) => item.id === work.id);
-  const lo = Math.log10(Math.min(...items.map((item) => item.value))), hi = Math.log10(Math.max(...items.map((item) => item.value)));
-  const span = Math.max(hi - lo, 0.3), left = lo - span * 0.06, width = span * 1.12;
-  const x = (value) => (((Math.log10(value) - left) / width) * 280 + 10).toFixed(1);
+  const values = items.map((item) => item.value);
+  const min = Math.min(...values), max = Math.max(...values);
+  const positives = values.filter((value) => value > 0);
+  const first = min === 0 ? 30 : 10;
+  const lo = positives.length ? Math.log10(Math.min(...positives)) : 0;
+  const span = positives.length ? Math.max(Math.log10(max) - lo, 0.3) : 1;
+  const x = (value) => value === 0 ? '10.0' : (first + (Math.log10(value) - lo) / span * (290 - first)).toFixed(1);
   const label = (value) => (metric === 'cost' ? money(value) : formatTokens(value));
   const dots = items.map((item) => `<circle class="usage-dot${item.id === work.id ? ' is-own' : ''}" cx="${x(item.value)}" cy="26" r="${item.id === work.id ? 4.5 : 3.5}"/>`).join('');
-  const ratio = own ? own.value / mid : null;
+  const ratio = own && mid > 0 ? own.value / mid : null;
   return `<div class="usage-position">
     <h4>同题位置</h4>
     <svg viewBox="0 0 300 50" role="img" aria-label="${esc(`本题 ${items.length} 件参与比较，中位数 ${label(mid)}`)}">
@@ -105,9 +109,9 @@ function position(task, work, metric) {
       <line class="usage-median" x1="${x(mid)}" y1="10" x2="${x(mid)}" y2="36"/>
       <text class="usage-tick" x="${x(mid)}" y="8" text-anchor="middle">${esc(`中位数 ${label(mid)}`)}</text>
       ${dots}
-      <text class="usage-tick" x="10" y="48">${esc(label(10 ** lo))}</text><text class="usage-tick" x="290" y="48" text-anchor="end">${esc(label(10 ** hi))}</text>
+      <text class="usage-tick" x="10" y="48">${esc(label(min))}</text><text class="usage-tick" x="290" y="48" text-anchor="end">${esc(label(max))}</text>
     </svg>
-    <p class="fine"><span>${esc(`本题 ${items.length} 件参与比较`)}</span>${ratio ? ` · <span>${esc(metric === 'cost' ? `这一件的花费是本题中位数的 ${ratio.toFixed(1)} 倍` : `这一件的 token 是本题中位数的 ${ratio.toFixed(1)} 倍`)}</span>` : ''}</p>
+    <p class="fine"><span>${esc(`本题 ${items.length} 件参与比较`)}</span>${ratio != null ? ` · <span>${esc(metric === 'cost' ? `这一件的花费是本题中位数的 ${ratio.toFixed(1)} 倍` : `这一件的 token 是本题中位数的 ${ratio.toFixed(1)} 倍`)}</span>` : ''}</p>
   </div>`;
 }
 

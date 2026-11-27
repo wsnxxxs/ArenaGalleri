@@ -5,9 +5,9 @@ import experience from './i18n-experience.js';
 import levels from './i18n-levels.js';
 
 const normalize = (text) => text.trim().replace(/\s+/g, ' ');
-const catalog = Object.fromEntries(Object.entries({ ...gallery, ...platform, ...authoring, ...experience, ...levels }).map(([source, english]) => [normalize(source), english]));
+const catalog = new Map(Object.entries({ ...gallery, ...platform, ...authoring, ...experience, ...levels }).map(([source, english]) => [normalize(source), english]));
 const generatedUiSources = new Map();
-const reverseCatalog = Object.fromEntries(Object.entries(catalog).map(([source, english]) => [english, source]));
+const reverseCatalog = new Map([...catalog].map(([source, english]) => [english, source]));
 const KEY = 'gallery-locale';
 let current;
 try { current = localStorage.getItem(KEY); } catch { /* storage unavailable */ }
@@ -21,7 +21,7 @@ export const formatDate = (value, options = {}) => value ? new Date(dateValue(va
 export const formatTime = (value, options = {}) => value ? new Date(dateValue(value)).toLocaleString(current, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', ...options }) : '';
 const escapePattern = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Templates are an explicit allowlist, anchored to the entire phrase; raw content is excluded below.
-const patterns = Object.entries(catalog).filter(([key]) => /\{[A-Za-z][A-Za-z0-9]*\}/.test(key) && (/[\u3400-\u9fff]/.test(key) || key.includes('{term}'))).map(([key, english]) => {
+const patterns = [...catalog].filter(([key]) => /\{[A-Za-z][A-Za-z0-9]*\}/.test(key) && (/[\u3400-\u9fff]/.test(key) || key.includes('{term}'))).map(([key, english]) => {
   const names = [];
   const pattern = key.split(/(\{[A-Za-z][A-Za-z0-9]*\})/).map((part) => {
     if (/^\{[A-Za-z][A-Za-z0-9]*\}$/.test(part)) {
@@ -50,7 +50,7 @@ function englishMessage(template, vars) {
 export function t(source, vars = {}) {
   const text = String(source ?? '');
   const original = interpolate(text, vars);
-  const output = current === 'en' ? englishMessage(catalog[normalize(text)] ?? translateText(text), vars) : original;
+  const output = current === 'en' ? englishMessage(catalog.get(normalize(text)) ?? translateText(text), vars) : original;
   if (output !== original) generatedUiSources.set(output, original);
   return output;
 }
@@ -59,7 +59,7 @@ export function translateText(source) {
   if (current !== 'en') return text;
   const trimmed = text.trim();
   const normalized = normalize(trimmed);
-  let english = catalog[normalized];
+  let english = catalog.get(normalized);
   if (english === undefined) for (const pattern of patterns) {
     const match = trimmed.match(pattern.regex);
     if (!match) continue;
@@ -70,14 +70,14 @@ export function translateText(source) {
     pattern.names.forEach((name, i) => {
       const value = match[i + 1];
       if (name !== 'term') vars[name] = value;
-      else if (catalog[normalize(value)] === undefined) known = false;
-      else vars[name] = catalog[normalize(value)];
+      else if (!catalog.has(normalize(value))) known = false;
+      else vars[name] = catalog.get(normalize(value));
     });
     if (!known) continue;
     english = englishMessage(pattern.english, vars);
     break;
   }
-  return english === undefined ? text : text.replace(trimmed, english);
+  return english === undefined ? text : text.replace(trimmed, () => english);
 }
 const ignored = 'pre,code,script,style,textarea,[contenteditable], [data-i18n-ignore]';
 const attrs = ['title', 'aria-label', 'placeholder', 'alt', 'label'];
@@ -100,8 +100,8 @@ function translateSlot(node, key, read, write) {
   const value = read();
   const slots = originals.get(node) ?? {};
   const saved = slots[key];
-  const knownSource = generatedUiSources.get(value.trim()) ?? reverseCatalog[value.trim()];
-  const source = !saved || value !== saved.output ? knownSource ? value.replace(value.trim(), knownSource) : value : saved.source;
+  const knownSource = generatedUiSources.get(value.trim()) ?? reverseCatalog.get(value.trim());
+  const source = !saved || value !== saved.output ? knownSource ? value.replace(value.trim(), () => knownSource) : value : saved.source;
   const output = translateText(source);
   slots[key] = { source, output };
   originals.set(node, slots);

@@ -18,7 +18,9 @@ export function staleBuild(buildInfo, bootstrap) {
   if (typeof buildInfo.datapack === 'string' && /^[a-f0-9]{40}$/.test(buildInfo.datapack)) {
     return bootstrap.datapack !== buildInfo.datapack;
   }
-  return buildInfo.datapack === null && bootstrap.datapack === null
+  // Locally assembled packages have no commit, but their raw catalog digest
+  // can still be compared with a pinned backend that supplies the same field.
+  return buildInfo.datapack === null && (bootstrap.datapack === null || /^[a-f0-9]{64}$/.test(bootstrap.catalogDigest))
     && typeof buildInfo.catalogDigest === 'string' && /^[a-f0-9]{64}$/.test(buildInfo.catalogDigest)
     && bootstrap.catalogDigest !== buildInfo.catalogDigest;
 }

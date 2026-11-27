@@ -409,6 +409,7 @@ export function mount(root, ctx) {
   let hoveredIndex = -1;
   let hasInteracted = false;
   let destroyed = false;
+  let overviewTrigger = null;
 
   // Physics & transition state.
   let rafId = 0;
@@ -466,6 +467,7 @@ export function mount(root, ctx) {
 
   const activeMember = () => MEMBERS[activeIndex] || MEMBERS[0];
   const restAngleRad = () => (activeMember().restAngle * Math.PI) / 180;
+  const badgeLabel = (member) => english() ? `Swing the badge for ${member.name}` : `晃动 ${member.name} 的工牌`;
 
   function badgeGeometry() {
     const w = stageRect.width;
@@ -569,11 +571,10 @@ export function mount(root, ctx) {
     if (!stageEl) return;
     const m = activeMember();
     const copy = memberCopy(m);
-    const en = english();
     if (pivotEl) pivotEl.style.setProperty('--member-accent', m.accentColor);
     if (pvcEl) {
       pvcEl.innerHTML = pvcCardInnerHtml(m);
-      pvcEl.setAttribute('aria-label', en ? `${m.name} badge — drag to swing` : `${m.name} 工牌 — 可拖拽晃动`);
+      if (pvcEl.hasAttribute('role')) pvcEl.setAttribute('aria-label', badgeLabel(m));
     }
     const statusEl = $('[data-detail-status]', stageEl);
     if (statusEl) statusEl.innerHTML = `${esc(copy.statusTop)}<br>${esc(copy.statusBottom)}`;
@@ -774,6 +775,7 @@ export function mount(root, ctx) {
         applyStageModeClasses();
         syncPageMeta();
         applyDetailVisuals();
+        focusBackButton();
       }
       return;
     }
@@ -851,6 +853,7 @@ export function mount(root, ctx) {
         mode = 'overview';
         applyStageModeClasses();
         syncPageMeta();
+        focusOverviewMember();
       }
     }
   }
@@ -967,10 +970,25 @@ export function mount(root, ctx) {
     renderTransitionAt(0);
   }
 
-  function openMember(index) {
+  function focusBackButton() {
+    if (document.activeElement === document.body || document.activeElement === overviewTrigger) {
+      $('[data-team-back]', stageEl)?.focus({ preventScroll: true });
+    }
+  }
+
+  function focusOverviewMember() {
+    if (document.activeElement === document.body || stageEl.contains(document.activeElement)) {
+      const trigger = overviewTrigger?.isConnected ? overviewTrigger : $(`[data-roster-index="${activeIndex}"]`, stageEl);
+      trigger?.focus({ preventScroll: true });
+    }
+    overviewTrigger = null;
+  }
+
+  function openMember(index, trigger) {
     if (index < 0 || index >= MEMBERS.length) return;
     if (mode === 'entering' || mode === 'leaving') return;
     clearTimeout(extractTimer);
+    overviewTrigger = trigger;
     activeIndex = index;
     dragging = false;
     tiltY = 0;
@@ -988,6 +1006,7 @@ export function mount(root, ctx) {
       applyStageModeClasses();
       syncPageMeta();
       applyDetailVisuals();
+      focusBackButton();
       return;
     }
 
@@ -1056,6 +1075,7 @@ export function mount(root, ctx) {
       }
       applyStageModeClasses();
       syncPageMeta();
+      focusOverviewMember();
       return;
     }
 
@@ -1097,6 +1117,12 @@ export function mount(root, ctx) {
     if (hintEl) hintEl.classList.add('is-hidden');
   }
 
+  function nudgeBadge() {
+    markInteracted();
+    omega += (theta >= restAngleRad() ? -1 : 1) * 1.65;
+    vx += (Math.random() > 0.5 ? 1 : -1) * 42;
+  }
+
   function stackCardHtml(m, i) {
     const zIndex = MEMBERS.length - i;
     const extraCls = mode === 'detail' ? (i === activeIndex ? ' is-extracted' : ' is-deck-hidden') : '';
@@ -1129,6 +1155,7 @@ export function mount(root, ctx) {
     const crumbs = [{ text: '开发者团队' }];
 
     const extra = hasProfileExtra(m);
+    const badgeInteractive = !reducedMotion();
     root.innerHTML = `${ctx.header(crumbs, false, '')}<main class="team-page">
       <section class="team-stage" data-team-stage data-mode="${esc(mode)}" data-has-extra="${extra ? 'true' : 'false'}" aria-label="${esc(en ? 'Developer Team' : '开发者团队')}">
 
@@ -1164,7 +1191,7 @@ export function mount(root, ctx) {
             <div class="team-backdrop" aria-hidden="true">
               <span class="team-backdrop-word ${backdropScaleClass(m.name)}" data-backdrop-word>${esc(m.name)}</span>
             </div>
-            <p class="team-hint${hasInteracted ? ' is-hidden' : ''}" data-team-hint>${esc(en ? 'Drag or flick the badge' : '可拖拽或轻拨工牌')}</p>
+            ${badgeInteractive ? `<p class="team-hint${hasInteracted ? ' is-hidden' : ''}" data-team-hint>${esc(en ? 'Drag or flick the badge' : '可拖拽或轻拨工牌')}</p>` : ''}
           </div>
           <div class="team-profile-extra" data-team-profile-extra${extra ? '' : ' hidden'}>${profileExtraHtml(m)}</div>
         </div>
@@ -1190,7 +1217,7 @@ export function mount(root, ctx) {
         <!-- Layer 4: Live physical PVC badge + brushed steel clasp -->
         <div class="team-badge-pivot" data-team-pivot style="--member-accent:${esc(m.accentColor)}">
           <div class="team-pvc-shadow" data-team-shadow aria-hidden="true"></div>
-          <div class="team-pvc" data-team-pvc role="button" tabindex="0" aria-label="${esc(en ? `${m.name} badge — drag to swing` : `${m.name} 工牌 — 可拖拽晃动`)}" data-i18n-ignore>
+          <div class="team-pvc" data-team-pvc${badgeInteractive ? ` role="button" tabindex="0" aria-label="${esc(badgeLabel(m))}"` : ''} data-i18n-ignore>
             ${pvcCardInnerHtml(m)}
           </div>
           <div class="team-clasp" data-team-clasp aria-hidden="true">${claspSvgMarkup()}</div>
@@ -1283,7 +1310,7 @@ export function mount(root, ctx) {
   };
 
   const onPointerDown = (event) => {
-    if (mode !== 'detail' || event.button > 0) return;
+    if (mode !== 'detail' || dragging || event.button > 0 || reducedMotion()) return;
     const target = event.target.closest('[data-team-pvc], .team-clasp');
     if (!target || !stageEl) return;
     event.preventDefault();
@@ -1360,9 +1387,9 @@ export function mount(root, ctx) {
     try { if (dragPointerId !== null) pvcEl?.releasePointerCapture(dragPointerId); } catch { /* ignore */ }
     dragPointerId = null;
 
+    if (event?.type === 'pointercancel') return;
     if (!dragMoved) {
-      omega += (theta >= restAngleRad() ? -1 : 1) * 1.65;
-      vx += (Math.random() > 0.5 ? 1 : -1) * 42;
+      nudgeBadge();
     } else {
       vx = clamp(dragVelX * 0.42, -950, 950);
       vy = clamp(dragVelY * 0.42, -950, 950);
@@ -1371,6 +1398,11 @@ export function mount(root, ctx) {
   };
 
   const onClick = (event) => {
+    // Assistive technology can activate the badge with a synthetic click.
+    if (mode === 'detail' && !reducedMotion() && event.detail === 0 && event.target.closest('[data-team-pvc]')) {
+      nudgeBadge();
+      return;
+    }
     const backBtn = event.target.closest('[data-team-back]');
     if (backBtn) {
       returnToOverview();
@@ -1379,7 +1411,7 @@ export function mount(root, ctx) {
     const openBtn = event.target.closest('[data-open-member]');
     if (openBtn && mode === 'overview') {
       const idx = Number(openBtn.dataset.openMember);
-      if (Number.isInteger(idx)) openMember(idx);
+      if (Number.isInteger(idx)) openMember(idx, openBtn);
       return;
     }
     const teamCrumb = event.target.closest('a[href="#/team"]');
@@ -1390,7 +1422,13 @@ export function mount(root, ctx) {
   };
 
   const onKeyDown = (event) => {
-    if (event.key === 'Escape' && mode === 'detail') {
+    if (event.defaultPrevented) return;
+    if (mode === 'detail' && !reducedMotion() && event.target === pvcEl && ['Enter', ' '].includes(event.key)) {
+      event.preventDefault();
+      if (!event.repeat) nudgeBadge();
+      return;
+    }
+    if (event.key === 'Escape' && mode === 'detail' && (root.contains(event.target) || event.target === document.body)) {
       event.preventDefault();
       returnToOverview();
     }

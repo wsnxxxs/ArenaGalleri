@@ -167,7 +167,7 @@ export function mountBoard(container, ctx) {
     for (const cell of container.querySelectorAll('[data-board-radar-key]')) cell.innerHTML = radarContent(cell.dataset.boardRadarKey);
   }
   async function loadRadars(force = false) {
-    if (!hasRadars || destroyed) return;
+    if (!radarsWanted || destroyed) return;
     const identity = radarIdentity();
     if (!isStaff()) {
       radarRequest?.controller.abort();
@@ -311,7 +311,7 @@ export function mountBoard(container, ctx) {
 
   const unrankedList = (unranked) => unranked.length ? `<details class="board-unranked"><summary>还没有比较数据的${unit === 'model' ? '模型' : '配置'} · ${unranked.length}${icon('next')}</summary><p data-i18n-ignore>${unranked.map((row) => `${esc(row.modelName)}${row.effort ? ` · ${esc(row.effort)}` : ''}`).join('、')}</p></details>` : '';
   const searchText = (row, m) => esc([row.modelName, row.effort, m.vendor].join(' ').toLowerCase());
-  const nameParts = (data, row) => `<b data-i18n-ignore>${esc(row.modelName)}</b>${row.effort ? `<span class="badge" data-i18n-ignore>${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}`;
+  const nameParts = (data, row) => `<b data-i18n-ignore>${esc(row.modelName)}</b>${row.effort ? `<span class="badge" data-i18n-ignore>${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames ?? platform.site?.limits?.provisionalGames ?? 30} 次">暂定</span>` : ''}`;
   const recordCells = (row) => row.games == null ? '<td class="c-games">—</td><td class="c-record">—</td><td class="c-rate">—</td>'
     : `<td class="c-games"><span data-i18n-number="${row.games}">${row.games}</span></td>
       <td class="c-record"><span data-i18n-number="${row.wins}">${row.wins}</span><span>·</span><span data-i18n-number="${row.draws}">${row.draws}</span><span>·</span><span data-i18n-number="${row.losses}">${row.losses}</span></td>
@@ -591,11 +591,11 @@ export function mountBoard(container, ctx) {
   // A board seen before draws at once from memory; the fresh one replaces it only if it differs.
   function load() {
     if (destroyed) return Promise.resolve();
-    void loadRadars(true);
     const params = new URLSearchParams({ by: unit, ...(ctx.curated ? { audience: 'curated', ...(ctx.sectionId ? { sectionId: ctx.sectionId } : {}) } : ctx.task ? { task: ctx.task.id } : { ...(ctx.category ? { category: ctx.category } : {}), ...(ctx.domain ? { domain: ctx.domain } : {}) }) });
     if (filterable) for (const [field, value] of Object.entries(filters)) if (value) params.set(field, value);
     const path = `leaderboard${nextBoard ? '/next' : ''}?${params}`;
     if (request?.path === path) return request.promise;
+    void loadRadars(true);
     request?.controller.abort();
     const controller = new AbortController();
     const reading = { path, controller, promise: null };
@@ -747,9 +747,13 @@ export function mountBoard(container, ctx) {
     ready: drawn ? null : loading,
     reload: load,
     refreshIdentity() {
-      if (hasRadars !== (radarsWanted && isStaff())) {
-        hasRadars = !hasRadars;
-        if (currentData) draw(currentData);
+      const enabled = radarsWanted && isStaff();
+      const changed = enabled !== hasRadars;
+      hasRadars = enabled;
+      if ((ctx.curated || changed) && currentData) draw(currentData);
+      if (ctx.curated) {
+        if (request) void loadRadars();
+        return load();
       }
       return loadRadars();
     },
@@ -1000,12 +1004,12 @@ export function mount(root, ctx) {
   return {
     ready,
     onPlatformChange: (reason) => {
-      if (reason === 'identity' || reason === 'session-ready') void board?.refreshIdentity?.();
+      if (!curated && (reason === 'identity' || reason === 'session-ready')) void board?.refreshIdentity?.();
       if (reason === 'activity' || reason === 'identity') {
         const select = $('[data-board-task]', root);
         if (select) select.innerHTML = boardTaskOptions(listed, select.value, platform.activityReady, platform.arena);
         // An empty curated board offers different next steps once the reader signs in.
-        if (reason === 'identity' && curated) return board?.reload();
+        if (reason === 'identity' && curated) return board?.refreshIdentity();
         return live?.refresh();
       }
       if (!['session', 'session-ready'].includes(reason)) return live?.refresh();

@@ -257,7 +257,8 @@ export function mountTaskUsage(container, ctx) {
     tips = 0;
     const { counted, list } = rows();
     const sorted = [...list].sort((a, b) => (a.value ?? Infinity) - (b.value ?? Infinity) || String(a.name).localeCompare(String(b.name)));
-    const mid = state.group === 'work' ? taskMedian(counted.map((w) => w.value)) : null;
+    const taskMid = taskMedian(counted.map((w) => w.value));
+    const mid = state.group === 'work' ? taskMid : null;
     const values = sorted.map((row) => row.value).filter((v) => v != null);
     const at = values.length ? axis(values).at : () => 0;
     const ticks = values.length ? axis(values).ticks : [];
@@ -275,7 +276,7 @@ export function mountTaskUsage(container, ctx) {
     container.innerHTML = `<div class="usage-head"><h2>${shown ? '花费' : '用量'}</h2>
         <p class="usage-lede"><span>${shown ? '这道题的作品生成时用了多少 token、花了多少钱、用了多久。' : '这道题的作品生成时用了多少 token、用了多久。'}</span><span>${single ? '数字由管理员从生成记录实测录入，目前 1 件有记录。' : `数字由管理员从生成记录实测录入，目前 ${recorded.length} 件有记录，${counted.length} 件参与比较。`}</span></p>
         ${shown && pricing?.asOf ? `<p class="usage-basis">按官方标价折算 · 价格表 <span data-i18n-date="${esc(pricing.asOf)}">${esc(pricing.asOf)}</span></p>` : ''}</div>
-      ${single ? '' : `<dl class="usage-stats">${counted.length >= 2 ? stats(counted, mid) : stat('有记录', count(recorded.length, '件'), counted.length ? '参与比较的不足 2 件' : '都不参与比较')}</dl>`}
+      ${single ? '' : `<dl class="usage-stats">${counted.length >= 2 ? stats(counted, taskMid) : stat('有记录', count(recorded.length, '件'), counted.length ? '参与比较的不足 2 件' : '都不参与比较')}</dl>`}
       ${single ? card(counted[0].r) : `<div class="usage-toolbar">
         ${recorded.length > 5 ? `<label class="collection-search">${icon('search')}<input type="search" data-usage-search aria-label="搜索模型" placeholder="搜索模型" value="${esc(query)}"></label>` : ''}
         <label class="result-sort">分组<select data-usage-group aria-label="分组">${Object.entries(GROUPS).map(([v, text]) => `<option value="${v}"${v === state.group ? ' selected' : ''}>${text}</option>`).join('')}</select></label>

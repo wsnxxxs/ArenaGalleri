@@ -1,7 +1,7 @@
 // Work metadata and display settings share a sheet; review decisions keep their own dialogs.
 import { $, $$, brandMark, esc, formatTime, icon, img } from './ui.js';
 import { accountVersion, api, byStaff, canDecide, isSenior, metricsInfo, moderationBadge, openDialog, refreshPlatform, ROLE_LABELS, setFaces, statusBadge, toast, updateRememberedReviewWork } from './platform.js';
-import { templatesOf } from './categories.js';
+import { benchmarkTask, templatesOf } from './categories.js';
 import { registeredModel, workFieldsHtml } from './work-fields.js';
 import { bindUsageEntry, loadInto, saveUsage, usageEntryHtml } from './usage-entry.js';
 import { loadPricing } from './usage-view.js';
@@ -43,11 +43,12 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
   const canOpenDecision = canDecide(w) && (decision === 'content' ? Boolean(onContent) : !questionHidden && Boolean(onReview));
   // Uploads can be re-homed to another question; package works keep the question the data pack gives them.
   const movable = !packaged && canDecide(w);
-  const homes = new Map([...ctx.DATA.tasks, ...questions].map((q) => [q.id, q.title]));
+  const homes = new Map([...ctx.DATA.tasks, ...questions].filter((q) => !benchmarkTask(q)).map((q) => [q.id, q.title]));
   if (!homes.has(w.task)) homes.set(w.task, task?.title ?? w.task);
   const homeHint = packaged ? '数据包作品的归属题目由数据仓库维护。' : !movable ? '需要管理员权限'
     : '改到其他题目后，这件作品的盲评记录、评论和表情一起迁移。';
   const sheet = openDialog({
+    accountBound: true,
     title: '管理作品',
     className: 'work-manage-sheet',
     body: `<form class="work-manage-form" novalidate>
@@ -139,7 +140,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
   });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (busy) return;
+    if (busy || owner !== accountVersion()) return;
     error.textContent = '';
     let meta;
     try { meta = editor.collect(); } catch (err) { error.textContent = err.message; return; }
@@ -215,6 +216,7 @@ function withdrawDialog(w, packaged) {
   return new Promise((resolve) => {
     let answer = null;
     const sheet = openDialog({
+      accountBound: true,
       title: '下架这件作品？',
       className: 'confirm-sheet',
       body: `<form class="withdraw-form">

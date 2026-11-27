@@ -53,6 +53,7 @@ test('with amounts off the task view compares tokens only; on, it adds cost in t
     // Grouped rows carry their names for the search, like single works.
     const select = (value) => { const event = new Event('change'); Object.defineProperty(event, 'target', { value: { value, matches: (q) => q === '[data-usage-group]' } }); off.dispatchEvent(event); };
     select('model');
+    assert.match(off.innerHTML, /<dt>本题中位数<\/dt><dd><b>71k token/, 'grouping keeps the three-work question median in the summary');
     assert.deepEqual([...off.innerHTML.matchAll(/class="usage-row is-group" data-usage-row="([^"]+)"/g)].map((m) => m[1]).sort(), ['m1', 'm2']);
     const on = box();
     const shown = mountTaskUsage(on, viewCtx(task, PRICING));
@@ -230,6 +231,7 @@ test('the chart takes only positive costs, and the pricing read happens once eve
     const svg = scatter([{ key: 'z', name: 'Z', x: 0, y: 1000 }, { key: 'a', name: 'A', x: 1, y: 1100 }, { key: 'b', name: 'B', x: 2, y: 1050 }]);
     assert.match(svg, /<svg class="cost-chart"/);
     assert.doesNotMatch(svg, /<title>Z /, 'the zero point is not drawn');
+    assert.match(scatter([{ name: 'Large', x: 100, y: 1050 }]), /<title>Large · 100×/);
     assert.equal(scatter([{ key: 'z', name: 'Z', x: 0, y: 1000 }]), '');
     // A frontier step from zero cost has no ratio: it says where it starts and gives the score difference.
     const { frontierSteps } = await import('../site/cost-chart.js');

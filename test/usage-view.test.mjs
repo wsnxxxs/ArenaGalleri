@@ -60,6 +60,18 @@ test('the drawer gives each figure once, says what the tokens were, and keeps th
   assert.match(t.usageLine(a), /^<span>3\.3M token<\/span><span class="usage-sep" aria-hidden="true">&nbsp;· <\/span><span>27 分 12 秒<\/span>$/);
 });
 
+test('the question median and sample count include zero usage in the work drawer', async () => {
+  const t = view({ showCost: false });
+  await t.loadPricing();
+  const items = [0, 100, 500].map((n, i) => work(String(i), n, 0, { cacheRead: 0 }));
+  const block = t.usageBlock(items[0], { results: items });
+  assert.match(block, /本题 3 件参与比较，中位数 100/);
+  assert.match(block, /这一件的 token 是本题中位数的 0.0 倍/);
+  const allZero = t.usageBlock(items[0], { results: [items[0], items[0], items[0]] });
+  assert.match(allZero, /本题 3 件参与比较，中位数 0/);
+  assert.doesNotMatch(allZero, /NaN|Infinity|倍/);
+});
+
 test('administrators see the edit entry; readers see nothing for unrecorded works', async () => {
   const reader = view({ showCost: false }), staff = view({ showCost: false }, { staff: true });
   assert.equal(reader.usageBlock({ id: 'x' }, { results: [] }), '');

@@ -217,7 +217,7 @@ function loadSession(request, catalogConnection, refreshActivity = false) {
         return responseData(response);
       });
       if (data === LEGACY) return true;
-      if (generation !== accountGeneration) return false;
+      if (generation !== accountGeneration || sessionConnection !== task) return false;
       if (!compatibleBuild(frontendBuildInfo, data) || !Object.hasOwn(data, 'user')
         || (data.user !== null && !data.user?.id)) throw new Error('Invalid platform response');
       const identityChanged = (data.user?.id ?? null) !== (platform.user?.id ?? null) || data.user?.role !== platform.user?.role || levelOf(data.user) !== levelOf(platform.user);
@@ -229,15 +229,20 @@ function loadSession(request, catalogConnection, refreshActivity = false) {
       const resolvedGeneration = accountGeneration;
       emit(identityChanged ? 'identity' : 'session');
       await catalogConnection;
-      if (platform.available && !legacy && resolvedGeneration === accountGeneration && (!platform.activityReady || activityNeedsRefresh || refreshActivity)) void loadActivity();
+      if (sessionConnection === task && platform.available && !legacy && resolvedGeneration === accountGeneration && (!platform.activityReady || activityNeedsRefresh || refreshActivity)) void loadActivity();
       return true;
     } catch (error) {
-      if (generation === accountGeneration) platform.sessionError = error.kind ? error : connectionFailure(error);
-      if (recoveryStarted) startPlatformRecovery();
+      if (sessionConnection === task && generation === accountGeneration) {
+        platform.sessionError = error.kind ? error : connectionFailure(error);
+        if (recoveryStarted) startPlatformRecovery();
+      }
       return false;
     } finally {
-      if (sessionConnection === task) { sessionConnection = null; platform.sessionConnecting = false; }
-      emit('session-ready');
+      if (sessionConnection === task) {
+        sessionConnection = null;
+        platform.sessionConnecting = false;
+        emit('session-ready');
+      }
     }
   })();
   sessionConnection = task;
@@ -261,11 +266,12 @@ async function readPlatform(buildInfo, request, bootstrap = false) {
   try {
     const data = await retryRead(async (timeout, tries) => {
       let response = await (tries ? (bootstrap ? requestBootstrap : requestCatalog)(timeout) : request);
-      if (!bootstrap && response.status === 404) { legacy = true; bootstrap = true; response = await requestBootstrap(timeout); }
+      if (!bootstrap && response.status === 404) { bootstrap = true; response = await requestBootstrap(timeout); }
       return response.status === 409 ? MISMATCH : responseData(response);
     });
     if (data === MISMATCH) { platform.available = false; platform.mismatch = true; return false; }
     if (!acceptCatalog(data, buildInfo)) return false;
+    if (bootstrap) legacy = true;
     if (bootstrap && generation === accountGeneration) {
       const identityChanged = (data.user?.id ?? null) !== (platform.user?.id ?? null) || data.user?.role !== platform.user?.role || levelOf(data.user) !== levelOf(platform.user);
       acceptUser(data.user);
@@ -296,6 +302,9 @@ export async function refreshPlatform(reason = 'refresh') {
   // A mutation may finish while an older catalog read is still in flight.
   // Follow that read with a new one so its pre-write snapshot cannot win.
   if (reason !== 'reconnect' && connection) await connection;
+  // The session snapshot also contains mutable quota and review counters. A
+  // read begun before the write must not restore the earlier values.
+  if (reason !== 'reconnect' && !connection && !legacy) sessionConnection = null;
   const connected = await connectPlatform();
   emit(reason);
   return connected;
@@ -551,7 +560,7 @@ export function toast(message) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
-export function openDialog({ title, body, className = '', onClose }) {
+export function openDialog({ title, body, className = '', accountBound = false, onClose }) {
   const dialog = document.createElement('dialog');
   dialog.className = `sheet ${className}`;
   dialog.innerHTML = `<div class="sheet-in">
@@ -560,17 +569,19 @@ export function openDialog({ title, body, className = '', onClose }) {
   </div>`;
   document.body.append(dialog);
   const close = () => { if (dialog.open) dialog.close(); };
-  dialog.addEventListener('close', () => { dialog.remove(); onClose?.(); });
+  const owner = accountVersion();
+  const unsubscribe = accountBound ? onPlatformChange(() => { if (owner !== accountVersion()) close(); }) : null;
+  dialog.addEventListener('close', () => { unsubscribe?.(); dialog.remove(); onClose?.(); });
   dialog.addEventListener('click', (e) => { if (e.target === dialog || e.target.closest('[data-sheet-close]')) close(); });
   dialog.showModal();
   return { el: dialog, close, setTitle: (text) => { $('.sheet-head h2', dialog).textContent = text; } };
 }
 
-export function confirmDialog({ title, message, confirm = '确认', danger = false }) {
+export function confirmDialog({ title, message, confirm = '确认', danger = false, accountBound = false }) {
   return new Promise((resolve) => {
     let answer = false;
     const sheet = openDialog({
-      title,
+      title, accountBound,
       className: 'confirm-sheet',
       body: `<p class="sheet-text">${esc(message)}</p><div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary${danger ? ' danger' : ''}" type="button" data-confirm>${esc(confirm)}</button></div>`,
       onClose: () => resolve(answer),
@@ -870,7 +881,8 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
     }, () => widgetTask ?? prepareWidget());
     $('[data-switch]', form).addEventListener('click', () => { setMode(mode === 'login' ? 'register' : 'login'); form.username.focus(); });
     // Recovery opens above the sign-in sheet and hands the account back to it.
-    $('[data-forgot]', form).addEventListener('click', async () => {
+    const forgot = $('[data-forgot]', form);
+    forgot.addEventListener('click', async () => {
       const account = await openReset(form.username.value.trim());
       if (!account || !sheet.el.isConnected) return;
       form.username.value = account;
@@ -881,9 +893,11 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submit = $('[type="submit"]', form);
+      if (submit.disabled) return;
       const switchButton = $('[data-switch]', form);
       submit.disabled = true;
       switchButton.disabled = true;
+      forgot.disabled = true;
       let loginSent = false;
       try {
         const body = { name: form.username.value, password: form.password.value };
@@ -908,6 +922,7 @@ export function openAuth({ mode = 'login', reason = '' } = {}) {
         $('.form-error', form).textContent = error.message;
         submit.disabled = false;
         switchButton.disabled = false;
+        forgot.disabled = false;
       } finally {
         if (loginSent) widget?.reset();
       }
@@ -986,9 +1001,10 @@ function menuHtml() {
     </div>`;
 }
 
+const expandedMenu = '[data-menu][aria-expanded="true"], [data-react-add][aria-expanded="true"]';
 function closeMenus() {
   $$('.menu').forEach((menu) => menu.remove());
-  $$('[data-menu][aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  $$(expandedMenu).forEach((b) => b.setAttribute('aria-expanded', 'false'));
 }
 
 export function refreshAccountControls() {
@@ -1009,7 +1025,7 @@ export function reactionBar(key, { locked = false } = {}) {
     return `<button class="react" type="button" data-react="${emoji}" data-key="${esc(key)}" aria-pressed="${own}" aria-label="${name} ${counts[emoji]}" ${locked ? 'disabled' : ''} title="${locked ? '存疑作品不能再互动' : own ? `撤回「${name}」` : `也贴一个「${name}」`}">${sticker(emoji)}<span class="n">${counts[emoji]}</span></button>`;
   }).join('');
   if (locked && !pills) return '';
-  return `<div class="reactions" data-reactions="${esc(key)}" data-locked="${locked ? 1 : 0}">${pills}${locked ? '' : `<button class="react-add" type="button" data-react-add data-key="${esc(key)}" aria-label="贴表情" title="贴表情">${icon('smile')}</button>`}</div>`;
+  return `<div class="reactions" data-reactions="${esc(key)}" data-locked="${locked ? 1 : 0}">${pills}${locked ? '' : `<button class="react-add" type="button" data-react-add aria-haspopup="menu" aria-expanded="false" data-key="${esc(key)}" aria-label="贴表情" title="贴表情">${icon('smile')}</button>`}</div>`;
 }
 
 function redrawReactions(key) {
@@ -1020,9 +1036,11 @@ function redrawReactions(key) {
 
 async function toggleReaction(key, emoji) {
   if (!(await requireUser('登录后就可以给作品贴表情'))) return;
+  const generation = accountGeneration;
   const [task, ...rest] = key.split('/');
   try {
     const result = await api(`works/${encodeURIComponent(task)}/${encodeURIComponent(rest.join('/'))}/reactions`, { method: 'POST', body: { emoji } });
+    if (generation !== accountGeneration) return;
     const added = result.mine.includes(emoji) && !(platform.reactions.mine[key] ?? []).includes(emoji);
     platform.reactions.counts[key] = result.counts;
     platform.reactions.mine[key] = result.mine;
@@ -1052,7 +1070,9 @@ function celebrate(key, emoji) {
 }
 
 function openPicker(button) {
+  const open = button.getAttribute('aria-expanded') === 'true';
   closeMenus();
+  if (open) return;
   const emojis = platform.site?.emojis;
   if (!Array.isArray(emojis) || !emojis.length) return;
   const key = button.dataset.key;
@@ -1103,5 +1123,12 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('.menu')) closeMenus();
   else if (e.target.closest('.menu a')) closeMenus();
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('.menu')) { closeMenus(); e.stopPropagation(); } }, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !$('.menu')) return;
+  const trigger = $(expandedMenu);
+  closeMenus();
+  trigger?.focus({ preventScroll: true });
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 addEventListener('hashchange', closeMenus);

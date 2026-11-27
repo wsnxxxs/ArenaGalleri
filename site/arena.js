@@ -52,7 +52,7 @@ const SKIP_REASON_MS = 6000;
 let curatedHinted = false;
 
 const RANDOM = 'random';
-const isOpen = (t) => (platform.arena[t.id]?.entries ?? 0) >= 2;
+const isOpen = (t) => votedTask(t) && (platform.arena[t.id]?.entries ?? 0) >= 2;
 // A senior admin may pin a model to place a newcomer quickly: every pair then holds one of its works,
 // on a random side, and the ballots count as usual. The pin lasts for the tab, never in the address.
 const PIN = 'arena-pin';
@@ -70,7 +70,9 @@ export function mount(root, ctx) {
   const random = ctx.param === RANDOM;
   const task = random ? null : ctx.DATA.tasks.find((t) => t.id === ctx.param);
   // A random round draws from the tasks the starting page was showing, as far as they can be judged.
-  const scope = random ? ctx.DATA.tasks.filter((t) => isOpen(t) && inPin(t) && (arenaScope.get() ?? [t.id]).includes(t.id)) : [];
+  const savedScope = random ? arenaScope.get() : null;
+  const allowed = savedScope && new Set(savedScope);
+  const scope = random ? ctx.DATA.tasks.filter((t) => isOpen(t) && inPin(t) && (!allowed || allowed.has(t.id))) : [];
   if (random ? !scope.length : !task || !votedTask(task)) {
     location.replace('#/arena');
     return {};
@@ -81,12 +83,9 @@ export function mount(root, ctx) {
 // The lobby follows the leaderboard: category views in the sidebar, one list on the right with the
 // open tasks first and the ones still short of works folded away, the rules folded at the end.
 function lobby(root, ctx) {
-  const tasks = ctx.DATA.tasks.filter(votedTask);
-  const tracks = tracksOf(tasks, { alwaysInclude: ['音乐'] });
   const view = { track: '', query: '' };
   const pool = (t) => platform.arena[t.id] ?? { works: 0, entries: 0 };
   const ready = (t) => isOpen(t) && inPin(t);
-  const openTasks = () => ctx.DATA.tasks.filter(ready);
 
   const row = (t) => {
     const p = pool(t);
@@ -102,7 +101,7 @@ function lobby(root, ctx) {
   };
 
   // The tasks in view: the chosen category, narrowed by the search.
-  function scope() {
+  function scope(tasks = ctx.DATA.tasks.filter(votedTask)) {
     const query = view.query.trim().toLowerCase();
     const scoped = tasks.filter((t) => (!view.track || t.category === view.track)
       && inPin(t) && matchesQuery(t, query));
@@ -110,8 +109,7 @@ function lobby(root, ctx) {
   }
   const meta = ({ open, closed }) => `${open.length} 道题可以开始${closed.length ? ` · ${closed.length} 道作品不足` : ''}`;
 
-  function list() {
-    const { scoped, open, closed } = scope();
+  function list({ scoped, open, closed }) {
     if (!scoped.length) {
       if (view.track === '音乐' && !view.query.trim()) {
         return `<div class="board-empty">
@@ -138,14 +136,24 @@ function lobby(root, ctx) {
       <p class="side-note">每组必有这个模型的作品，左右随机，对手由后台抽取，选择照常计入榜单。题目只列出它有作品的题。</p>`;
   }
 
-  // Typing redraws the list only, so the search in the toolbar keeps its focus.
+  const randomNote = (count) => `${view.track || view.query.trim() ? `在当前范围的 ${count} 道题里` : `在全部 ${count} 道题里`}随机抽组，每一组都可能换题。想专心评一道，点右侧的题目。`;
+
+  // Keep the search field and its focus while updating the list and the random draw range.
   const drawList = () => {
-    $('[data-arena-list]', root).innerHTML = list();
-    $('[data-arena-meta]', root).textContent = meta(scope());
+    const range = scope();
+    $('[data-arena-list]', root).innerHTML = list(range);
+    $('[data-arena-meta]', root).textContent = meta(range);
+    const random = $('[data-random]', root);
+    if (random) {
+      random.disabled = !range.open.length;
+      $('[data-random-note]', root).textContent = randomNote(range.open.length);
+    }
   };
 
   const draw = () => {
-    const open = openTasks();
+    const tasks = ctx.DATA.tasks.filter(votedTask);
+    const tracks = tracksOf(tasks, { alwaysInclude: ['音乐'] });
+    const open = tasks.filter(ready), range = scope(tasks);
     const track = tracks.find((x) => x.name === view.track);
     const link = (name, glyph, text, count) => `<button class="side-link" data-arena-track="${esc(name)}" aria-pressed="${view.track === name}">${icon(glyph)}${esc(text)}<span class="nav-count">${count}</span></button>`;
     root.innerHTML = `${ctx.pageStart({ title: '盲评', section: 'arena', heading: track ? `${track.label}题目` : '全部题目',
@@ -154,14 +162,14 @@ function lobby(root, ctx) {
             <div><dt>可评题目</dt><dd>${pad(open.length)}</dd></div>
             <div><dt>有效比较</dt><dd>${pad(platform.totals.votes)}</dd></div>
             ${platform.user ? `<div><dt>你已评</dt><dd>${pad(platform.me?.votes ?? 0)}</dd></div>` : ''}
-          </dl>${open.length ? `<button class="btn primary side-cta" data-random>${icon('blind')}随机一组</button><p class="side-cta-note">${view.track || view.query.trim() ? `在当前范围的 ${scope().open.length} 道题里` : `在全部 ${open.length} 道题里`}随机抽组，每一组都可能换题。想专心评一道，点右侧的题目。</p>` : ''}
+          </dl>${open.length ? `<button class="btn primary side-cta" data-random${range.open.length ? '' : ' disabled'}>${icon('blind')}随机一组</button><p class="side-cta-note" data-random-note>${randomNote(range.open.length)}</p>` : ''}
           ${guidedTrial() && isStaff() ? `<a class="btn side-cta" href="#/dimensions">${icon('rank')}维度图</a><p class="side-cta-note">测试版：按模型看各维度的单项胜率，只有管理员可见。</p>` : ''}
           ${platform.user ? '' : '<p class="side-note">未登录也可以计票，选择计入大众榜。登录并通过资格考试后，选择同时计入精选榜。<button class="link en-gap" data-auth="login">登录</button></p>'}
           ${isSenior() && platform.arenaModels.length ? pinField() : ''}`,
       nav: `<nav class="side-nav section-nav" aria-label="盲评题型">${link('', 'grid', '全部', open.length)}${tracks.map((x) => link(x.name, x.glyph, x.label, x.tasks.filter(ready).length)).join('')}</nav>` })}
       <section class="block wrap">
-        <div class="collection-toolbar"><label class="collection-search">${icon('search')}<input type="search" data-arena-search aria-label="搜索题目" placeholder="搜索题目" value="${esc(view.query)}"></label><span data-arena-meta>${meta(scope())}</span></div>
-        <div data-arena-list>${list()}</div>
+        <div class="collection-toolbar"><label class="collection-search">${icon('search')}<input type="search" data-arena-search aria-label="搜索题目" placeholder="搜索题目" value="${esc(view.query)}"></label><span data-arena-meta>${meta(range)}</span></div>
+        <div data-arena-list>${list(range)}</div>
         <details class="board-notes">
           <summary>盲评规则${icon('next')}</summary>
           <dl>
@@ -363,7 +371,7 @@ function match(root, ctx, first, scope) {
     syncGate();
     if (voteWait() <= 0 && skipWait() <= 0) {
       stopGate();
-      if (!state.busy) live('现在可以投票');
+      if (!state.busy && canVote()) live('现在可以投票');
     }
   }
   const onVisibility = () => {
@@ -643,6 +651,7 @@ function match(root, ctx, first, scope) {
     $$('.arena-layout [data-layout]', el).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.layout === layout() && (layout() !== 'ab' || state.split === 0.5))));
     if (layout() !== shownLayout) {
       shownLayout = layout();
+      if (shownLayout !== 'ab') postFrame(shownLayout === 'a' ? 'b' : 'a', { source: 'sp-arena-audio', pause: true });
       drawControls('a');
       drawControls('b');
     }
@@ -672,7 +681,6 @@ function match(root, ctx, first, scope) {
     else {
       remember();
       state.split = kind === 'a' ? 1 : 0;
-      postFrame(kind === 'a' ? 'b' : 'a', { source: 'sp-arena-audio', pause: true });
     }
     drawSplit();
   }
@@ -718,11 +726,12 @@ function match(root, ctx, first, scope) {
       onReady() {
         if (!alive || !node.isConnected || currentFrame(side) !== iframe) return;
         state.ready[side] = true;
+        if (state.side === side) state.seen[side] = true;
         delete state.loadErrors[side];
         syncControls(side);
         syncAudioTheme(side);
         later(() => $('.loader', node)?.classList.add('gone'), 300);
-        if (bothReady()) startGate(side);
+        if (bothReady() && !state.result) startGate(side);
         else { drawHeads([side]); syncGate(); }
       },
       onSlow() {
@@ -774,9 +783,13 @@ function match(root, ctx, first, scope) {
     tag.hidden = !state.random;
     tag.textContent = `随机 · ${state.scope.length === ctx.DATA.tasks.filter(isOpen).length ? '全部题目' : `${state.scope.length} 道题`}`;
     $('.arena-mode', el).hidden = Boolean(state.error);
-    $$('.arena-mode [data-mode]', el).forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.mode === 'random') === state.random)));
+    for (const button of $$('.arena-mode [data-mode]', el)) {
+      button.disabled = !state.match;
+      button.setAttribute('aria-pressed', String((button.dataset.mode === 'random') === state.random));
+    }
     const chip = $('[data-a="unpin"]', el);
     chip.hidden = !state.pin;
+    chip.disabled = !state.match;
     chip.title = '退出固定模型，之后的组照常抽取';
     chip.innerHTML = state.pin ? `<span class="vtool-text">固定</span><b data-i18n-ignore>${esc(state.pin.name)}</b>${icon('close')}` : '';
   }
@@ -784,6 +797,8 @@ function match(root, ctx, first, scope) {
   function unpin() {
     setPin('');
     state.pin = null;
+    state.done.clear();
+    state.unavailable = false;
     dropPrefetch();
     drawMode();
     drawBar();
@@ -818,8 +833,9 @@ function match(root, ctx, first, scope) {
   }
 
   function setMode(random) {
-    if (state.error || state.random === random) return;
+    if (!state.match || state.error || state.random === random) return;
     state.random = random;
+    if (random) arenaScope.set(state.scope.map((t) => t.id));
     dropPrefetch();
     history.replaceState(history.state, '', `#/arena/${random ? RANDOM : task.id}`);
     drawMode();
@@ -906,6 +922,7 @@ function match(root, ctx, first, scope) {
   function showError(error) {
     state.error = error;
     state.controls = {};
+    drawMode();
     if (error.code === 'guided-staff-only') {
       for (const body of $$('[data-body]', el)) body.innerHTML = `<div class="arena-layer"><div class="board-empty arena-empty">
         <p class="board-empty-title">${esc(error.message)}</p><p>${platform.user ? '当前账号不是管理员。换一个管理员账号登录后再试。' : '用管理员账号登录后即可试用。'}</p>
@@ -931,7 +948,6 @@ function match(root, ctx, first, scope) {
       return;
     }
     $('.arena-layout', el).hidden = true;
-    drawMode();
     const others = ctx.DATA.tasks.filter((t) => t !== task && isOpen(t) && !state.done.has(t.id));
     const exhausted = error.code === 'exhausted';
     const unavailable = exhausted && state.random && state.unavailable;
@@ -1074,9 +1090,10 @@ function match(root, ctx, first, scope) {
     state.prefetch = null;
     $('.arena-switched', el)?.remove();
     // Every pair starts side by side at an even split, so the last pair's layout favours neither.
-    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, loadErrors: {}, seen: { a: true }, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', slow: false, held: null, needVerify: null, step: 'overall', aspectPick: null, overallPick: null });
+    Object.assign(state, { match: null, result: null, unsealed: false, ready: {}, loadErrors: {}, seen: {}, controls: {}, controlsShown: {}, split: 0.5, lastSplit: 0.5, side: 'a', slow: false, held: null, needVerify: null, step: 'overall', aspectPick: null, overallPick: null });
     dropSkipReason();
     if (!prefetched) {
+      drawMode();
       drawSplit();
       for (const body of $$('[data-body]', el)) {
         body.innerHTML = `<div class="arena-layer">${loader(body.dataset.body, '正在抽取一组作品')}</div>`;
@@ -1138,6 +1155,7 @@ function match(root, ctx, first, scope) {
     }
     state.busy = false;
     if (prefetched) drawSplit();
+    drawMode();
     update();
   }
 
@@ -1172,9 +1190,9 @@ function match(root, ctx, first, scope) {
     const body = { ...tieOf(pick),
       ...(match.aspect && state.aspectPick && pick !== 'skip' ? { aspect: { id: match.aspect.id, ...tieOf(state.aspectPick) } } : {}),
       ...(turnstileToken ? { turnstileToken } : {}) };
-    // An immediate vote can be picked before the ready write returns. Send it after
+    // A vote can be picked before a slow ready write returns. Send it after
     // that write, using the same deadline for both the wait and vote confirmation.
-    const pendingReady = pick !== 'skip' && match.minViewSeconds === 0 ? readyRequest : null;
+    const pendingReady = pick !== 'skip' ? readyRequest : null;
     return writeWithDeadline(async (signal) => {
       if (pendingReady) await pendingReady;
       signal.throwIfAborted();
@@ -1319,15 +1337,15 @@ function match(root, ctx, first, scope) {
       const couldVote = canVote();
       state.side = action.dataset.side;
       postFrame(state.side === 'a' ? 'b' : 'a', { source: 'sp-arena-audio', pause: true });
-      state.seen[state.side] = true;
+      if (state.ready[state.side]) state.seen[state.side] = true;
       drawSide();
       syncGate();
-      if (!couldVote && viewMs() === 0 && canVote() && !state.busy) live('现在可以投票');
+      if (!couldVote && canVote() && !state.busy) live('现在可以投票');
     }
   });
   const onKey = (e) => {
     // Keys belong to a dialog or the reference viewer while either is open.
-    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, textarea, select') || $('dialog[open]') || !$('#lightbox').hidden) return;
+    if (e.repeat || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input, textarea, select') || $('dialog[open]') || !$('#lightbox').hidden) return;
     const key = e.key.toLowerCase();
     const picks = guided ? { a: 'a', s: 'good', x: 'bad', d: 'b' } : { a: 'a', s: 'tie', d: 'b' };
     if (picks[key]) {
@@ -1550,13 +1568,18 @@ function match(root, ctx, first, scope) {
         frameLoads.clear();
         dropSkipReason();
         state.match = state.result = state.pendingPick = state.held = state.needVerify = null;
-        state.counted = 0;
+        state.done.clear();
+        state.unavailable = false;
+        state.round = state.counted = 0;
+        state.ready = {};
+        state.controls = {};
         state.tally = { win: 0, tie: 0, loss: 0 };
         state.place = '';
         humanSheet = null;
         entryToken = '';
         state.busy = false;
         state.pin = pinned();
+        if ($('[data-head]', el)) { drawHeads(); drawMobileControls(); }
         return showError(new Error('登录状态已变化，请重新抽取'));
       }
       if (!state.error) update();

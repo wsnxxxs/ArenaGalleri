@@ -70,12 +70,15 @@ export const categoryLabel = (name) => categoryOf(name)?.label ?? name ?? '';
 export const subcategoriesOf = (name) => categoryOf(name)?.subcategories ?? [];
 export const subcategoryOf = (task) => {
   const sub = typeof task?.subcategory === 'string' ? task.subcategory.trim() : '';
+  // Some design questions recorded their PDF format before they had a subcategory.
+  if (!sub && task?.category === '静态网页' && task.templates?.includes('pdf')) return 'PDF';
   return (sub && subcategoriesOf(task?.category).find((s) => !s.disabled && (s.name === sub || s.aliases?.includes(sub))))?.name ?? '';
 };
 // Unknown categories are judged by vote, as every category was before AI grading.
 export const aiJudged = (task) => categoryOf(task?.category)?.judging === 'ai';
 export const benchmarkTask = (task) => Boolean(task?.benchmarkOnly || categoryOf(task?.category)?.judging === 'benchmark');
 export const votedTask = (task) => !aiJudged(task) && !benchmarkTask(task);
+export const catalogQuestionsForBuild = (tasks, guided) => guided ? tasks : tasks.filter((task) => !benchmarkTask(task));
 export const publishableCategories = () => CATEGORIES.filter((c) => c.publish !== false);
 // Only design questions take PDF; a question moved to another category keeps no PDF format.
 export const pdfTask = (task) => task?.category === '静态网页' && (subcategoryOf(task) === 'PDF' || Boolean(task.templates?.includes('pdf')));

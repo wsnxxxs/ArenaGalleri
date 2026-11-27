@@ -7,7 +7,7 @@
 // save; text that is not a number does, since the server would refuse it. Converted amounts appear
 // only while the server's switch is on.
 import { $, $$, esc, formatTime, icon } from './ui.js';
-import { api, metricsInfo, openDialog, refreshPlatform, toast } from './platform.js';
+import { accountVersion, api, metricsInfo, openDialog, refreshPlatform, toast } from './platform.js';
 import { KINDS, parseAmount, recognize, warnings } from './usage-paste.js';
 import { PAID_BASIS, SOURCES, costOf, costShown, formatMoney, formatTokens, priceFor, tokensOf } from './usage.js';
 import { currencyNow, loadPricing, pricingNow } from './usage-view.js';
@@ -171,6 +171,7 @@ export function bindUsageEntry(block, { modelOf = () => null, draft = {} } = {})
   return {
     fill,
     refresh,
+    setLoading(value) { block.inert = value; block.setAttribute('aria-busy', String(value)); },
     // After a failed read nothing in the block can be edited or saved, and it says why.
     disable(text) {
       $$('input, select, textarea, button', block).forEach((control) => { control.disabled = true; });
@@ -219,48 +220,60 @@ export async function saveUsage(task, id, usage) {
 // or there is none (404). After any other failure the block stays empty and must not be saved, so an
 // unread record is never overwritten.
 export async function loadInto(entry, task, id) {
+  const owner = accountVersion();
+  entry.setLoading(true);
+  void loadPricing().then(() => { if (owner === accountVersion()) entry.refresh(); });
   try {
     const { usage } = await readUsage(task, id);
+    if (owner !== accountVersion()) return false;
     entry.fill(usage, { baseline: true });
     entry.showMeta(usage);
     return true;
   } catch (error) {
+    if (owner !== accountVersion()) return false;
     entry.fill(null, { baseline: true });
     if (error.status === 404) return true;
     entry.disable(`用量没有读出（${error.message}），这次保存不会改动用量。关闭后重新打开再录入。`);
     return false;
+  } finally {
+    if (owner === accountVersion()) entry.setLoading(false);
   }
 }
 
 // The drawer's 「编辑」/「录入」: the block alone in a sheet.
 export function openUsageSheet(work, { modelName } = {}) {
-  void loadPricing();
+  const owner = accountVersion();
   const sheet = openDialog({
     title: '用量',
     className: 'usage-sheet',
+    accountBound: true,
     body: `<form novalidate data-usage-form>${usageEntryHtml()}
-      <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit">保存</button></div></form>`,
+      <div class="sheet-actions"><button class="btn" type="button" data-sheet-close>取消</button><button class="btn primary" type="submit" disabled>保存</button></div></form>`,
   });
   const form = $('[data-usage-form]', sheet.el);
   const entry = bindUsageEntry($('[data-usage-entry]', form), { modelOf: () => ({ id: work.model, name: modelName ?? work.modelName }) });
-  let ready = false;
+  let ready = false, saving = false;
   void loadInto(entry, work.task, work.id).then((ok) => { ready = ok; $('[type="submit"]', form).disabled = !ok; });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!ready) return;
+    if (!ready || saving || !sheet.el.open || owner !== accountVersion()) return;
     const { usage, changed, error } = entry.read();
     if (error) return;
     if (!changed) { sheet.close(); return; }
     const button = $('[type="submit"]', form);
+    saving = true;
     button.disabled = true;
     try {
       await saveUsage(work.task, work.id, usage);
+      if (owner !== accountVersion()) return;
       sheet.close();
       toast(usage ? '用量已保存' : '用量记录已删除');
       await refreshPlatform('edit');
     } catch (err) {
       $('[data-usage-error]', form).textContent = err.message;
       button.disabled = false;
+    } finally {
+      saving = false;
     }
   });
   return sheet;

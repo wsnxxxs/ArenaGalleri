@@ -15,6 +15,10 @@ test('platform keeps the API available across datapack versions', () => {
   assert.equal(compatibleBuild({ datapack: null }, { datapack: null, apiVersion: 2 }), true);
   assert.equal(compatibleBuild({ datapack: null, catalogDigest: 'c'.repeat(64) }, { datapack: null, catalogDigest: 'c'.repeat(64), apiVersion: 2 }), true);
   assert.equal(staleBuild({ datapack: null, catalogDigest: 'c'.repeat(64) }, { datapack: null, catalogDigest: 'd'.repeat(64), apiVersion: 2 }), true);
+  const local = { datapack: null, catalogDigest: 'c'.repeat(64) };
+  assert.equal(staleBuild(local, { datapack: build.datapack, catalogDigest: 'd'.repeat(64) }), true);
+  assert.equal(staleBuild(local, { datapack: build.datapack, catalogDigest: local.catalogDigest }), false);
+  assert.equal(staleBuild(local, { datapack: build.datapack }), false);
   assert.equal(compatibleBuild({}, { datapack: null, apiVersion: 2 }), false);
 });
 
