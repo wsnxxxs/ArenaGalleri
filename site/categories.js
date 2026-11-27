@@ -25,13 +25,11 @@ export const CATEGORIES = [
     ],
   },
   {
-    name: '静态网页', label: '设计', note: '网页、像素画与办公排版', slug: 'page', glyph: 'desktop', templates: ['static'], judging: 'vote',
+    name: '静态网页', label: '设计', note: '网页、像素画与 PDF 文档排版', slug: 'page', glyph: 'desktop', templates: ['static'], judging: 'vote',
     subcategories: [
       { name: '网页', label: '网页' },
       { name: '像素画', label: '像素画' },
-      { name: 'Word', label: 'Word' },
-      { name: 'PPT', label: 'PPT' },
-      { name: 'Excel', label: 'Excel' },
+      { name: 'PDF', label: 'PDF', templates: ['pdf'] },
     ],
   },
   {
@@ -49,8 +47,12 @@ export const CATEGORIES = [
       { name: '词曲', label: '词曲' },
     ],
   },
+  {
+    name: '后端', label: '后端', note: '离线闭卷后端工程基准 · 仅展示排名数据', slug: 'backend', glyph: 'terminal', templates: [], judging: 'benchmark', publish: false,
+    subcategories: [],
+  },
 ];
-export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '单个 HTML 文件', audio: '单个 MP3 音频' };
+export const TEMPLATE_LABELS = { text: '纯文本 / Markdown', static: '单个 HTML 文件', audio: '单个 MP3 音频', pdf: '单个 PDF 文件' };
 // The backend may send its own list in bootstrap (`domains`); this one stands in without it.
 export const DOMAIN_GROUPS = [
   { title: '理工与健康', domains: ['数学', '物理', '化学', '生物', '天文', '计算机技术', '工程技术', '医学健康', '地理环境'] },
@@ -71,7 +73,10 @@ export const subcategoryOf = (task) => {
 };
 // Unknown categories are judged by vote, as every category was before AI grading.
 export const aiJudged = (task) => categoryOf(task?.category)?.judging === 'ai';
-export const votedTask = (task) => !aiJudged(task);
+export const benchmarkTask = (task) => Boolean(task?.benchmarkOnly || categoryOf(task?.category)?.judging === 'benchmark');
+export const votedTask = (task) => !aiJudged(task) && !benchmarkTask(task);
+export const publishableCategories = () => CATEGORIES.filter((c) => c.publish !== false);
+export const pdfTask = (task) => Boolean(task && (subcategoryOf(task) === 'PDF' || (Array.isArray(task.templates) && task.templates.includes('pdf'))));
 // Reserved for AI grading: { score, max, judge, rationale } on a work, null until a grade arrives.
 export function aiScoreOf(work) {
   const grade = work?.aiScore;
@@ -80,8 +85,12 @@ export function aiScoreOf(work) {
 }
 // Questions that predate formats take their category's; the category itself is never a tag.
 // Pages arrive as one HTML file only: questions stored with the retired ZIP format `vite` take `static`.
-export const templatesOf = (task) => [...new Set((task.templates?.length ? task.templates : categoryOf(task.category)?.templates ?? ['static'])
-  .map((type) => (type === 'vite' ? 'static' : type)))];
+export function templatesOf(task) {
+  if (benchmarkTask(task)) return [];
+  if (pdfTask(task)) return ['pdf'];
+  return [...new Set((task?.templates?.length ? task.templates : categoryOf(task?.category)?.templates ?? ['static'])
+    .map((type) => (type === 'vite' ? 'static' : type)))];
+}
 export const domainsOf = (task) => task.domains ?? [];
 export const domainList = (platform) => (platform?.domains?.length ? platform.domains : DOMAINS);
 // Groups organize the picker only; the API's list remains authoritative for allowed values.
@@ -113,7 +122,19 @@ const SNIPPET = { before: 18, after: 36 };
 
 const searchWords = (query) => query.split(/\s+/).map((word) => fold(word).folded).filter(Boolean);
 // The separator survives folding, so a word cannot run from the title into the summary.
-const questionText = (task) => fold([task.title, task.summary, categoryLabel(task.category), translateText(categoryLabel(task.category)), subcategoryOf(task), translateText(subcategoryOf(task)), ...domainsOf(task), ...domainsOf(task).map(translateText)].join('|')).folded;
+const questionText = (task) => fold([
+  task.title,
+  task.summary,
+  categoryLabel(task.category),
+  translateText(categoryLabel(task.category)),
+  subcategoryOf(task),
+  translateText(subcategoryOf(task)),
+  ...(Array.isArray(task.languages) ? task.languages : []),
+  task.languageLabel,
+  task.benchmark?.tier,
+  ...domainsOf(task),
+  ...domainsOf(task).map(translateText),
+].join('|')).folded;
 const promptTexts = (task) => [task.prompt ?? '', ...(task.promptVariants ?? []).map((variant) => variant.prompt ?? '')]
   .filter(Boolean).map((text) => ({ text, ...fold(text, true) }));
 

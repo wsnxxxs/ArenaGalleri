@@ -11,7 +11,7 @@ import { onWorkFieldChange, readWorkFields, registeredModel, workFieldsHtml } fr
 import { bindUsageEntry, saveUsage, usageEntryHtml } from './usage-entry.js';
 import { loadPricing } from './usage-view.js';
 import { TEMPLATE_LABELS, templatesOf } from './categories.js';
-import { MUSIC_LLM_NOTICE } from './question-fields.js';
+import { MUSIC_LLM_NOTICE, PDF_SUBCATEGORY_NOTICE } from './question-fields.js';
 import { linkReferences, referenceSheet } from './references.js';
 
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-downloads';
@@ -26,6 +26,7 @@ const FILES = {
   text: { accept: '.txt,.md,.markdown,text/plain,text/markdown', pattern: /\.(txt|md|markdown)$/i, prompt: '拖入 .txt 或 .md 文本文件', error: '文学作品请上传 .txt 或 .md 文本文件' },
   static: { accept: '.html,.htm,text/html', pattern: /\.html?$/i, prompt: '拖入单个 HTML 文件', error: '设计和三维作品请上传单个 .html 文件' },
   audio: { accept: '.mp3,audio/mpeg', pattern: /\.mp3$/i, prompt: '拖入单个 .mp3 音频文件', error: '音乐作品必须只上传一个 .mp3 文件（不接受压缩包或其他音频格式）' },
+  pdf: { accept: '.pdf,application/pdf', pattern: /\.pdf$/i, prompt: '拖入单个 .pdf 文件', error: 'PDF 题目只接受单个 .pdf 文件，不接受 HTML 或其他格式' },
 };
 // A page is one HTML file of at most 30 MB, whatever the server would take.
 const HTML_BYTES = 30 * 1024 * 1024;
@@ -128,6 +129,7 @@ export function uploadFlow(root, ctx, options) {
   let usageEntry = null;
   const isText = () => state.template === 'text';
   const isAudio = () => state.template === 'audio' || task.category === '音乐';
+  const isPdf = () => state.template === 'pdf';
 
   const maxBytes = () => (state.template === 'text' ? platform.site.limits.uploadBytes : Math.min(platform.site.limits.uploadBytes, HTML_BYTES));
   const pendingFull = () => pendingLimit() !== null && (platform.me?.pending ?? 0) >= pendingLimit();
@@ -146,6 +148,12 @@ export function uploadFlow(root, ctx, options) {
         '每次提交只能包含一个有效的 <code>.mp3</code> 音频文件，不接受压缩包、多个文件或 WAV/FLAC/MIDI 等其他格式。',
         '平台会在试加载与双盲测试页面中统一提供播放键、进度条与音频全程频谱，文件名和标签信息不会在盲评中展示。'],
     };
+    if (state.template === 'pdf') return {
+      summary: ['单个 <code>.pdf</code> 文件', `最大 ${formatBytes(maxBytes())}`],
+      rules: [esc(PDF_SUBCATEGORY_NOTICE),
+        '每次提交只能包含一个有效的 <code>.pdf</code> 文件，不接受 <code>.html</code>、压缩包或其他格式。',
+        '请在下面试加载窗口翻阅一遍，确认 PDF 每一页排版与图像都解析正常。'],
+    };
     return {
       summary: ['单个 <code>.html</code> 文件', `最大 ${formatBytes(maxBytes())}`],
       rules: ['脚本、样式、贴图和模型都写进这一个 HTML（内联或 data: URL）；不接受 ZIP，平台也不执行构建。',
@@ -163,9 +171,10 @@ export function uploadFlow(root, ctx, options) {
       return `<div class="step-body">${taskLabel}<div class="notice">${icon('mail')}<p>账号需要先绑定邮箱，才能上传作品。</p><button class="btn primary sm" data-bind-email>绑定邮箱</button></div></div>`;
     }
     const musicNotice = isAudio() ? `<div class="notice music-llm-notice" data-selected="1">${icon('music')}<p>${esc(MUSIC_LLM_NOTICE)}</p></div>` : '';
+    const pdfNotice = isPdf() ? `<div class="notice music-llm-notice" data-selected="1">${icon('file')}<p>${esc(PDF_SUBCATEGORY_NOTICE)}</p></div>` : '';
     if (state.draft) {
       const d = state.draft;
-      return `<div class="step-body">${taskLabel}${musicNotice}
+      return `<div class="step-body">${taskLabel}${musicNotice}${pdfNotice}
         ${state.notice === 'prompt' ? `<div class="notice is-stale" data-sample-notice>${icon('alert')}<p><b>提示词改过了</b>示例结果需要按新的提示词生成。如果这份文件是按旧提示词生成的，请点「重新选择文件」替换；仍然适用的话，在下面重新确认试加载即可。</p></div>` : ''}
         <p class="file-line">${icon('file')}<b data-i18n-ignore>${esc(d.sourceName)}</b><span>${d.files} 个文件 · ${formatBytes(d.bytes)}</span></p>
         <ul class="checks">${d.checks.map(checkRow).join('')}</ul>
@@ -181,7 +190,7 @@ export function uploadFlow(root, ctx, options) {
           <span class="drop-meta"><span>或点击选择</span>${summary.map((item) => `<span>${item}</span>`).join('')}</span>
           <input type="file" accept="${FILES[state.template].accept}" hidden>
         </div>`;
-    return `<div class="step-body">${taskLabel}${musicNotice}
+    return `<div class="step-body">${taskLabel}${musicNotice}${pdfNotice}
       ${templates.length > 1 ? `<label class="field"><span class="field-label">提交格式</span><select class="input" data-template${state.uploading ? ' disabled' : ''}>${templates.map((value) => `<option value="${value}"${value === state.template ? ' selected' : ''}>${TEMPLATE_LABELS[value]}</option>`).join('')}</select></label>` : ''}
       ${options.lead ? '' : promptPeek()}
       ${state.notice?.file ? `<div class="notice is-stale" data-sample-notice>${icon('alert')}<p><b>原来的文件不再适用</b><span>提交格式改为</span> <span>${esc(TEMPLATE_LABELS[state.template])}</span> · <span>已移除文件</span> <span data-i18n-ignore>${esc(state.notice.file)}</span> · <span>请重新选择文件。填过的结果信息会保留。</span></p></div>` : ''}
@@ -271,7 +280,7 @@ export function uploadFlow(root, ctx, options) {
   const confirmText = () => {
     const t = state.trial;
     const warned = t.errors.length || t.failed.length || t.blocked.length || state.draft?.checks.some((c) => c.state === 'warn');
-    return `${isText() ? '我已看过排版后的全文' : state.template === 'audio' ? '我已试听过音频并查看全程频谱' : '我已亲自操作过作品'}，它与题目相符${warned ? '，也看过了上面的提示' : ''}`;
+    return `${isText() ? '我已看过排版后的全文' : state.template === 'audio' ? '我已试听过音频并查看全程频谱' : isPdf() ? '我已翻阅过 PDF 每一页' : '我已亲自操作过作品'}，它与题目相符${warned ? '，也看过了上面的提示' : ''}`;
   };
 
   function stepTwo() {
@@ -353,7 +362,7 @@ export function uploadFlow(root, ctx, options) {
         <div class="submit-main">${state.result ? done() : [
           options.lead?.html() ?? '',
           step(1, steps[offset], options.fileNote ?? '', stepOne(), { doneStep: Boolean(state.draft), action: state.draft ? `<button class="link step-action" data-act="restart">${isText() ? '修改原文' : '重新选择文件'}</button>` : '' }),
-          step(2, steps[offset + 1], state.draft && !state.confirmed ? isText() ? '请在下面通读一遍' : '请在下面亲自操作一遍' : '', stepTwo(), { locked: !state.draft, doneStep: state.confirmed }),
+          step(2, steps[offset + 1], state.draft && !state.confirmed ? isText() ? '请在下面通读一遍' : isPdf() ? '请在下面翻阅一遍，确认 PDF 每一页都解析正常' : '请在下面亲自操作一遍' : '', stepTwo(), { locked: !state.draft, doneStep: state.confirmed }),
           step(3, options.infoLabel ?? '作品信息', state.confirmed ? '核验时会对照这些信息' : '', stepThree(), { locked: !state.confirmed }),
         ].join('')}</div>
         ${state.result ? '' : `<aside class="submit-aside">
@@ -469,7 +478,13 @@ export function uploadFlow(root, ctx, options) {
   function pickFiles(fileList) {
     if (!fileList?.length) return;
     if (fileList.length > 1) {
-      state.error = state.template === 'audio' ? '音乐作品必须只上传一个 .mp3 文件，请勿同时选择或拖入多个文件' : '每次只能上传一个文件';
+      state.error = state.template === 'audio' ? '音乐作品必须只上传一个 .mp3 文件，请勿同时选择或拖入多个文件'
+        : state.template === 'pdf' ? 'PDF 题目只接受单个 .pdf 文件，请勿同时选择或拖入多个文件'
+          : '每次只能上传一个文件';
+      return draw();
+    }
+    if (state.template === 'pdf' && /\.html?$/i.test(fileList[0].name)) {
+      state.error = 'PDF 题目不接受 HTML 文件，请上传单个 .pdf 文件';
       return draw();
     }
     return upload(fileList[0]);

@@ -33,7 +33,7 @@ function questionRows(tasks, { now = Date.now(), modelKey = work => work.model ?
     }
     const published = timestamp(task.createdAt) ?? timestamp(task.date);
     const age = published === null ? Infinity : day - Math.floor(published / DAY);
-    const open = task.acceptsUploads !== false && !task.promptPending;
+    const open = task.acceptsUploads !== false && !task.promptPending && !task.benchmarkOnly && task.category !== '后端';
     return { task, answers: answers.length, models: models.size, open,
       recent: open && published !== null && published <= now && age >= 0 && age < 7,
       score: 2 * Math.log1p(models.size) + Math.log1p([...models.values()].reduce((sum, value) => sum + value, 0))

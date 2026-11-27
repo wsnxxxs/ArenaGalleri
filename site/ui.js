@@ -54,6 +54,7 @@ const ICONS = {
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   blind: '<rect x="3" y="5.5" width="7.5" height="13" rx="1.5"/><rect x="13.5" y="5.5" width="7.5" height="13" rx="1.5"/><path d="M6.75 10.5v.01M17.25 10.5v.01M5.5 14h2.5M16 14h2.5"/>',
   music: '<path d="M9 17.5V6l10-2v11.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>',
+  terminal: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="m7.5 9.5 3 2.5-3 2.5M12.5 14.5h4"/>',
 };
 export const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 // Same mark as assets/logo.svg, drawn with theme colours: a solid line (一) over a broken one (亿样).

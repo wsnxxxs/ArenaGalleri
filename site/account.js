@@ -5,8 +5,8 @@ import { memberChips, memberList, memberResults, membersState, openMember } from
 import { accountVersion, api, apiRemembered, arenaText, autoRejected, avatarFace, byStaff, canDecide, levelBadge, levelOf, confirmDialog, injected, isSenior, isStaff, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, recall, refreshPlatform, requireUser, reviewCount, reviewVerdict, riskLabels, ROLE_LABELS, setFaces, statusBadge, toast, updateRememberedReviewWork } from './platform.js';
 import { effortOptions, onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { openWorkManagement } from './work-management.js';
-import { CATEGORIES, categoryLabel, domainsOf, matchesQuery } from './categories.js';
-import { categoryField, domainField, syncDomains } from './question-fields.js';
+import { CATEGORIES, TEMPLATE_LABELS, categoryLabel, domainsOf, matchesQuery, subcategoriesOf, subcategoryOf } from './categories.js';
+import { categoryField, domainField, subcategoryFieldHtml, syncDomains } from './question-fields.js';
 import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
 import { sticker, stickerName } from './stickers.js';
@@ -303,7 +303,7 @@ function questionRow(ctx, question) {
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
     <div class="submission-question-body"><h3>${hidden ? `<span data-i18n-ignore>${esc(question.title)}</span>` : `<a href="#/${esc(question.id)}" data-i18n-ignore>${esc(question.title)}</a>`}${moderationBadge(m, HELD.question[m.status], QUESTION_LABELS)}${again ? `<span class="badge">第 ${m.round} 次提交</span>` : ''}</h3>
       <p class="summary" data-i18n-ignore>${esc(question.summary)}</p>
-      <p class="work-meta">${[categoryLabel(question.category), ...domainsOf(question)].filter(Boolean).map((label) => `<span>${esc(label)}</span>`).join(' · ')}<span>${esc(question.date)}${hidden ? '' : ` · ${works} 件作品`}</span></p>
+      <p class="work-meta">${[categoryLabel(question.category), subcategoryOf(question), ...(subcategoryOf(question) === 'PDF' ? [TEMPLATE_LABELS.pdf] : []), ...domainsOf(question)].filter(Boolean).map((label) => `<span>${esc(label)}</span>`).join(' · ')}<span>${esc(question.date)}${hidden ? '' : ` · ${works} 件作品`}</span></p>
       ${note}
     </div><div class="actions">${hidden ? '' : `<a class="btn sm" href="#/${esc(question.id)}">查看题目${icon('next')}</a>`}${resubmit ? `<a class="btn sm primary" href="#/new/${encodeURIComponent(question.id)}">修改后重新提交${icon('next')}</a>` : ''}${works && !hidden ? '' : `<button class="icon-btn" data-delete-question="${esc(question.id)}" title="删除题目" aria-label="删除「${esc(question.title)}」">${icon('trash')}</button>`}</div>
   </article>`;
@@ -974,7 +974,7 @@ function reviewQuestionRow(ctx, q, picked) {
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
     <div class="submission-question-body"><h3>${shown ? `<a href="#/${esc(q.id)}" data-i18n-ignore><span data-i18n-ignore>${esc(q.title)}</span></a>` : `<span data-i18n-ignore><span data-i18n-ignore>${esc(q.title)}</span></span>`}${moderationBadge(q.moderation, '', QUESTION_LABELS)}${q.moderation?.previous ? `<span class="badge">重新提交 · 第 ${q.moderation.round} 次</span>` : ''}</h3>
       <p class="summary" data-i18n-ignore>${esc(q.summary)}</p>
-      <p class="work-meta">${publisherHtml(ctx, q)}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.category ? `<span>${esc(categoryLabel(q.category))}</span>` : ''}${domainsOf(q).map((d) => `<span>${esc(d)}</span>`).join('')}</p>
+      <p class="work-meta">${publisherHtml(ctx, q)}<span>${esc(q.date)} · ${q.works ?? 0} 件作品</span>${q.category ? `<span>${esc(categoryLabel(q.category))}</span>` : ''}${subcategoryOf(q) ? `<span>${esc(subcategoryOf(q))}</span>` : ''}${subcategoryOf(q) === 'PDF' ? `<span>${esc(TEMPLATE_LABELS.pdf)}</span>` : ''}${domainsOf(q).map((d) => `<span>${esc(d)}</span>`).join('')}</p>
       ${detail ? `<p class="result-reason">${icon(status === 'rejected' ? 'alert' : 'guide')}<span>${esc(detail)}</span></p>` : ''}
       ${resubmission(q)}
       ${samples.length ? `<ul class="question-samples">${samples.map(sampleRow).join('')}</ul>` : shown ? '' : '<p class="result-reason"><span>没有附带示例结果。</span></p>'}
@@ -1006,7 +1006,7 @@ function catalogRow(ctx, q, buckets) {
     <span class="submission-question-mark" aria-hidden="true">${icon('text')}</span>
     <div class="submission-question-body"><h3>${shown ? `<a href="#/${esc(q.id)}" data-i18n-ignore><span data-i18n-ignore>${esc(q.title)}</span></a>` : `<span data-i18n-ignore><span data-i18n-ignore>${esc(q.title)}</span></span>`}${shown ? '' : `<span class="status status-${waiting ? 'unverified' : 'questioned'}">${icon(waiting ? 'clock' : 'alert')}${waiting ? '待审核' : '未公开'}</span>`}${shown && !q.acceptsUploads ? '<span class="badge">不收投稿</span>' : ''}</h3>
       <p class="summary" data-i18n-ignore>${esc(q.summary)}</p>
-      <p class="work-meta">${publisherHtml(ctx, q)}${q.date ? `<span>${esc(q.date)}</span>` : ''}${q.category ? `<span>${esc(categoryLabel(q.category))}</span>` : ''}${domainsOf(q).map((d) => `<span>${esc(d)}</span>`).join('')}</p>
+      <p class="work-meta">${publisherHtml(ctx, q)}${q.date ? `<span>${esc(q.date)}</span>` : ''}${q.category ? `<span>${esc(categoryLabel(q.category))}</span>` : ''}${subcategoryOf(q) ? `<span>${esc(subcategoryOf(q))}</span>` : ''}${subcategoryOf(q) === 'PDF' ? `<span>${esc(TEMPLATE_LABELS.pdf)}</span>` : ''}${domainsOf(q).map((d) => `<span>${esc(d)}</span>`).join('')}</p>
       <p class="work-meta">${q.works ?? buckets.length} 件作品${counts.length ? ` · ${counts.join(' · ')}` : ''}${shown ? `<span>盲评池 ${pool?.works ?? 0} 件 · ${pool?.entries ?? 0} 个配置</span>` : ''}</p>
       ${q.moderation?.status === 'rejected' && q.moderation.reason ? `<p class="result-reason">${icon('alert')}<span><span data-i18n-ignore>${esc(q.moderation.reason)}</span></span></p>` : ''}
     </div>
@@ -1023,7 +1023,33 @@ function catalogRow(ctx, q, buckets) {
 
 // The question type and domains, shared with the publishing form.
 function categoryFields(q) {
-  return categoryField(q.category) + domainField(platform, domainsOf(q));
+  return categoryField(q.category, q.subcategory) + domainField(platform, domainsOf(q));
+}
+function bindQuestionCategoryForm(form) {
+  syncDomains(form);
+  form.addEventListener('change', (event) => {
+    if (event.target.matches?.('[name="domains"]')) { syncDomains(form); return; }
+    if (event.target.matches?.('[name="category"]')) {
+      const cat = event.target.value;
+      const enabledSubs = subcategoriesOf(cat).filter((s) => !s.disabled);
+      const currentSub = form.querySelector('[name="subcategory"]:checked')?.value ?? '';
+      const nextSub = enabledSubs.some((s) => s.name === currentSub) ? currentSub : (enabledSubs[0]?.name ?? '');
+      const picker = $('[data-subcategory-picker]', form);
+      if (picker) picker.innerHTML = subcategoryFieldHtml(cat, nextSub);
+    }
+    if (event.target.matches?.('[name="category"], [name="subcategory"]')) {
+      const cat = form.querySelector('[name="category"]:checked')?.value ?? '';
+      const sub = form.querySelector('[name="subcategory"]:checked')?.value ?? '';
+      const musicNotice = $('[data-music-category-notice]', form);
+      if (musicNotice) musicNotice.toggleAttribute('data-selected', cat === '音乐');
+      const pdfNotice = $('[data-pdf-subcategory-notice]', form);
+      if (pdfNotice) {
+        const isPdf = cat === '静态网页' && sub === 'PDF';
+        pdfNotice.hidden = !isPdf;
+        pdfNotice.toggleAttribute('data-selected', isPdf);
+      }
+    }
+  });
 }
 const questionShown = (q) => ['legacy', 'approved'].includes(q.moderation?.status ?? 'legacy');
 
@@ -1049,8 +1075,7 @@ function decideQuestion(q, status, current = () => true) {
       </form>`,
     });
     const form = $('[data-q-form]', sheet.el);
-    syncDomains(form);
-    form.addEventListener('change', () => syncDomains(form));
+    bindQuestionCategoryForm(form);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const reason = form.reason.value.trim();
@@ -1058,12 +1083,18 @@ function decideQuestion(q, status, current = () => true) {
       if (status === 'rejected' && !reason) { error.textContent = '请写明拒绝理由'; form.reason.focus(); return; }
       const category = form.category?.value;
       if (status === 'approved' && !category) { error.textContent = '请选择题目类型'; $('[name="category"]', form).focus(); return; }
+      const subcategory = form.subcategory?.value?.trim() || '';
       const domains = $$('[name="domains"]:checked', form).map((box) => box.value);
       if (status === 'approved' && !domains.length) { error.textContent = '请选择所属领域'; return; }
       const button = $('[type="submit"]', form);
       button.disabled = true;
       try {
-        await api(`questions/${encodeURIComponent(q.id)}/moderation`, { method: 'POST', body: { status, reason, ...(category ? { category, domains } : {}) } });
+        const templates = category === '静态网页' && subcategory === 'PDF' ? ['pdf']
+          : category === '静态网页' && q.subcategory === 'PDF' ? ['static'] : undefined;
+        await api(`questions/${encodeURIComponent(q.id)}/moderation`, {
+          method: 'POST',
+          body: { status, reason, ...(category ? { category, domains, ...(subcategory ? { subcategory } : {}), ...(templates ? { templates } : {}) } : {}) },
+        });
         saved = true;
         sheet.close();
         // Settle on success too, so the list refreshes even if the close event never arrives.
@@ -1107,9 +1138,8 @@ function editQuestion(q, works = [], current = () => true) {
       </form>`,
     });
     const form = $('[data-q-edit-form]', sheet.el);
-    syncDomains(form);
+    bindQuestionCategoryForm(form);
     refs?.mount($('[data-ref-host]', form));
-    form.addEventListener('change', () => syncDomains(form));
     form.prompt.addEventListener('input', () => refs?.advise());
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1125,6 +1155,10 @@ function editQuestion(q, works = [], current = () => true) {
       const category = form.category.value;
       if (!category) { error.textContent = '请选择题目类型'; return; }
       if (category !== q.category) body.category = category;
+      const subcategory = form.subcategory?.value?.trim() ?? '';
+      if (subcategory !== (q.subcategory ?? '')) body.subcategory = subcategory;
+      if (category === '静态网页' && subcategory === 'PDF' && !q.templates?.includes('pdf')) body.templates = ['pdf'];
+      else if (category === '静态网页' && subcategory !== 'PDF' && q.templates?.includes('pdf')) body.templates = ['static'];
       const domains = $$('[name="domains"]:checked', form).map((box) => box.value);
       if (!domains.length) { error.textContent = '请选择所属领域'; return; }
       if ([...domains].sort().join('|') !== [...domainsOf(q)].sort().join('|')) body.domains = domains;
