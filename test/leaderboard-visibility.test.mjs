@@ -43,7 +43,7 @@ test('single-question boards show small entries and aggregate boards renumber af
       rank: 1, works: 1, score: 1300, interval: 100, games: 21, wins: 13, draws: 0, losses: 8, winRate: 13 / 21, provisional: true };
     const large = { ...small, key: 'large', modelName: 'Large sample sentinel', model: 'large', rank: 2, works: 5, score: 1200 };
     return Response.json({ by: params.get('by'), rows: params.has('task') ? [small] : [small, large],
-    unranked: [], totals: { votes: 21, voters: 3 }, provisionalGames: 30 });
+    unranked: [], totals: { votes: 21, voters: 3 } });
   };
   try {
     const { mountBoard } = await import('../site/leaderboard.js');
@@ -61,7 +61,7 @@ test('single-question boards show small entries and aggregate boards renumber af
         assert.equal(delivered.by, by);
         if (task) {
           assert.match(container.innerHTML, /Small sample sentinel/);
-          assert.match(container.innerHTML, /class="badge provisional"[^>]*>暂定/);
+          assert.match(container.innerHTML, /class="badge provisional" title="比较少于 30 次">暂定/);
           assert.doesNotMatch(container.innerHTML, /data-board-small|5 件/);
           assert.equal(visibleRows, 1);
           assert.equal(settings.get('board-show-small-samples'), 'false');
@@ -79,7 +79,7 @@ test('single-question boards show small entries and aggregate boards renumber af
         };
         toggle(true);
         assert.match(container.innerHTML, /Small sample sentinel/);
-        assert.match(container.innerHTML, /class="badge provisional"[^>]*>暂定/);
+        assert.match(container.innerHTML, /class="badge provisional" title="比较少于 30 次">暂定/);
         assert.deepEqual(ranks(), ['01', '02']);
         assert.equal(visibleRows, 2); assert.equal(delivered.rows[1].rank, 2);
         assert.equal(settings.get('board-show-small-samples'), 'true');

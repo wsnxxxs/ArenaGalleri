@@ -1,7 +1,7 @@
 // Reference images given to every model with a question: the sheet shown with the prompt, its
 // viewer and zip download, and the editor used when publishing or editing a question.
 import { $, esc, formatBytes, icon, pad, versionedMedia } from './ui.js';
-import { createUploadRequest } from './platform-api.js';
+import { createUploadRequest, mediaCredentials } from './platform-api.js';
 import { platform, toast } from './platform.js';
 import { REFERENCE_TYPES, referenceAdvice, referenceName, referenceNote, referenceStem, zipStore } from './reference-files.js';
 
@@ -53,7 +53,8 @@ async function downloadAll(button, set) {
   label.textContent = '打包中…';
   try {
     const files = await Promise.all(set.refs.map(async (ref) => {
-      const response = await fetch(media(ref.src), { credentials: 'include' });
+      const href = media(ref.src);
+      const response = await fetch(href, { credentials: mediaCredentials(href) });
       if (!response.ok) throw new Error(String(response.status));
       return { name: ref.name, bytes: new Uint8Array(await response.arrayBuffer()) };
     }));
@@ -64,6 +65,7 @@ async function downloadAll(button, set) {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   } catch {
+    if (!button.isConnected) return;
     toast('打包下载失败，可以在大图里逐张下载');
     openReference(set, 0);
   } finally {
@@ -75,7 +77,7 @@ async function downloadAll(button, set) {
 // A blob keeps the supplied filename when the image is hosted by the separate API.
 export async function downloadReference({ href, name }) {
   try {
-    const response = await fetch(href, { credentials: 'include' });
+    const response = await fetch(href, { credentials: mediaCredentials(href) });
     if (!response.ok) throw new Error(String(response.status));
     const url = URL.createObjectURL(await response.blob());
     const link = Object.assign(document.createElement('a'), { href: url, download: name });

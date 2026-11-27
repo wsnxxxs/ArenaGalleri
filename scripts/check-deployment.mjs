@@ -1,6 +1,6 @@
 // Check the API configured by the published Gallery, rather than an unrelated API URL.
 import assert from 'node:assert/strict';
-import { compatibleBuild, staleBuild } from '../site/platform-api.js';
+import { compatibleBuild } from '../site/platform-api.js';
 
 const [siteUrl, expectedApiUrl] = process.argv.slice(2);
 assert.ok(siteUrl && expectedApiUrl, 'Usage: npm run check:deployment -- <gallery URL> <expected API directory URL>');
@@ -33,7 +33,9 @@ const validation = await fetch(new URL('catalog', actualApi), { headers: { Origi
 // A concurrent publication may legitimately replace the catalog during this check.
 assert.ok([200, 304].includes(validation.status), `Catalog revalidation: HTTP ${validation.status}`);
 if (validation.status === 200) {
-  assert.notEqual(validation.headers.get('etag')?.replace(/^W\//, ''), etag.replace(/^W\//, ''),
+  const updatedTag = validation.headers.get('etag');
+  assert.ok(updatedTag, 'An updated catalog must still have a validator');
+  assert.notEqual(updatedTag.replace(/^W\//, ''), etag.replace(/^W\//, ''),
     'An unchanged catalog must return 304; check whether the proxy forwards If-None-Match');
 }
 assert.equal(validation.headers.get('access-control-allow-origin'), site.origin, 'Revalidation must retain CORS headers');
@@ -43,6 +45,15 @@ assert.equal(session.headers.get('cache-control'), 'no-store', 'Session must not
 assert.equal((await session.json()).user, null, 'Credential-free deployment check must remain anonymous');
 const catalog = await (await read('data.json')).json();
 assert.ok(compatibleBuild(catalog.buildInfo, bootstrap), 'Published Gallery and configured API must be compatible');
-assert.ok(!staleBuild(catalog.buildInfo, bootstrap), 'Published Gallery and configured API must use the same datapack');
-assert.ok(bootstrap.questions.length >= catalog.tasks.length, 'Configured API must include the packaged questions');
+const { datapack, catalogDigest } = catalog.buildInfo;
+if (datapack === null) {
+  assert.match(catalogDigest ?? '', /^[a-f0-9]{64}$/, 'A local build requires its catalog digest');
+  assert.equal(bootstrap.catalogDigest, catalogDigest, 'Published Gallery and configured API must use the same catalog');
+} else {
+  assert.match(datapack, /^[a-f0-9]{40}$/, 'A pinned build requires its full commit SHA');
+  assert.equal(bootstrap.datapack, datapack, 'Published Gallery and configured API must use the same datapack');
+}
+const questionIds = new Set(bootstrap.questions.map(question => question.id));
+const missing = catalog.tasks.filter(task => !questionIds.has(task.id));
+assert.equal(missing.length, 0, `Configured API is missing packaged questions: ${missing.map(task => task.id).join(', ')}`);
 console.log(JSON.stringify({ api: actualApi, questions: bootstrap.questions.length, communityQuestions: bootstrap.questions.filter((q) => !catalog.tasks.some((t) => t.id === q.id)).length, works: bootstrap.works.length, server: bootstrap.serverVersion, revalidation: validation.status, session: session.status }));

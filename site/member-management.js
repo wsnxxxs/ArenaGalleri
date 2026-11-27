@@ -1,6 +1,6 @@
 // 全部成员 for senior admins: the member list and its role sheet. The backend enforces the same rules.
 import { $, esc, formatDate, formatTime, icon } from './ui.js';
-import { api, avatarFace, levelBadge, levelOf, levelText, openDialog, platform, toast } from './platform.js';
+import { accountVersion, api, avatarFace, levelBadge, levelOf, levelText, openDialog, platform, toast } from './platform.js';
 
 const FILTERS = [['all', '全部'], ['3', 'Lv3 高级管理员'], ['2', 'Lv2 普通管理员'], ['1', 'Lv1 认证成员'], ['0', 'Lv0 成员'], ['trusted', '可信成员']];
 const SORTS = { seen: '最近活跃', latest: '最新注册', oldest: '最早注册', works: '投稿最多', votes: '计票最多' };
@@ -99,10 +99,11 @@ export function memberList(state, pagination = '') {
 
 // Level history comes from the shared audit log, whose 'role' entries read "name → 等级".
 export function openMember(m, { audit = [], onSaved }) {
+  const owner = accountVersion();
   const locked = lockReason(m);
   const { verified, questioned, pending, rejected } = m.works;
   const log = audit.filter((entry) => entry.action === 'role' && entry.detail?.startsWith(`${m.name} → `));
-  const sheet = openDialog({ title: '管理成员', className: 'member-sheet', body: `<form novalidate>
+  const sheet = openDialog({ accountBound: true, title: '管理成员', className: 'member-sheet', body: `<form novalidate>
     <div class="member-body"><div class="member-grid">
       <aside class="member-facts">
         <div class="member-id">${face(m)}<div><h3 data-i18n-ignore>${esc(m.nickname)}</h3><p data-i18n-ignore>@${esc(m.name)}</p></div></div>
@@ -117,7 +118,7 @@ export function openMember(m, { audit = [], onSaved }) {
           ${level(m) < 2 ? `<div><dt>资格考试</dt><dd>${m.exam?.passedAt ? `通过考试 · ${dateHtml(m.exam.passedAt)}` : examLine(m)}</dd></div>` : ''}
           <div><dt>待审额度</dt><dd>${quota(m)}${level(m) < 2 && !m.trusted ? `<p>可信成员需已核验满 3 件且近 90 天无存疑（现在已核验 ${verified} 件）。</p>` : ''}</dd></div>
         </dl>
-        <div class="actions"><a class="btn sm" href="#/review/works?${encodeURIComponent(new URLSearchParams({ q: m.nickname }))}">在全部作品中查看${icon('right')}</a></div>
+        <div class="actions"><a class="btn sm" data-sheet-close href="#/review/works?${encodeURIComponent(new URLSearchParams({ q: m.nickname }))}">在全部作品中查看${icon('right')}</a></div>
         <details><summary>等级记录 · ${log.length}</summary>
           ${log.length ? `<ol class="audit">${log.map((entry) => `<li>${timeHtml(entry.at)}<span class="audit-actor" data-i18n-ignore>${esc(entry.actor)}</span><b>调整等级</b><span data-i18n-ignore>${esc(entry.detail)}</span></li>`).join('')}</ol>` : '<p class="muted">最近的审核记录里没有等级调整。</p>'}
         </details>
@@ -146,15 +147,19 @@ export function openMember(m, { audit = [], onSaved }) {
   form.addEventListener('change', sync);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (form.inert || submit.disabled || owner !== accountVersion()) return;
     const next = Number(form.elements.level.value);
+    form.inert = true;
     submit.disabled = true;
     try {
       await api(`admin/users/${encodeURIComponent(m.id)}/role`, { method: 'POST', body: { level: next } });
     } catch (err) {
       $('.form-error', form).textContent = err.message;
-      submit.disabled = false;
+      form.inert = false;
+      sync();
       return;
     }
+    if (owner !== accountVersion()) return;
     sheet.close();
     toast(`已将 ${m.nickname} 改为 ${levelText(next)}`);
     onSaved?.();

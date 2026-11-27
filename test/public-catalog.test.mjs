@@ -37,7 +37,9 @@ test('the display catalog keeps prompts and runtime paths without private source
 
 test('published package files exclude build records and source maps while keeping runtime assets and licenses', () => {
   for (const path of ['data.json', '.datapack-source.json', 'assets/scenes/posters.json',
-    'results\\work\\build-info.json', 'assets/brands/README.md', 'results/work/app.js.map']) {
+    'results\\work\\build-info.json', 'assets/brands/README.md', 'results/work/app.js.map',
+    'datapack.json', 'tools/Integration.JSON', 'nested/.datapack-source.json', 'results/work/posters.json',
+    '.git/HEAD', 'results/work/.env.local', '.DS_Store']) {
     assert.equal(publishablePackageFile(path), false, path);
   }
   for (const path of ['results/work/index.html', 'results/work/app.js', 'results/work/data.json',

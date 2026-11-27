@@ -35,14 +35,14 @@ function render() {
     ${editing ? `<form class="announcement-compose" data-ann-form>
       <div class="announcement-compose-fields"><label>${tr('标题', 'Title')}<input name="title" maxlength="100" required autocomplete="off" placeholder="${tr('简短描述这则公告', 'A short title for this announcement')}"></label>
         <label>${tr('Markdown 正文', 'Markdown body')}<textarea name="body" maxlength="20000" required placeholder="# ${tr('公告标题', 'Announcement heading')}\n\n${tr('在这里编写公告…', 'Write the announcement here…')}"></textarea></label></div>
-      <div class="announcement-compose-preview"><span>${tr('预览', 'Preview')}</span><div class="announcement-markdown" data-ann-preview></div></div>
+      <div class="announcement-compose-preview"><span>${tr('预览', 'Preview')}</span><div class="announcement-markdown" data-ann-preview data-i18n-ignore></div></div>
       <p class="announcement-error" role="alert" data-ann-error hidden></p>
       <div class="announcement-compose-actions"><button type="button" class="btn" data-ann-cancel>${tr('取消', 'Cancel')}</button><button type="submit" class="btn primary announcement-publish">${tr('发布公告', 'Publish announcement')}</button></div>
     </form>` : entries.length ? `<div class="announcement-layout">
       <nav class="announcement-history" aria-label="${tr('历史公告', 'Announcement history')}"><h3>${tr('历史公告', 'History')} <small>${entries.length}</small></h3>
-        ${entries.map(entry => `<button type="button" data-ann-select="${entry.id}"${entry.id === current.id ? ' aria-current="true"' : ''}><time datetime="${esc(entry.publishedAt)}">${dateOf(entry)}</time><span>${esc(entry.title)}</span></button>`).join('')}</nav>
-      <article class="announcement-article" aria-labelledby="announcement-entry-title"><time datetime="${esc(current.publishedAt)}">${esc(fullDate(current))}</time><h3 id="announcement-entry-title">${esc(current.title)}</h3>
-        <div class="announcement-markdown">${renderAnnouncementMarkdown(current.body)}</div></article></div>
+        ${entries.map(entry => `<button type="button" data-ann-select="${esc(entry.id)}"${entry.id === current.id ? ' aria-current="true"' : ''}><time datetime="${esc(entry.publishedAt)}">${dateOf(entry)}</time><span data-i18n-ignore>${esc(entry.title)}</span></button>`).join('')}</nav>
+      <article class="announcement-article" aria-labelledby="announcement-entry-title"><time datetime="${esc(current.publishedAt)}">${esc(fullDate(current))}</time><h3 id="announcement-entry-title" data-i18n-ignore>${esc(current.title)}</h3>
+        <div class="announcement-markdown" data-i18n-ignore>${renderAnnouncementMarkdown(current.body)}</div></article></div>
       <footer class="announcement-footer"><button type="button" class="btn" data-ann-later>${tr('暂时关闭', 'Close for now')}</button><button type="button" class="btn primary" data-ann-read>${tr('已读并关闭', 'Mark read and close')}</button></footer>`
       : `<div class="announcement-empty">${tr('目前还没有公告。', 'There are no announcements yet.')}</div>`}
   </div>`;

@@ -170,7 +170,7 @@ export function mountBoard(container, ctx) {
       const m = modelOf(row);
       return `<tr${row.provisional ? ' class="is-provisional"' : ''} data-board-row="${esc([row.modelName, row.effort, m.vendor].join(' ').toLowerCase())}">
       <td class="c-rank${rank <= 3 ? ' is-top' : ''}">${pad(rank)}</td>
-      <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b data-i18n-ignore>${esc(row.modelName)}</b>${row.effort ? `<span class="badge" data-i18n-ignore>${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames} 次">暂定</span>` : ''}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
+      <td class="c-model"><span class="board-model">${brandMark(m, 'brand-mark sm')}<span class="board-name"><b data-i18n-ignore>${esc(row.modelName)}</b>${row.effort ? `<span class="badge" data-i18n-ignore>${esc(row.effort)}</span>` : ''}${row.provisional ? `<span class="badge provisional" title="比较少于 ${data.provisionalGames ?? platform.site?.limits?.provisionalGames ?? 30} 次">暂定</span>` : ''}<small>${[vendorLine(m), ...standingsOf(data, row)].join(' · ')}</small></span></span></td>
       <td class="c-score"><b><span data-i18n-number="${row.score}">${row.score}</span></b><small>±<span data-i18n-number="${row.interval}">${row.interval}</span></small></td>
       <td class="c-range" aria-hidden="true"><span class="range"><s style="left:${at(1000)}%"></s><i style="left:${from}%;width:${(to - from).toFixed(2)}%;background:linear-gradient(90deg, ${tone(from)}, ${tone(to)})"></i><em style="left:${at(row.score)}%"></em></span></td>
       <td class="c-games"><span data-i18n-number="${row.games}">${row.games}</span></td>
@@ -290,6 +290,10 @@ export function mountBoard(container, ctx) {
   return {
     ready: drawn ? null : loading,
     reload: load,
+    refreshIdentity() {
+      if (currentData) draw(currentData);
+      return load();
+    },
     search(value) {
       text = value;
       query = value.trim().toLowerCase();
@@ -445,7 +449,7 @@ export function mount(root, ctx) {
         const select = $('[data-board-task]', root);
         if (select) select.innerHTML = boardTaskOptions(listed, select.value, platform.activityReady, platform.arena);
         // An empty curated board offers different next steps once the reader signs in.
-        if (reason === 'identity' && curated) return board?.reload();
+        if (reason === 'identity' && curated) return board?.refreshIdentity();
         return live?.refresh();
       }
       if (!['session', 'session-ready'].includes(reason)) return live?.refresh();

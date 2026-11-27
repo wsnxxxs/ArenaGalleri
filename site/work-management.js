@@ -46,6 +46,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
   const homeHint = packaged ? '数据包作品的归属题目由数据仓库维护。' : !movable ? '需要管理员权限'
     : '改到其他题目后，这件作品的盲评记录、评论和表情一起迁移。';
   const sheet = openDialog({
+    accountBound: true,
     title: '管理作品',
     className: 'work-manage-sheet',
     body: `<form class="work-manage-form" novalidate>
@@ -122,7 +123,7 @@ export function openWorkManagement(ctx, w, { questions = [], audit = [], createE
   });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (busy) return;
+    if (busy || owner !== accountVersion()) return;
     error.textContent = '';
     let meta;
     try { meta = editor.collect(); } catch (err) { error.textContent = err.message; return; }
@@ -186,6 +187,7 @@ function withdrawDialog(w, packaged) {
   return new Promise((resolve) => {
     let answer = null;
     const sheet = openDialog({
+      accountBound: true,
       title: '下架这件作品？',
       className: 'confirm-sheet',
       body: `<form class="withdraw-form">

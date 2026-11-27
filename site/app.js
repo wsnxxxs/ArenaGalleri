@@ -1507,7 +1507,7 @@ function createViewer(t) {
   const many = t.results.length > 1;
   setPageTitle(['在线预览', { text: t.title, original: true }]);
 
-  root.innerHTML = `<div class="viewer">
+  root.innerHTML = `<div class="viewer work-viewer">
     <header class="vbar">
       ${backLink('vback')}
       <div class="vnav">
@@ -1933,6 +1933,11 @@ function retrace(from) {
   }
   currentVisit = entry.visit;
   entry.hash = location.hash;
+  resolveBack(entry, here);
+  return { scroll: returning ? entry.scroll : 0, returning };
+}
+function resolveBack(entry, here) {
+  entry.key = here.key;
   // Each visit's `from` is the history entry just before it, so walking them counts the steps back.
   back = null;
   if (here.up) {
@@ -1941,7 +1946,6 @@ function retrace(from) {
     while (prev && prev.key !== above.key) { prev = visits.get(prev.from); steps++; }
     back = { up: here.up, text: above.name, href: prev?.hash ?? here.up, steps: prev ? steps : 0 };
   }
-  return { scroll: returning ? entry.scroll : 0, returning };
 }
 history.scrollRestoration = 'manual';
 const plainClick = (event) => !event.defaultPrevented && !event.button && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
@@ -2064,6 +2068,9 @@ const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 async function route({ keepScroll = false, from = null } = {}) {
   const version = ++routeVersion;
   const visit = keepScroll || from === null ? null : retrace(from);
+  // Direct links enter before the catalog identifies their question. Reuse the
+  // visit when a redraw can finally resolve its parent.
+  if (!visit && currentVisit && currentVisit === history.state?.visit) resolveBack(visits.get(currentVisit), placeOf(location.hash));
   const scrollBack = keepScroll ? scrollY : visit?.scroll ?? 0;
   // The page's items rise in on arrival and a card's picture can carry over into the viewer (motion.js).
   const motion = scene(root, { navigation: from !== null, from });
@@ -2142,7 +2149,7 @@ async function show(version, visit, scrollBack) {
   } else if (!taskId && page?.home) {
     refreshAccountControls();
     page.onPlatformChange();
-  } else if (works.length && page?.task === t) page.update(works);
+  } else if (works.length && page?.task === t && page.update) page.update(works);
   else {
     // Session/activity arrivals redraw the same task. Its public score read belongs
     // to that task, while leaving it (including a withdrawal) still cancels the read.
@@ -2178,7 +2185,7 @@ async function show(version, visit, scrollBack) {
         const staged = hostedTask(t);
         const stage = create(root, staged, { label, vendorOf, cover, header: galleryStageHeader(t, a), initial: (vs ?? '').split(',').filter((id) => staged.results.some((r) => r.id === id)) });
         // The 3D views keep the works they opened with; a review elsewhere shows on the next visit.
-        page = { destroy: () => stage.destroy(), onPlatformChange() {} };
+        page = { task: t, destroy: () => stage.destroy(), onPlatformChange() {} };
       } catch (error) {
         if (version !== routeVersion) return;
         root.innerHTML = '<main class="empty-page wrap"></main>';
@@ -2208,6 +2215,7 @@ onPlatformChange((reason) => {
   const sameCatalog = mergedCatalog?.works === platform.works && mergedCatalog?.questions === platform.questions && mergedCatalog?.state === catalogState();
   if (sessionOnly && sameCatalog && !page?.awaitingSession && !page?.fullscreen) return;
   mergePlatform();
+  if (page?.task && !DATA.tasks.includes(page.task)) { void route({ keepScroll: true }); return; }
   const activeRoute = location.hash.replace(/^#\/?/, '').split('/')[0];
   if (reason === 'identity' && ['new', 'submit', 'me', 'review'].includes(activeRoute)) { void route({ keepScroll: true }); return; }
   if (sessionOnly && !page?.awaitingSession && !page?.home && !page?.fullscreen) return;

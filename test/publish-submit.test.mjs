@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-globalThis.document = { title: '', addEventListener() {} };
+globalThis.document = { title: '', addEventListener() {}, removeEventListener() {} };
 globalThis.window = { addEventListener() {} };
 globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
@@ -9,6 +9,7 @@ globalThis.history = { state: {} };
 globalThis.SAME_PROMPT_CONFIG = { apiBaseUrl: 'https://backend.test/api/' };
 const { platform } = await import('../site/platform.js');
 const { mount } = await import('../site/publish.js');
+const { uploadFlow } = await import('../site/submit.js');
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 async function withForm(values, run, delayResponse = null) {
@@ -95,4 +96,33 @@ test('a second submit shares the pending form state and cannot create a duplicat
       release();
     }
   }, pending);
+});
+
+test('a new sample offers only drafts in an accepted format, including older drafts named by extension', async () => {
+  const previous = { user: platform.user, site: platform.site };
+  const originalFetch = globalThis.fetch;
+  platform.user = { id: 'one', role: 'user', emailBound: true };
+  platform.site = { cdn: [], limits: { uploadBytes: 1000000, coverBytes: 10000 } };
+  const task = { id: '__new__', title: 'Text question', prompt: 'Write', templates: ['text'] };
+  const ctx = { DATA: { title: 'Gallery' }, pageStart: () => '', pageEnd: () => '', taskHref: () => '#' };
+  try {
+    for (const [sourceName, template, accepted] of [['old.html', 'static', false], ['old.HTML', null, false], ['old.MD', null, true]]) {
+      const draft = { id: 'old', sourceName, template, files: 1, bytes: 42, expiresAt: '2027-01-01T00:00:00Z', checks: [], preview: '/draft-preview/' };
+      globalThis.fetch = async () => Response.json({ draft });
+      const root = Object.assign(new EventTarget(), { innerHTML: '', querySelector: () => null });
+      const flow = uploadFlow(root, ctx, { task });
+      try {
+        await settle();
+        assert.equal(root.innerHTML.includes('data-act="resume"'), accepted, sourceName);
+        if (accepted) {
+          root.onclick({ target: { matches: () => false, closest: (selector) => selector === '[data-act]' ? { dataset: { act: 'resume' } } : null } });
+          assert.match(root.innerHTML, /class="file-line"/);
+          assert.equal(flow.kept().file, 'old.MD');
+        }
+      } finally { flow.destroy(); }
+    }
+  } finally {
+    Object.assign(platform, previous);
+    globalThis.fetch = originalFetch;
+  }
 });

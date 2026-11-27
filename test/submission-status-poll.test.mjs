@@ -9,17 +9,19 @@ test('a submission cannot draw the previous account after its catalog refresh se
   const begin = source.indexOf('  async function submit(form)');
   const finish = source.indexOf('  // A draft survives', begin);
   const refresh = deferred(), started = deferred();
-  let owner = 1;
+  let owner = 1, writes = 0;
   const draws = [], button = {}, label = { textContent: 'Submit' }, error = {};
   const context = { active: true, accountVersion: () => owner, state: { draft: { id: 'draft' } }, task: {}, options: {},
     readWorkFields: () => ({ body: { modelName: 'Fixture' } }), trialSummary: () => ({}), clearTimeout() {},
-    api: async () => ({ work: { task: 'task', id: 'work', moderation: { status: 'pending' } } }),
+    api: async () => { writes++; return { work: { task: 'task', id: 'work', moderation: { status: 'pending' } } }; },
     refreshPlatform: () => { started.resolve(); return refresh.promise; }, toast() {},
     $: (selector) => selector === '[type="submit"]' ? button : selector === '[data-submit-label]' ? label : error,
     draw: () => draws.push('draw'), follow: () => draws.push('follow'), scrollTo() {} };
   vm.runInNewContext(`${source.slice(begin, finish)}\nglobalThis.send = submit;`, context);
   const sending = context.send({ attest: { checked: true } });
   await started.promise;
+  await context.send({ attest: { checked: true } });
+  assert.equal(writes, 1, 'a repeated submit while the first write is finishing cannot reuse the draft');
   owner = 2;
   refresh.resolve();
   await sending;

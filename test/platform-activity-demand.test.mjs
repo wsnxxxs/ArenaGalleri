@@ -117,3 +117,45 @@ test('writes on a hidden tab defer the invalidated activity until visibility ret
   assert.equal(module.platform.totals.votes, 2);
   assert.equal(calls.filter(path => path === 'activity').length, 2);
 }));
+
+test('a completed write fetches current session counters even if an earlier session is still pending', async () => environment('write-session', async (module) => {
+  const older = pending();
+  let sessionReads = 0;
+  const user = { id: 'author', role: 'user' };
+  module.platform.user = user;
+  globalThis.fetch = (url) => {
+    const path = new URL(url).pathname.split('/').at(-1);
+    if (path === 'session') return ++sessionReads === 1 ? older.promise : Promise.resolve(dto({ user, me: { uploads: 1 } }));
+    return Promise.resolve(dto({ questions: [], works: [] }));
+  };
+  await module.connectPlatform(build);
+  await module.refreshPlatform('upload');
+  await tick();
+  assert.equal(sessionReads, 2);
+  assert.equal(module.platform.me.uploads, 1);
+  older.resolve(dto({ user, me: { uploads: 0 } }));
+  await tick();
+  assert.equal(module.platform.me.uploads, 1);
+  assert.equal(module.platform.sessionConnecting, false);
+}));
+
+test('an unsuccessful legacy probe retries the split API when the service returns', async () => environment('legacy-probe', async (module) => {
+  let now = 100_000, online = false;
+  Date.now = () => now;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname.split('/').at(-1);
+    calls.push(path);
+    if (!online || path === 'bootstrap') return dto({}, 404);
+    return dto(path === 'catalog' ? { questions: [], works: [] } : { user: null });
+  };
+  assert.equal(await module.connectPlatform(build), false);
+  await tick();
+  assert.equal(module.catalogState(), 'error');
+  online = true;
+  now += 3000;
+  assert.equal(await module.refreshPlatform('reconnect'), true);
+  await tick();
+  assert.deepEqual(calls.slice(-2), ['catalog', 'session']);
+  assert.equal(module.platform.sessionReady, true);
+}));

@@ -240,7 +240,7 @@ export function mount(root, ctx) {
         templates: data.getAll('templates'), ...(refs?.value().length ? { references: refs.value(), referenceCredit: refs.credit() } : {}) };
       if (mode === 'sample') { enterSample({ fromHistory, changed: before !== JSON.stringify(question) }); return true; }
       const kept = flow?.kept();
-      if (kept && !(await confirmDialog({ title: '单独提交题目？', message: `已附上的示例结果「${kept.file}」会被丢弃，题目单独进入审核。`, confirm: '丢弃示例并提交' }))) return false;
+      if (kept && !(await confirmDialog({ accountBound: true, title: '单独提交题目？', message: `已附上的示例结果「${kept.file}」会被丢弃，题目单独进入审核。`, confirm: '丢弃示例并提交' }))) return false;
       if (!current()) return false;
       const buttons = $$('button[type="submit"]', form);
       buttons.forEach((button) => { button.disabled = true; });
@@ -311,7 +311,9 @@ export function mount(root, ctx) {
     $('.side-steps', root).outerHTML = sideSteps(0, kept);
   }
 
+  let sampleHash;
   function enterSample({ fromHistory = false, changed = false } = {}) {
+    sampleHash = location.hash;
     if (!fromHistory) history.pushState({ ...history.state, publish: 'sample' }, '');
     showing = 'upload';
     if (!flow) { showUpload(); scrollTo({ top: 0 }); return; }
@@ -325,7 +327,7 @@ export function mount(root, ctx) {
   function confirmLeave() {
     return new Promise((resolve) => {
       let leave = false;
-      const sheet = openDialog({ title: '文件还在上传', className: 'confirm-sheet',
+      const sheet = openDialog({ accountBound: true, title: '文件还在上传', className: 'confirm-sheet',
         body: '<p class="sheet-text">返回修改题目会中断这次上传。题目内容会保留，改完后需要重新选择文件。</p><div class="sheet-actions"><button class="btn" type="button" data-leave>中断并返回</button><button class="btn primary" type="button" data-sheet-close>继续上传</button></div>',
         onClose: () => resolve(leave) });
       $('[data-leave]', sheet.el).addEventListener('click', () => { leave = true; sheet.close(); });
@@ -351,7 +353,9 @@ export function mount(root, ctx) {
       if (showing === 'form') void proceed('sample', { fromHistory: true }).then((moved) => { if (!moved && active) history.back(); });
       return;
     }
-    if (showing !== 'upload') return;
+    if (showing !== 'upload' || location.hash !== sampleHash) return;
+    // The pending write owns this sample. Returning to its editor could submit it again.
+    if (flow.submitting()) { history.pushState({ ...history.state, publish: 'sample' }, ''); return; }
     if (skipGuard) { skipGuard = false; backToForm(); return; }
     // A submitted question is not edited again; back goes on to where the author came from.
     if (flow.finished()) { history.back(); return; }

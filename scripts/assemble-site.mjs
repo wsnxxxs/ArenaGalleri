@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -36,79 +36,105 @@ for (const field of ['title', 'subtitle', 'description', 'repo']) {
 function* walk(dir) {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) yield* walk(path);
+    if (!publishablePackageFile(relative(SITE, path))) continue;
+    const entry = lstatSync(path);
+    if (entry.isSymbolicLink()) throw new Error(`Site contains a symbolic link: ${relative(SITE, path)}`);
+    if (entry.isDirectory()) yield* walk(path);
     else yield path;
   }
 }
 
-rmSync(DIST, { recursive: true, force: true });
-mkdirSync(DIST, { recursive: true });
-cpSync(DATAPACK, DIST, { recursive: true, filter: path => publishablePackageFile(relative(DATAPACK, path)) });
-// Compatibility for the previously published package only. New data packages
-// own and ship the bridge; this vendored copy belongs to the data tooling.
-if (!existsSync(join(DIST, 'sandtable-bridge.js'))) {
-  if (data.schemaVersion) throw new Error('Data package is missing its scene bridge');
-  cpSync(join(ROOT, 'scripts/datapack-bridge.js'), join(DIST, 'sandtable-bridge.js'));
-}
-
-let overlaid = 0;
-const collisions = [];
-for (const file of walk(SITE)) {
-  const rel = relative(SITE, file);
-  const target = join(DIST, rel);
-  if (existsSync(target)) {
-    collisions.push(rel.split('\\').join('/'));
-    continue;
+function assemble(dist) {
+  cpSync(DATAPACK, dist, { recursive: true, filter(path) {
+    const rel = relative(DATAPACK, path);
+    if (!publishablePackageFile(rel)) return false;
+    if (lstatSync(path).isSymbolicLink()) throw new Error(`Data package contains a symbolic link: ${rel}`);
+    return true;
+  } });
+  // Compatibility for the previously published package only. New data packages
+  // own and ship the bridge; this vendored copy belongs to the data tooling.
+  if (!existsSync(join(dist, 'sandtable-bridge.js'))) {
+    if (data.schemaVersion) throw new Error('Data package is missing its scene bridge');
+    cpSync(join(ROOT, 'scripts/datapack-bridge.js'), join(dist, 'sandtable-bridge.js'));
   }
-  mkdirSync(dirname(target), { recursive: true });
-  cpSync(file, target);
-  overlaid++;
-}
-if (collisions.length) {
-  console.error('Site overlay collides with the data package at:');
-  for (const rel of collisions) console.error(`  ${rel}`);
-  console.error('Paths are meant to be disjoint; resolve the overlap before deploying.');
-  process.exit(1);
-}
 
-// Posters and their paths come from the data package. A stale poster falls back
-// locally; checkDatapack blocks the same mismatch in CI.
-const manifest = readPosterManifest(DATAPACK);
-const fingerprint = createPosterFingerprint({ datapackRoot: DATAPACK, siteRoot: SITE, manifest });
-for (const task of data.tasks) {
-  for (const result of task.results) {
-    if (!posterIsCurrent({ datapackRoot: DATAPACK, task, result, manifest, fingerprint })) result.previewPoster = null;
+  let overlaid = 0;
+  const collisions = [];
+  for (const file of walk(SITE)) {
+    const rel = relative(SITE, file);
+    const target = join(dist, rel);
+    if (existsSync(target)) {
+      collisions.push(rel.split('\\').join('/'));
+      continue;
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    cpSync(file, target);
+    overlaid++;
   }
-}
-writeFileSync(join(DIST, 'data.json'), JSON.stringify(publicCatalog(data, buildInfo)));
-function readCdnBase(name) {
-  if (!Object.hasOwn(process.env, name)) return undefined;
-  return normalizeMediaCdnBase(process.env[name], true);
-}
-const mediaBase = readCdnBase('MEDIA_CDN_BASE_URL');
-const viteBase = readCdnBase('VITE_MEDIA_CDN_BASE_URL');
-if (mediaBase !== undefined && viteBase !== undefined && mediaBase !== viteBase) {
-  throw new Error('MEDIA_CDN_BASE_URL and VITE_MEDIA_CDN_BASE_URL disagree');
-}
-// Empty or unset stays off. An explicit empty MEDIA_CDN_BASE_URL wins over a missing alias.
-const mediaCdnBaseUrl = mediaBase !== undefined ? mediaBase : (viteBase ?? '');
-// GUIDED_VOTING=1 builds the staff-only trial of guided blind voting: a separate preview, never the public site.
-if (![undefined, '', '0', '1'].includes(process.env.GUIDED_VOTING)) throw new Error('GUIDED_VOTING must be 1 or 0');
-const guidedVoting = process.env.GUIDED_VOTING === '1';
-if (process.env.API_BASE_URL || process.env.MEDIA_BASE_URL || mediaCdnBaseUrl || mediaBase !== undefined || viteBase !== undefined || guidedVoting) {
-  const runtime = {};
-  for (const [variable, field] of [['API_BASE_URL', 'apiBaseUrl'], ['MEDIA_BASE_URL', 'mediaBaseUrl']]) {
-    if (!process.env[variable]) continue;
-    const base = new URL(process.env[variable]);
-    if (!['http:', 'https:'].includes(base.protocol)) throw new Error(`${variable} must be an HTTP(S) URL`);
-    runtime[field] = base.href;
+  if (collisions.length) {
+    throw new Error(`Site overlay collides with the data package at:\n${collisions.join('\n')}`);
   }
-  if (!runtime.apiBaseUrl) runtime.apiBaseUrl = 'api/';
-  runtime.mediaCdnBaseUrl = mediaCdnBaseUrl;
-  if (guidedVoting) runtime.guidedVoting = true;
-  writeFileSync(join(DIST, 'runtime-config.js'), `globalThis.SAME_PROMPT_CONFIG = ${JSON.stringify(runtime)};\n`);
+
+  // Posters and their paths come from the data package. A stale poster falls back
+  // locally; checkDatapack blocks the same mismatch in CI.
+  const manifest = readPosterManifest(DATAPACK);
+  const fingerprint = createPosterFingerprint({ datapackRoot: DATAPACK, siteRoot: SITE, manifest });
+  for (const task of data.tasks) {
+    for (const result of task.results) {
+      if (!posterIsCurrent({ datapackRoot: DATAPACK, task, result, manifest, fingerprint })) result.previewPoster = null;
+    }
+  }
+  writeFileSync(join(dist, 'data.json'), JSON.stringify(publicCatalog(data, buildInfo)));
+  function readCdnBase(name) {
+    if (!Object.hasOwn(process.env, name)) return undefined;
+    return normalizeMediaCdnBase(process.env[name], true);
+  }
+  const mediaBase = readCdnBase('MEDIA_CDN_BASE_URL');
+  const viteBase = readCdnBase('VITE_MEDIA_CDN_BASE_URL');
+  if (mediaBase !== undefined && viteBase !== undefined && mediaBase !== viteBase) {
+    throw new Error('MEDIA_CDN_BASE_URL and VITE_MEDIA_CDN_BASE_URL disagree');
+  }
+  // Empty or unset stays off. An explicit empty MEDIA_CDN_BASE_URL wins over a missing alias.
+  const mediaCdnBaseUrl = mediaBase !== undefined ? mediaBase : (viteBase ?? '');
+  // GUIDED_VOTING=1 builds the staff-only trial of guided blind voting: a separate preview, never the public site.
+  if (![undefined, '', '0', '1'].includes(process.env.GUIDED_VOTING)) throw new Error('GUIDED_VOTING must be 1 or 0');
+  const guidedVoting = process.env.GUIDED_VOTING === '1';
+  if (process.env.API_BASE_URL || process.env.MEDIA_BASE_URL || mediaCdnBaseUrl || mediaBase !== undefined || viteBase !== undefined || guidedVoting) {
+    const runtime = {};
+    for (const [variable, field] of [['API_BASE_URL', 'apiBaseUrl'], ['MEDIA_BASE_URL', 'mediaBaseUrl']]) {
+      if (!process.env[variable]) continue;
+      const base = new URL(process.env[variable]);
+      if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
+        throw new Error(`${variable} must be a public HTTP(S) base URL without credentials, a query, or a hash`);
+      }
+      runtime[field] = base.href;
+    }
+    if (!runtime.apiBaseUrl) runtime.apiBaseUrl = 'api/';
+    runtime.mediaCdnBaseUrl = mediaCdnBaseUrl;
+    if (guidedVoting) runtime.guidedVoting = true;
+    writeFileSync(join(dist, 'runtime-config.js'), `globalThis.SAME_PROMPT_CONFIG = ${JSON.stringify(runtime)};\n`);
+  }
+
+  return { assetVersion: cacheBustSite(dist, SITE), overlaid };
 }
 
-const assetVersion = cacheBustSite(DIST, SITE);
-
-console.log(`Assembled dist/: ${works} result(s) + ${overlaid} site file(s), no collisions. Assets: ${assetVersion}`);
+// A rejected overlay or runtime setting must leave the last complete build usable.
+const cache = join(ROOT, '.cache');
+mkdirSync(cache, { recursive: true });
+const stage = mkdtempSync(join(cache, 'assemble-'));
+const next = join(stage, 'next'), previous = join(stage, 'previous');
+try {
+  const { assetVersion, overlaid } = assemble(next);
+  if (existsSync(DIST)) renameSync(DIST, previous);
+  try {
+    renameSync(next, DIST);
+  } catch (error) {
+    if (existsSync(previous)) renameSync(previous, DIST);
+    throw error;
+  }
+  rmSync(previous, { recursive: true, force: true });
+  console.log(`Assembled dist/: ${works} result(s) + ${overlaid} site file(s), no collisions. Assets: ${assetVersion}`);
+} finally {
+  // If a filesystem error prevented rollback, retain the previous directory for recovery.
+  if (!existsSync(previous)) rmSync(stage, { recursive: true, force: true });
+}

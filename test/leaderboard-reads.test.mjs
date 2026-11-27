@@ -8,7 +8,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const data = (tag = 'fresh') => ({ by: 'config', rows: [], unranked: [], totals: { votes: 3, voters: 2 }, tag });
 
-function environment(cached = null) {
+function environment(cached = null, ctx = {}, globals = {}) {
   const reads = [], rendered = [], attributes = new Map(), timers = new Map();
   let timerId = 0, memory = cached;
   const container = Object.assign(new EventTarget(), {
@@ -23,10 +23,10 @@ function environment(cached = null) {
     apiRemembered(path, options) {
       const read = { path, ...options, ...deferred() }; reads.push(read);
       return read.promise.then(answer => { memory = answer; return answer; });
-    }, recall: () => memory,
+    }, recall: () => memory, ...globals,
   };
   vm.runInNewContext(source.replace(/^import .*$/gm, '').replace(/^export /gm, '') + '\nglobalThis.mountBoardForTest = mountBoard;', state);
-  const board = state.mountBoardForTest(container, { embedded: false, onData: value => rendered.push(value) });
+  const board = state.mountBoardForTest(container, { embedded: false, onData: value => rendered.push(value), ...ctx });
   const click = selector => {
     const event = new Event('click');
     Object.defineProperty(event, 'target', { value: { closest: query => query === selector ? { dataset: { boardUnit: 'model' } } : null } });
@@ -81,4 +81,20 @@ test('a malformed remembered board cannot poison retries, and a valid stale boar
   assert.match(e.container.innerHTML, /每 10 分钟更新一次/);
   assert.match(e.container.innerHTML, /offline[\s\S]*data-board-retry/);
   e.board.destroy();
+});
+
+test('signing in during a cached curated board refresh updates its actions even for an unchanged response', async () => {
+  const cached = { ...data(), audience: 'curated', scope: { taskIds: ['q'] } };
+  let level = -1;
+  const e = environment(cached, { curated: true }, { levelOf: () => level });
+  try {
+    assert.match(e.container.innerHTML, /data-auth="login"/);
+    level = 1;
+    const refresh = e.board.refreshIdentity();
+    assert.match(e.container.innerHTML, /data-curated-arena/);
+    assert.equal(e.reads.length, 1);
+    e.reads[0].resolve(structuredClone(cached));
+    await refresh;
+    assert.doesNotMatch(e.container.innerHTML, /data-auth="login"/);
+  } finally { e.board.destroy(); }
 });

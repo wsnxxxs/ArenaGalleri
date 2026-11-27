@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { publishablePackageFile } from './public-catalog.mjs';
 
 function* files(dir) {
   for (const name of readdirSync(dir).sort()) {
@@ -13,8 +14,9 @@ function* files(dir) {
 // Only the gallery shell and its shared Three.js vendor modules participate.
 // Results and other data-package pages are independent documents.
 export function mainSiteAssets(dist, site) {
-  const scripts = readdirSync(site).filter(name => name.endsWith('.js')).map(name => join(dist, name));
-  const styles = readdirSync(site).filter(name => name.endsWith('.css')).map(name => join(dist, name));
+  const entries = readdirSync(site).filter(publishablePackageFile);
+  const scripts = entries.filter(name => name.endsWith('.js')).map(name => join(dist, name));
+  const styles = entries.filter(name => name.endsWith('.css')).map(name => join(dist, name));
   const vendor = [...files(join(dist, 'vendor'))].filter(path => path.endsWith('.js'));
   return { scripts: [...scripts, ...vendor].sort(), styles: styles.sort() };
 }
@@ -24,7 +26,8 @@ export function cacheBustSite(dist, site) {
   const paths = [...scripts, ...styles].map(path => [relative(dist, path).replaceAll('\\', '/'), path])
     .sort(([a], [b]) => a.localeCompare(b, 'en'));
   const digest = createHash('sha256');
-  digest.update(readFileSync(join(site, 'index.html')));
+  const template = readFileSync(join(site, 'index.html'), 'utf8');
+  digest.update(template);
   for (const [path, file] of paths) {
     digest.update('\0' + path + '\0');
     digest.update(readFileSync(file));
@@ -32,7 +35,7 @@ export function cacheBustSite(dist, site) {
   const version = digest.digest('hex').slice(0, 24);
   const versioned = new Map(paths.filter(([path]) => path.endsWith('.js')).map(([path]) => [path, `./${path}?v=${version}`]));
   const htmlFile = join(dist, 'index.html');
-  let html = readFileSync(htmlFile, 'utf8');
+  let html = template;
   const importmaps = [...html.matchAll(/<script\s+type="importmap">([^<]*)<\/script>/g)];
   if (importmaps.length !== 1) throw new Error('Expected one main-site import map');
   const imports = JSON.parse(importmaps[0][1]).imports;
