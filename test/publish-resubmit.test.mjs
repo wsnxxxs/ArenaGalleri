@@ -24,6 +24,7 @@ function environment({ resubmit = true, aborts = false, selectedSubcategory = qu
     $: (selector, node) => node.querySelector(selector), $$: (selector, node) => node.querySelectorAll(selector),
     esc: String, formatDate: String, pad: String, icon: () => '', moderationBadge: () => '', reviewVerdict: () => '',
     categoryOf: () => ({ templates: ['static'] }),
+    subcategoryOf: (question) => question?.subcategory ?? '',
     categoryField(category, subcategory) { categorySelections.push({ category, subcategory }); return ''; },
     domainField: () => '', syncDomains() {}, TEMPLATE_LABELS: {},
     resolveApiMedia(data, endpoint) { assert.equal(endpoint, 'question'); return data; },

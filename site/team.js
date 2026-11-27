@@ -688,14 +688,17 @@ export function mount(root, ctx) {
   function applyStageModeClasses() {
     if (!stageEl) return;
     stageEl.dataset.mode = mode;
-    if (overviewEl) overviewEl.setAttribute('aria-hidden', mode === 'detail' ? 'true' : 'false');
+    // A hidden layer is also inert, so Tab skips its invisible buttons.
+    if (overviewEl) { overviewEl.setAttribute('aria-hidden', mode === 'detail' ? 'true' : 'false'); overviewEl.inert = mode === 'detail'; }
     if (detailRevealEl) {
       detailRevealEl.setAttribute('aria-hidden', mode === 'overview' ? 'true' : 'false');
+      detailRevealEl.inert = mode === 'overview';
       if (mode === 'detail') detailRevealEl.style.setProperty('--wipe', '100%');
       if (mode === 'overview') detailRevealEl.style.setProperty('--wipe', '0%');
     }
     if (pivotEl) {
       pivotEl.style.pointerEvents = mode === 'detail' ? 'auto' : 'none';
+      pivotEl.inert = mode !== 'detail';
       if (mode === 'overview') {
         pivotEl.style.opacity = '0';
         if (svgEl) svgEl.style.opacity = '0';

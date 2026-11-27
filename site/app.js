@@ -258,6 +258,8 @@ function openSolveMenu(trigger) {
   solveMenuTrigger = trigger;
   trigger.setAttribute('aria-expanded', 'true');
   positionSolveMenu(trigger);
+  // The menu sits at the end of the page; keyboard users land on its current choice (Escape returns).
+  menu.querySelector('.solve-menu-item.is-active:not(:disabled), .solve-menu-item:not(:disabled):not(.is-disabled)')?.focus({ preventScroll: true });
 }
 
 document.addEventListener('click', (event) => {
@@ -318,7 +320,7 @@ function applyTaskSubcategory(taskId, subcategory) {
     const lbl = btn.querySelector('.subcat-side-label');
     if (lbl) lbl.textContent = clean ? subcatLabelOf(category, clean) : tr('未设置细分');
   }
-  const sideTags = $('.task-side .side-tags');
+  const sideTags = $('.app-sidebar .side-tags');
   if (sideTags && task) {
     sideTags.querySelector('.tag-sub')?.remove();
     if (clean) {
@@ -439,6 +441,8 @@ function openSubcatMenu(trigger) {
   subcatMenuTrigger = trigger;
   trigger.setAttribute('aria-expanded', 'true');
   positionSubcatMenu(trigger);
+  // The menu sits at the end of the page; keyboard users land on its current choice (Escape returns).
+  menu.querySelector('.solve-menu-item.is-active:not(:disabled), .solve-menu-item:not(:disabled):not(.is-disabled)')?.focus({ preventScroll: true });
 }
 
 document.addEventListener('click', (event) => {
@@ -727,7 +731,7 @@ function libraryStart(crumbs) {
       ${pageTitle('题库')}<p class="side-intro">${['ready', 'static'].includes(catalogState()) ? `${DATA.tasks.length} 道题目 · ${works} 件作品` : '最新题目与作品正在加载'}</p>
       <nav class="side-nav section-nav" aria-label="题库导航">
         ${control('side-link', 'data-home-view="tasks"', true, `${icon('grid')}全部题目${['ready', 'static'].includes(catalogState()) ? `<span class="nav-count">${DATA.tasks.length}</span>` : ''}`)}
-        ${tracksOf(DATA.tasks, { alwaysInclude: CATEGORIES.map((c) => c.name) }).map((x) => {
+        ${tracksOf(DATA.tasks, { alwaysInclude: libraryCategories() }).map((x) => {
           const hasSubs = x.subcategories.length > 0;
           return `<div class="side-tree-group${hasSubs ? '' : ' is-leaf'}" data-tree-group="${esc(x.name)}"${hasSubs ? ' data-expanded="false"' : ''}>
           <button class="side-link${hasSubs ? ' side-tree-parent' : ''}" type="button" data-home-category="${esc(x.name)}" aria-pressed="false"${hasSubs ? ' aria-expanded="false"' : ''}>${icon(x.glyph)}<span class="side-link-text">${esc(x.label)}</span>${hasSubs ? '<span class="side-tree-caret" aria-hidden="true">▸</span>' : ''}<span class="nav-count">${x.tasks.length}</span></button>
@@ -778,7 +782,8 @@ function rankedTasks(tasks = DATA.tasks, now = Date.now()) {
   }).map(task => ({ task, reason: null }));
 }
 
-// Form and domain ride in the address (#/questions/<category>/<domain>, either may be left out),
+const ALL_SUBCATEGORIES = '全部';
+// Form and domain ride in the address (#/questions/<category>/<subcategory>/<domain>, each may be left out),
 // as does the model index (#/questions/models), so a return or a shared link keeps them. Search
 // and the selects only survive a return; a fresh visit opens the whole library.
 function renderLibrary(scopes = [], fresh = true) {
@@ -789,7 +794,10 @@ function renderLibrary(scopes = [], fresh = true) {
   const catIdx = restScopes.findIndex((x) => categoryOf(x) || DATA.tasks.some((t) => t.category === x));
   homeState.category = catIdx >= 0 ? restScopes.splice(catIdx, 1)[0] : '';
   const allowedSubs = subcategoriesOf(homeState.category).filter((s) => !s.disabled);
-  const subIdx = homeState.category ? restScopes.findIndex((x) => allowedSubs.some((s) => s.name === x)) : -1;
+  // 全部 holds the subcategory place before a domain that shares a subcategory's name (推理 / 数学).
+  const allSubs = Boolean(homeState.category) && restScopes[0] === ALL_SUBCATEGORIES;
+  if (allSubs) restScopes.shift();
+  const subIdx = homeState.category && !allSubs ? restScopes.findIndex((x) => allowedSubs.some((s) => s.name === x)) : -1;
   homeState.subcategory = subIdx >= 0 ? restScopes.splice(subIdx, 1)[0] : '';
   homeState.treeOpen = Boolean(homeState.category);
   homeState.domain = restScopes.find((x) => DATA.tasks.some((t) => domainsOf(t).includes(x))) ?? '';
@@ -844,7 +852,7 @@ function renderLibrary(scopes = [], fresh = true) {
         <span class="backend-card-weight">1:2:1:2 · ×${esc(weight)}</span>
       </div>
       ${status ? `<p class="backend-card-status">${esc(status)}</p>` : ''}
-      ${top3.length ? `<ol class="backend-card-top3">${top3.map((row, idx) => `<li><span class="backend-card-rank">${pad(row?.rank ?? idx + 1)}</span><span class="backend-card-model" data-i18n-ignore>${esc(row?.name ?? row?.modelName ?? '')}${row?.effort ? ` <small>${esc(row.effort)}</small>` : ''}</span><span class="backend-card-score">${row?.score != null ? Number(row.score).toFixed(2) : '—'}</span></li>`).join('')}</ol>` : '<p class="backend-card-empty">闭卷排名数据</p>'}
+      ${top3.length ? `<ol class="backend-card-top3">${top3.map((row, idx) => `<li><span class="backend-card-rank">${esc(pad(row?.rank ?? idx + 1))}</span><span class="backend-card-model" data-i18n-ignore>${esc(row?.name ?? row?.modelName ?? '')}${row?.effort ? ` <small>${esc(row.effort)}</small>` : ''}</span><span class="backend-card-score">${row?.score != null ? Number(row.score).toFixed(2) : '—'}</span></li>`).join('')}</ol>` : '<p class="backend-card-empty">闭卷排名数据</p>'}
     </div>`;
   };
   const taskCard = (t) => {
@@ -1115,7 +1123,7 @@ function renderLibrary(scopes = [], fresh = true) {
     const mobileSubs = $('[data-mobile-subcats]', root);
     if (mobileSubs) {
       const activeTrack = homeState.view === 'tasks' && homeState.treeOpen && homeState.category
-        ? tracksOf(DATA.tasks, { alwaysInclude: CATEGORIES.map((c) => c.name) }).find((x) => x.name === homeState.category)
+        ? tracksOf(DATA.tasks, { alwaysInclude: libraryCategories() }).find((x) => x.name === homeState.category)
         : null;
       const subs = activeTrack?.subcategories ?? [];
       mobileSubs.hidden = !subs.length;
@@ -1127,7 +1135,9 @@ function renderLibrary(scopes = [], fresh = true) {
     const scopes = homeState.view === 'tasks' ? [homeState.category, homeState.subcategory, homeState.domain].filter(Boolean) : [];
     const scopeCrumbs = homeState.view === 'models' ? [{ text: '模型索引' }] : scopes.map((x) => ({ text: categoryOf(x) ? categoryLabel(x) : x }));
     $('.topbar .crumbs').innerHTML = breadcrumbTrail(scopeCrumbs.length ? [LIBRARY, ...scopeCrumbs] : [{ text: '题库' }]);
-    const address = [LIBRARY.href, ...(homeState.view === 'models' ? ['models'] : scopes.map(encodeURIComponent))].join('/');
+    const sharedName = !homeState.subcategory && homeState.domain && subcategoriesOf(homeState.category).some((s) => s.name === homeState.domain);
+    const written = sharedName ? [homeState.category, ALL_SUBCATEGORIES, homeState.domain] : scopes;
+    const address = [LIBRARY.href, ...(homeState.view === 'models' ? ['models'] : written.map(encodeURIComponent))].join('/');
     if (location.hash !== address) history.replaceState(history.state, '', address);
     previews?.setPaused(homeState.view !== 'tasks');
   };
@@ -1947,6 +1957,8 @@ function renderBackendTask(t) {
   });
   return {
     ready,
+    // Sign-in and statistics do not change the benchmark board; the page is not redrawn for them.
+    onPlatformChange() {},
     destroy() {
       cancelled = true;
       taskBoard?.destroy?.();
@@ -1956,7 +1968,7 @@ function renderBackendTask(t) {
   };
 }
 function taskPage(t) {
-  if (typeof benchmarkTask === 'function' && benchmarkTask(t)) return renderBackendTask(t);
+  if (benchmarkTask(t)) return renderBackendTask(t);
   const onPromptKey = renderTask(t);
   activatePanel(/\/(?:usage|cost)$/.test(location.hash.split('#')[1]) ? 'cost' : location.hash.split('#')[2], false);
   document.addEventListener('keydown', onPromptKey);
@@ -2284,6 +2296,34 @@ function createViewer(t) {
   const frameLoads = new Map();
   let blurTimer;
   const clearFrameLoads = () => { for (const stop of frameLoads.values()) stop(); frameLoads.clear(); };
+  // Music works: the embedded players follow the site theme, and starting one pauses the other.
+  const frameOrigin = (frame) => { try { return new URL(frame.src).origin; } catch { return ''; } };
+  const postFrame = (frame, message) => {
+    const origin = frame && frameOrigin(frame);
+    if (frame?.contentWindow && origin) frame.contentWindow.postMessage(message, origin);
+  };
+  const currentTheme = () => {
+    const theme = document.documentElement.dataset.theme;
+    if (theme === 'light' || theme === 'dark') return theme;
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  };
+  const syncAudioTheme = (frame) => {
+    if (t.category === '音乐') postFrame(frame, { source: 'sp-arena-theme', theme: currentTheme() });
+  };
+  const themeObserver = new MutationObserver(() => {
+    if (t.category === '音乐') $$('iframe', stage).forEach(syncAudioTheme);
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  const onAudioMessage = (event) => {
+    if (t.category !== '音乐' || event.data?.source !== 'sp-audio' || event.data.playing !== true) return;
+    const frames = $$('iframe', stage);
+    const sourceFrame = frames.find((frame) => event.source === frame.contentWindow && event.origin === frameOrigin(frame));
+    if (!sourceFrame) return;
+    for (const frame of frames) {
+      if (frame !== sourceFrame) postFrame(frame, { source: 'sp-arena-audio', pause: true });
+    }
+  };
+  addEventListener('message', onAudioMessage);
   const byId = (id) => t.results.find((r) => r.id === id);
   // A version the question no longer lists adds nothing to the option text.
   const versionLabel = (r) => variantsOf(t).find((variant) => variant.id === r.promptVariant)?.label;
@@ -2371,7 +2411,7 @@ function createViewer(t) {
     if (split) controls.add(frame, { inject: hosted(r) });
     const loader = $('.loader', body);
     frameLoads.set(i, watchViewerFrame(frame, {
-      onLoaded: () => { loader.classList.add('gone'); frameLoads.delete(Number(pane.dataset.pane)); },
+      onLoaded: () => { loader.classList.add('gone'); frameLoads.delete(Number(pane.dataset.pane)); syncAudioTheme(frame); },
       onSlow: () => {
         loader.innerHTML = `<b>作品尚未完成载入</b><span>可以重新载入这一侧，或继续等待。</span><button class="btn" type="button" data-pane-reload="${pane.dataset.pane}">${icon('reload')}重新载入当前栏</button>`;
       },
@@ -2617,6 +2657,8 @@ function createViewer(t) {
       gone = true;
       clearFrameLoads();
       clearTimeout(blurTimer);
+      themeObserver.disconnect();
+      removeEventListener('message', onAudioMessage);
       controls.destroy();
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('blur', onBlur);
@@ -2638,6 +2680,8 @@ const PLATFORM_PAGES = { arena: './arena.js', leaderboard: './leaderboard.js', c
 const PAGE_TITLES = { arena: '盲评', leaderboard: '榜单', changelog: '更新日志', team: '开发者团队', new: '发起题目', exam: '资格考试', submit: '上传作品', me: '个人中心', review: '审核', dimensions: '维度图' };
 const PAGE_SECTIONS = { arena: 'arena', leaderboard: 'leaderboard', changelog: '', team: '', new: 'new', exam: 'new', submit: 'questions', me: 'me', review: 'me', dimensions: 'arena' };
 const guidedTrial = () => globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true;
+// The closed-book 后端 section belongs to the guided trial build only.
+const libraryCategories = () => CATEGORIES.filter((c) => c.judging !== 'benchmark' || guidedTrial()).map((c) => c.name);
 // A pointer resting on a link to one of these pages (or a finger landing on it) starts fetching the
 // page's code, so the click usually finds it ready.
 const warmed = new Set();

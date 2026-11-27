@@ -321,7 +321,6 @@ Harness 没有评分，这里只按花费倍数排序。|Harnesses have no score
 普通管理员|Administrator
 成员|Member
 可信成员|Trusted member
-全部|All
 题目|Questions
 内容|Content
 核验|Verification

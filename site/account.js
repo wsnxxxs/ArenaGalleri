@@ -5,7 +5,7 @@ import { memberChips, memberList, memberResults, membersState, openMember } from
 import { accountVersion, api, apiRemembered, arenaText, autoRejected, avatarFace, byStaff, canDecide, levelBadge, levelOf, confirmDialog, injected, isSenior, isStaff, moderationBadge, openBindEmail, openDialog, platform, QUESTION_LABELS, recall, refreshPlatform, requireUser, reviewCount, reviewVerdict, riskLabels, ROLE_LABELS, setFaces, statusBadge, toast, updateRememberedReviewWork } from './platform.js';
 import { effortOptions, onWorkFieldChange, readWorkFields, workFieldsHtml } from './work-fields.js';
 import { openWorkManagement } from './work-management.js';
-import { CATEGORIES, TEMPLATE_LABELS, categoryLabel, domainsOf, matchesQuery, subcategoriesOf, subcategoryOf } from './categories.js';
+import { CATEGORIES, TEMPLATE_LABELS, categoryLabel, categoryOf, domainsOf, matchesQuery, subcategoriesOf, subcategoryOf } from './categories.js';
 import { categoryField, domainField, subcategoryFieldHtml, syncDomains } from './question-fields.js';
 import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { moderated, pendingLimit, stageTrack } from './submit.js';
@@ -1023,7 +1023,7 @@ function catalogRow(ctx, q, buckets) {
 
 // The question type and domains, shared with the publishing form.
 function categoryFields(q) {
-  return categoryField(q.category, q.subcategory) + domainField(platform, domainsOf(q));
+  return categoryField(q.category, subcategoryOf(q)) + domainField(platform, domainsOf(q));
 }
 function bindQuestionCategoryForm(form) {
   syncDomains(form);
@@ -1050,6 +1050,12 @@ function bindQuestionCategoryForm(form) {
       }
     }
   });
+}
+// A PDF question takes the PDF format; leaving PDF (or the design category) restores the category's own.
+function pdfTemplates(q, category, subcategory) {
+  const wantPdf = category === '静态网页' && subcategory === 'PDF';
+  if (wantPdf === Boolean(q.templates?.includes('pdf'))) return undefined;
+  return wantPdf ? ['pdf'] : [...(categoryOf(category)?.templates ?? ['static'])];
 }
 const questionShown = (q) => ['legacy', 'approved'].includes(q.moderation?.status ?? 'legacy');
 
@@ -1083,14 +1089,14 @@ function decideQuestion(q, status, current = () => true) {
       if (status === 'rejected' && !reason) { error.textContent = '请写明拒绝理由'; form.reason.focus(); return; }
       const category = form.category?.value;
       if (status === 'approved' && !category) { error.textContent = '请选择题目类型'; $('[name="category"]', form).focus(); return; }
-      const subcategory = form.subcategory?.value?.trim() || '';
+      // Only a checked option counts: a lone radio's value reads even when it is not chosen.
+      const subcategory = form.querySelector('[name="subcategory"]:checked')?.value ?? '';
       const domains = $$('[name="domains"]:checked', form).map((box) => box.value);
       if (status === 'approved' && !domains.length) { error.textContent = '请选择所属领域'; return; }
       const button = $('[type="submit"]', form);
       button.disabled = true;
       try {
-        const templates = category === '静态网页' && subcategory === 'PDF' ? ['pdf']
-          : category === '静态网页' && q.subcategory === 'PDF' ? ['static'] : undefined;
+        const templates = pdfTemplates(q, category, subcategory);
         await api(`questions/${encodeURIComponent(q.id)}/moderation`, {
           method: 'POST',
           body: { status, reason, ...(category ? { category, domains, ...(subcategory ? { subcategory } : {}), ...(templates ? { templates } : {}) } : {}) },
@@ -1155,10 +1161,10 @@ function editQuestion(q, works = [], current = () => true) {
       const category = form.category.value;
       if (!category) { error.textContent = '请选择题目类型'; return; }
       if (category !== q.category) body.category = category;
-      const subcategory = form.subcategory?.value?.trim() ?? '';
-      if (subcategory !== (q.subcategory ?? '')) body.subcategory = subcategory;
-      if (category === '静态网页' && subcategory === 'PDF' && !q.templates?.includes('pdf')) body.templates = ['pdf'];
-      else if (category === '静态网页' && subcategory !== 'PDF' && q.templates?.includes('pdf')) body.templates = ['static'];
+      const subcategory = form.querySelector('[name="subcategory"]:checked')?.value ?? '';
+      if (subcategory !== subcategoryOf(q)) body.subcategory = subcategory;
+      const templates = pdfTemplates(q, category, subcategory);
+      if (templates) body.templates = templates;
       const domains = $$('[name="domains"]:checked', form).map((box) => box.value);
       if (!domains.length) { error.textContent = '请选择所属领域'; return; }
       if ([...domains].sort().join('|') !== [...domainsOf(q)].sort().join('|')) body.domains = domains;
@@ -1450,7 +1456,7 @@ function review(root, ctx) {
     const options = (items, current) => items.map(([id, label]) => `<option value="${esc(id)}"${id === current ? ' selected' : ''}>${esc(label)}</option>`).join('');
     return `<div class="work-management"><div class="work-manage-heading"><h3>全部题目<span>${state.scopeTotal}</span></h3><p>公开状态、投稿与作品分别管理</p></div>
       <div class="work-manage-tools"><label class="collection-search">${icon('search')}<input type="search" data-catalog-search aria-label="搜索题目、提示词或发布者" placeholder="搜索题目、提示词或发布者" value="${esc(state.catalog.query)}"></label>
-        <select name="category" data-catalog-select aria-label="按题目类型筛选">${options([['', '全部类型'], ...CATEGORIES.map((c) => [c.name, c.label])], state.catalog.category)}</select>
+        <select name="category" data-catalog-select aria-label="按题目类型筛选">${options([['', '全部类型'], ...CATEGORIES.filter((c) => c.judging !== 'benchmark' || globalThis.SAME_PROMPT_CONFIG?.guidedVoting === true).map((c) => [c.name, c.label])], state.catalog.category)}</select>
         <select name="domain" data-catalog-select aria-label="按领域筛选">${options([['', '全部领域'], ...domains.map((d) => [d, d])], state.catalog.domain)}</select>
         <select name="sort" data-catalog-select aria-label="题目排序">${options([['latest', '最新在前'], ['oldest', '最早在前'], ['title', '按题目名称'], ['works', '作品最多']], state.catalog.sort)}</select></div>
       <div class="chips work-manage-filters" data-catalog-chips>${catalogChips()}</div><div class="work-manage-results" data-catalog-results>${catalogResults()}</div></div>`;

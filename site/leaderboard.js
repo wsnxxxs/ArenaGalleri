@@ -797,13 +797,14 @@ export function mount(root, ctx) {
     location.replace('#/leaderboard/curated');
     return {};
   }
-  const isBackend = first === 'backend';
+  // The backend boards belong to the guided trial build only.
+  const isBackend = guided && first === 'backend';
   const backendTier = isBackend && second ? second.toUpperCase() : null;
   if (isBackend && second && !['EZ', 'HD', 'IN', 'AT'].includes(backendTier)) {
     location.replace('#/leaderboard/backend');
     return {};
   }
-  const backendTaskMatch = !curated && !isBackend && first
+  const backendTaskMatch = guided && !curated && !isBackend && first
     ? ctx.DATA.tasks.find((t) => t.id === first && benchmarkTask(t)) ?? null
     : null;
   if (backendTaskMatch) {

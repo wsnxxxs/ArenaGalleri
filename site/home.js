@@ -335,6 +335,10 @@ function bindHeroCarousel(root) {
   const track = shell?.querySelector('[data-hero-track]');
   const slides = shell ? $$('[data-hero-slide]', shell) : [];
   const spiral = mountSpiralCanvas(shell?.querySelector('.home-support-canvas'));
+  // The reward code is a private asset copied in at deploy; without it the card drops the code, not a broken image.
+  const qr = shell?.querySelector('.home-support-qr-img');
+  const dropQr = () => { qr.closest('.home-support-qr-wrap').hidden = true; };
+  if (qr) { qr.addEventListener('error', dropQr, { once: true }); if (qr.complete && !qr.naturalWidth) dropQr(); }
   let index = 0;
   const apply = (next) => {
     if (!track || !slides.length) return;

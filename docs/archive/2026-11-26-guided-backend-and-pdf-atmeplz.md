@@ -41,3 +41,10 @@
 ## 下一步建议
 
 - 与后端分支 `feat/guided-backend-and-pdf` 配套上线至 `guided-trial` 并验证公网 HTTPS 行为。
+
+## 勘误（2026-11-27，wsnxxxs 复查合并时追加）
+
+- 「仅针对 guided-trial」：合并前前端没有门控，非引导构建也显示「后端 0」分区并能打开 `#/leaderboard/backend`。合并时已按引导构建门控。
+- 「既有被迁移为 PDF 的历史 HTML 作品」：本仓库原先没有迁移，仍存 Word / PPT / Excel 的题目会失去细分。合并时改为把这三个旧值读作 PDF。
+- 「无子分类的分类（推理、三维、音乐、后端）省略侧栏折叠箭头」：推理、三维、音乐都有细分，只有后端没有。
+- 英文词条并不完整，验证也只跑了部分单测。合并时补齐词条，完整 `npm run check` / `npm test` 的结果见 `2026-11-27-trial-review-wsnxxxs.md`。

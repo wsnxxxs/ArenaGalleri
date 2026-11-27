@@ -350,6 +350,8 @@ export default {
   '经济金融': 'Economics & finance', '商业管理': 'Business & management', '法律政务': 'Law & government', '社会生活': 'Society',
   '建筑': 'Architecture', '自然景观': 'Nature & landscapes', '交通与机械': 'Transport & machinery', '产品与品牌': 'Products & brands',
   '游戏娱乐': 'Games & entertainment', '生活服务': 'Everyday services', '餐饮美食': 'Food & dining', '旅游出行': 'Travel', '运动体育': 'Sports',
+  '模仿写作、网文、碎片文段与主题小说': 'Imitation writing, web fiction, fragments and themed fiction',
+  '数学、物理、电路与逻辑 · AI 评分': 'Math, physics, circuits and logic · AI-graded',
   '理工与健康': 'Science, technology & health', '人文与社会': 'Humanities & society', '空间与产品': 'Spaces & products', '生活与娱乐': 'Life & entertainment',
   '其他领域': 'Other domains', '故事、诗歌、文案与改写': 'Stories, poetry, copywriting and rewriting',
   '数学、逻辑与哲学 · AI 评分': 'Mathematics, logic and philosophy · AI grading',

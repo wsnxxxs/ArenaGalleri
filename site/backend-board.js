@@ -370,17 +370,20 @@ export function mountBackendBoard(container, ctx = {}) {
     const reading = { path, controller, promise: null };
     request = reading;
     container.setAttribute('aria-busy', 'true');
+    // As in leaderboard.js: the deadline also covers reading the body, and a timeout shows its own message.
+    let reject;
+    const cancelled = new Promise((_, fail) => { reject = fail; });
+    controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
     const timer = setTimeout(() => controller.abort(new DOMException('连接超时，请重试。', 'TimeoutError')), 15000);
     reading.promise = (async () => {
       try {
-        const data = await api(path, { signal: controller.signal });
+        const data = await Promise.race([api(path, { signal: controller.signal }), cancelled]);
         if (destroyed || request !== reading || controller.signal.aborted) return;
         if (!data || !Array.isArray(data.rows)) throw new Error('服务暂时不可用，请稍后重试。');
         draw(data);
         return data;
       } catch (error) {
-        if (error?.name === 'AbortError' && error.message !== '连接超时，请重试。') return;
-        if (destroyed || request !== reading) return;
+        if (error?.name === 'AbortError' || destroyed || request !== reading) return;
         if (tier && fallback && Array.isArray(fallback.rows)) {
           const data = { ...fallback, tier };
           draw(data);

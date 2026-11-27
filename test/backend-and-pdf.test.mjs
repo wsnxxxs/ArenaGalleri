@@ -11,6 +11,7 @@ import {
   pdfTask,
   publishableCategories,
   subcategoriesOf,
+  subcategoryOf,
   templatesOf,
   votedTask,
 } from '../site/categories.js';
@@ -77,7 +78,7 @@ test('backend category, PDF subcategory, helpers and terminal icon match specifi
     assert.deepEqual(subcategoriesOf('静态网页'), [
       { name: '网页', label: '网页' },
       { name: '像素画', label: '像素画' },
-      { name: 'PDF', label: 'PDF', templates: ['pdf'] },
+      { name: 'PDF', label: 'PDF', templates: ['pdf'], aliases: ['Word', 'PPT', 'Excel'] },
     ]);
 
     const backend = categoryOf('后端');
@@ -107,6 +108,9 @@ test('backend category, PDF subcategory, helpers and terminal icon match specifi
     assert.deepEqual(templatesOf(pdf), ['pdf']);
     assert.deepEqual(templatesOf(web), ['static']);
     assert.deepEqual(templatesOf(bench), []);
+    assert.equal(subcategoryOf({ category: '静态网页', subcategory: 'Word' }), 'PDF', 'questions from before the merge read as PDF');
+    assert.deepEqual(templatesOf({ category: '静态网页', subcategory: 'Excel' }), ['pdf']);
+    assert.deepEqual(templatesOf({ category: '建模', templates: ['pdf'] }), ['static'], 'a question moved out of design drops the PDF format');
 
     assert.equal(benchmarkTask(bench), true);
     assert.equal(benchmarkTask({ id: 'x', benchmarkOnly: true }), true);

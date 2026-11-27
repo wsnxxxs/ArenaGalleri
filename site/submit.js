@@ -10,7 +10,7 @@ import { createUploadRequest, resolveApiMedia } from './platform-api.js';
 import { onWorkFieldChange, readWorkFields, registeredModel, workFieldsHtml } from './work-fields.js';
 import { bindUsageEntry, saveUsage, usageEntryHtml } from './usage-entry.js';
 import { loadPricing } from './usage-view.js';
-import { TEMPLATE_LABELS, templatesOf } from './categories.js';
+import { TEMPLATE_LABELS, benchmarkTask, templatesOf } from './categories.js';
 import { MUSIC_LLM_NOTICE, PDF_SUBCATEGORY_NOTICE } from './question-fields.js';
 import { linkReferences, referenceSheet } from './references.js';
 
@@ -82,7 +82,7 @@ function workStage(w, shown) {
 export function mount(root, ctx) {
   const tasks = ctx.DATA.tasks;
   const task = tasks.find((t) => t.id === ctx.param);
-  if (!task || !task.acceptsUploads) {
+  if (!task || !task.acceptsUploads || benchmarkTask(task)) {
     root.innerHTML = `${ctx.pageStart({ title: '上传作品', section: 'questions', heading: task ? '这道题暂不接受作品' : '从一道题目开始', description: '每份作品都对应一道明确的题目。',
       crumbs: task ? [ctx.LIBRARY, { text: task.title, original: true, href: ctx.taskHref(task) }, { text: '上传作品' }] : [ctx.LIBRARY, { text: '上传作品' }] })}
       <section class="account-empty">${icon('grid')}<h2>${!task ? '请从题目内上传作品' : task.promptPending ? '提示词原文尚未公开' : '这道题暂时关闭了投稿'}</h2><p>${!task ? '在题库中打开一道题，点击「上传作品」。' : task.promptPending ? '待题目补充完整提示词后即可上传。' : '管理员重新开放后即可上传。'}</p><a class="btn primary" href="${task ? ctx.taskHref(task) : '#/questions'}">${task ? '返回题目' : '浏览题库'}</a></section>${ctx.pageEnd()}`;

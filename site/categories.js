@@ -29,7 +29,8 @@ export const CATEGORIES = [
     subcategories: [
       { name: '网页', label: '网页' },
       { name: '像素画', label: '像素画' },
-      { name: 'PDF', label: 'PDF', templates: ['pdf'] },
+      // Word, PPT and Excel were merged into PDF; questions still stored with them read as PDF.
+      { name: 'PDF', label: 'PDF', templates: ['pdf'], aliases: ['Word', 'PPT', 'Excel'] },
     ],
   },
   {
@@ -69,14 +70,15 @@ export const categoryLabel = (name) => categoryOf(name)?.label ?? name ?? '';
 export const subcategoriesOf = (name) => categoryOf(name)?.subcategories ?? [];
 export const subcategoryOf = (task) => {
   const sub = typeof task?.subcategory === 'string' ? task.subcategory.trim() : '';
-  return sub && subcategoriesOf(task?.category).some((s) => s.name === sub && !s.disabled) ? sub : '';
+  return (sub && subcategoriesOf(task?.category).find((s) => !s.disabled && (s.name === sub || s.aliases?.includes(sub))))?.name ?? '';
 };
 // Unknown categories are judged by vote, as every category was before AI grading.
 export const aiJudged = (task) => categoryOf(task?.category)?.judging === 'ai';
 export const benchmarkTask = (task) => Boolean(task?.benchmarkOnly || categoryOf(task?.category)?.judging === 'benchmark');
 export const votedTask = (task) => !aiJudged(task) && !benchmarkTask(task);
 export const publishableCategories = () => CATEGORIES.filter((c) => c.publish !== false);
-export const pdfTask = (task) => Boolean(task && (subcategoryOf(task) === 'PDF' || (Array.isArray(task.templates) && task.templates.includes('pdf'))));
+// Only design questions take PDF; a question moved to another category keeps no PDF format.
+export const pdfTask = (task) => task?.category === '静态网页' && (subcategoryOf(task) === 'PDF' || Boolean(task.templates?.includes('pdf')));
 // Reserved for AI grading: { score, max, judge, rationale } on a work, null until a grade arrives.
 export function aiScoreOf(work) {
   const grade = work?.aiScore;
@@ -88,7 +90,8 @@ export function aiScoreOf(work) {
 export function templatesOf(task) {
   if (benchmarkTask(task)) return [];
   if (pdfTask(task)) return ['pdf'];
-  return [...new Set((task?.templates?.length ? task.templates : categoryOf(task?.category)?.templates ?? ['static'])
+  const own = (task?.templates ?? []).filter((type) => type !== 'pdf');
+  return [...new Set((own.length ? own : categoryOf(task?.category)?.templates ?? ['static'])
     .map((type) => (type === 'vite' ? 'static' : type)))];
 }
 export const domainsOf = (task) => task.domains ?? [];

@@ -10,7 +10,7 @@ import { accountVersion, api, can, confirmDialog, moderationBadge, openDialog, p
 import { resolveApiMedia } from './platform-api.js';
 import { levelGate } from './level-gate.js';
 import { contentStage, moderated, stageTrack, uploadFlow } from './submit.js';
-import { TEMPLATE_LABELS, categoryLabel, categoryOf, subcategoriesOf } from './categories.js';
+import { TEMPLATE_LABELS, categoryLabel, categoryOf, subcategoriesOf, subcategoryOf } from './categories.js';
 import { MUSIC_LLM_NOTICE, categoryField, domainField, subcategoryFieldHtml, syncDomains } from './question-fields.js';
 import { referenceEditor, referenceSheet, referencesEnabled } from './references.js';
 import { replaceReferenceNote } from './reference-files.js';
@@ -128,8 +128,8 @@ export function mount(root, ctx) {
       loadedOwner = owner;
       samples = data.works ?? [];
       removeSamples = false;
-      question = { title: found.title, summary: found.summary ?? '', category: found.category ?? '', subcategory: found.subcategory ?? '',
-        domains: found.domains ?? [], prompt: found.prompt ?? '', templates: found.category === '静态网页' && found.subcategory === 'PDF' ? ['pdf'] : (found.templates ?? []) };
+      question = { title: found.title, summary: found.summary ?? '', category: found.category ?? '', subcategory: subcategoryOf(found),
+        domains: found.domains ?? [], prompt: found.prompt ?? '', templates: found.category === '静态网页' && subcategoryOf(found) === 'PDF' ? ['pdf'] : (found.templates ?? []) };
       refs?.destroy();
       refs = referencesEnabled() ? referenceEditor({ refs: found.references ?? [], credit: found.referenceCredit ?? '', prompt: () => promptArea()?.value ?? question.prompt, insert: insertNote }) : null;
       showForm();
