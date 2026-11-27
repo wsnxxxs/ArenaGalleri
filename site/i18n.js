@@ -21,7 +21,7 @@ export const formatDate = (value, options = {}) => value ? new Date(dateValue(va
 export const formatTime = (value, options = {}) => value ? new Date(dateValue(value)).toLocaleString(current, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', ...options }) : '';
 const escapePattern = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Templates are an explicit allowlist, anchored to the entire phrase; raw content is excluded below.
-const patterns = Object.entries(catalog).filter(([key]) => /\{[A-Za-z][A-Za-z0-9]*\}/.test(key) && /[\u3400-\u9fff]/.test(key)).map(([key, english]) => {
+const patterns = Object.entries(catalog).filter(([key]) => /\{[A-Za-z][A-Za-z0-9]*\}/.test(key) && (/[\u3400-\u9fff]/.test(key) || key.includes('{term}'))).map(([key, english]) => {
   const names = [];
   const pattern = key.split(/(\{[A-Za-z][A-Za-z0-9]*\})/).map((part) => {
     if (/^\{[A-Za-z][A-Za-z0-9]*\}$/.test(part)) {
@@ -62,7 +62,20 @@ export function translateText(source) {
   let english = catalog[normalized];
   if (english === undefined) for (const pattern of patterns) {
     const match = trimmed.match(pattern.regex);
-    if (match) { english = englishMessage(pattern.english, Object.fromEntries(pattern.names.map((name, i) => [name, match[i + 1]]))); break; }
+    if (!match) continue;
+    // {term} holds an interface phrase (a page or action name) and matches only one the catalog knows;
+    // every other placeholder keeps the captured original text.
+    const vars = {};
+    let known = true;
+    pattern.names.forEach((name, i) => {
+      const value = match[i + 1];
+      if (name !== 'term') vars[name] = value;
+      else if (catalog[normalize(value)] === undefined) known = false;
+      else vars[name] = catalog[normalize(value)];
+    });
+    if (!known) continue;
+    english = englishMessage(pattern.english, vars);
+    break;
   }
   return english === undefined ? text : text.replace(trimmed, english);
 }

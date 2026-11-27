@@ -241,6 +241,8 @@ export default {
   '厂商待确认': 'Provider to be confirmed',
   '（{count} 题）': ' ({count} questions)', '· 未验证': '· Unverified', '· 存疑': '· Questioned',
   '，再用': ', then use', '打开。': 'to open it.',
+  // {term}: a page name the catalog translates (see translateText); the {value} forms keep other text.
+  '当前地址没有可用的平台服务。连接后即可使用{term}，作品仍可浏览。': 'No platform service is available at this address. Connect to use {term}; works remain available to browse.',
   '当前地址没有可用的平台服务。连接后即可使用{value}，作品仍可浏览。': 'No platform service is available at this address. Connect to use {value}; works remain available to browse.',
   '最新题目与作品正在加载…': 'Loading the latest questions and works…', '返回': 'Back',
   '没有 id 为「{id}」的题目。': 'No question with ID “{id}” exists.',
@@ -302,6 +304,8 @@ export default {
   '{value}的提示词版本': 'Prompt versions for {value}', '收起 {name} 的其余作品': 'Collapse other works by {name}',
   '展开 {name} 的另外 {count} 件作品': 'Expand {count} other works by {name}',
   '同一模型的另外 {count} 件作品（其他档位或版本）': '{count} other works by the same model (other levels or versions)',
+  '正在载入{term}…': 'Loading {term}…', '{term}暂时不可用': '{term} is temporarily unavailable',
+  '{term}暂时未能载入': 'Could not load {term}', '返回{term}': 'Back to {term}',
   '正在载入{value}…': 'Loading {value}…', '{value}暂时不可用': '{value} is temporarily unavailable',
   '{value}暂时未能载入': 'Could not load {value}', '返回{value}': 'Back to {value}',
 

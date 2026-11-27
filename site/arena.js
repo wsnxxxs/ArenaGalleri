@@ -915,6 +915,13 @@ function match(root, ctx, first, scope) {
       return;
     }
     if (!error.code || error.code === 'challenge-cancelled' || error.code === 'match-timeout' || error.status >= 500 || [408, 429].includes(error.status)) {
+      // The end-of-range panel replaced both panes; a new account starts over from the lobby.
+      if (!$('[data-body]', el)) {
+        $('.arena-stage', el).innerHTML = `<div class="board-empty arena-empty"><p class="board-empty-title">${esc(error.message)}</p><p>回到盲评大厅重新开始。</p>
+          <div class="board-empty-actions"><a class="btn primary" href="#/arena">返回盲评大厅</a></div></div>`;
+        drawBar();
+        return;
+      }
       const cancelled = error.code === 'challenge-cancelled';
       for (const body of $$('[data-body]', el)) body.innerHTML = `<div class="arena-layer"><div class="board-empty arena-empty">
         <p class="board-empty-title">${esc(error.message)}</p><p>${cancelled ? '确认你是真人后，就可以继续盲评。' : '可以重试抽取，或返回盲评题库。'}</p>

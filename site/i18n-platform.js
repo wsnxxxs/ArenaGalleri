@@ -904,6 +904,7 @@ ArenaGalleri 运营团队|ArenaGalleri team
 ，按名称推断为 {value}|, inferred from the name as {value}
 · {value} 个 · {value2} · 入口 {value3}|· {value} files · {value2} · Entry {value3}
 {value} 个 · {value2} · 入口 {value3}|{value} files · {value2} · Entry {value3}
+{term} {count} 件？|{term}: {count} works?
 {value} {value2} 件？|{value} {value2} works?
 ，{value} 件作品随之删除|, along with {value} works
 已公开{value}|Public{value}
@@ -1016,11 +1017,16 @@ ArenaGalleri 运营团队|ArenaGalleri team
 {value} 拒绝|Rejected {value}
 盲评池 {value} 件 · {value2} 个配置|Evaluation pool: {value} works · {value2} configurations
 已有 {value} 件作品，不能再改|{value} works exist; changes are locked
+显示 {n} / {total} 件作品 · 需要管理员权限|Showing {n} / {total} works · Administrator permissions required
 显示 {value} / {value2} 件作品{value3}|Showing {value} / {value2} works{value3}
 显示 {value} / {value2} 道题目|Showing {value} / {value2} questions
 显示 {value} / {value2} 位成员 · 自己和服务器固定的账号不能在这里改角色|Showing {value} / {value2} members · Your own role and server-fixed accounts cannot be changed here
 没有{value}的作品|No works matching {value}
 自动审核中 · {value}|Automatic review · {value}
+已选 {count} {term} · 每批最多 200 件，请缩小选择范围|Selected {count} {term} · Up to 200 works per batch; narrow your selection
+全选当前页（{count} {term}） · 每批最多 200 件，请缩小选择范围|Select this page ({count} {term}) · Up to 200 works per batch; narrow your selection
+{term} {count} 件|{term}: {count} works
+{term} {count} 道|{term}: {count} questions
 已选 {value} {value2}|Selected {value} {value2}
 全选（{value} {value2}）|Select all ({value} {value2})
 · 每批最多 200 件，请缩小选择范围|· Up to 200 works per batch; narrow your selection

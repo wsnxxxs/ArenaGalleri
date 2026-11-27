@@ -248,6 +248,9 @@ const messages = {
   '保存后立即失去全部管理权限，不能进入审核页。已做出的审核决定和记录保留；待审投稿按成员规则计算。保留认证成员身份，可以发起题目。': 'After saving, the member immediately loses every admin right and cannot open the review page. Past review decisions and records are kept, and pending uploads follow the member rules. They stay a Verified member and can create questions.',
   '保存后立即不能进入审核页。已做出的审核决定和记录保留；待审投稿按成员规则计算。之后的选择只计入大众榜，不能再发起题目。': 'After saving, the member can no longer open the review page. Past review decisions and records are kept, and pending uploads follow the member rules. Later choices count only toward the public board and they can no longer create questions.',
   '保存后立即失去全部管理权限，不能进入审核页。已做出的审核决定和记录保留；待审投稿按成员规则计算。之后的选择只计入大众榜，不能再发起题目。': 'After saving, the member immediately loses every admin right and cannot open the review page. Past review decisions and records are kept, and pending uploads follow the member rules. Later choices count only toward the public board and they can no longer create questions.',
+  // Staff batch actions: {term} is the action's own label or result (see translateText).
+  '{count} 件{term}': '{count} works: {term}',
+  '{term}：{value}': '{term}: {value}',
 };
 
 export default messages;

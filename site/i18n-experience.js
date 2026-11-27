@@ -177,6 +177,7 @@ const messages = {
   '正在抽取一组作品…': 'Drawing a pair…',
   '正在抽取一组作品': 'Drawing a pair',
   '登录状态已变化，请重新载入': 'Your sign-in state changed. Please reload.',
+  '回到盲评大厅重新开始。': 'Start again from the blind-review lobby.',
   '登录状态已变化，请重新抽取': 'Your sign-in state changed. Please draw a new pair.',
   '抽取作品超时，请重试': 'Drawing a pair timed out. Please try again.',
   '正在提交选择…': 'Submitting your choice…',
