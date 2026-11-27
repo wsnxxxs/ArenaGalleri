@@ -15,6 +15,17 @@ test('English interface phrases and explicit templates preserve dynamic values',
   assert.equal(translateText('· 本次已计入 2 组'), '· 2 pairs counted this session');
 });
 
+test('a {term} slot translates a known interface phrase and leaves other text to the next template', () => {
+  setLocale('en');
+  assert.equal(translateText('正在载入榜单…'), 'Loading leaderboard…');
+  assert.equal(translateText('返回题库'), 'Back to questions');
+  assert.equal(translateText('撤下 2 件？'), 'Hide: 2 works?');
+  assert.equal(translateText('已移出盲评：模型原名'), 'Removed from blind review: 模型原名');
+  assert.equal(translateText('正在载入某个作品…'), 'Loading 某个作品…', 'unknown text falls through to the {value} form');
+  assert.equal(translateText('注意：原文'), '注意：原文');
+  setLocale('zh-CN');
+});
+
 test('copy is matched as a whole phrase and Chinese switches back without changing content', () => {
   setLocale('en');
   assert.equal(translateText('作品原文中包含登录两个字'), '作品原文中包含登录两个字');
