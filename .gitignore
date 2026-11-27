@@ -2,6 +2,7 @@ node_modules
 dist
 .datapack/
 .datapack-auth-*/
+.datapack-download-*/
 .integration/
 .DS_Store
 *.log

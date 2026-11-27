@@ -444,6 +444,8 @@ export function mount(root, ctx) {
       if (reason === 'activity' || reason === 'identity') {
         const select = $('[data-board-task]', root);
         if (select) select.innerHTML = boardTaskOptions(listed, select.value, platform.activityReady, platform.arena);
+        // An empty curated board offers different next steps once the reader signs in.
+        if (reason === 'identity' && curated) return board?.reload();
         return live?.refresh();
       }
       if (!['session', 'session-ready'].includes(reason)) return live?.refresh();

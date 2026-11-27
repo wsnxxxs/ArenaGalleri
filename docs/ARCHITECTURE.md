@@ -22,7 +22,7 @@
 | `work-controls.js` | 并排作品的折叠协议、内容源 URL 与同源 iframe 脚本注入 |
 | `publish.js` / `submit.js` / `account.js` | 题目、投稿、个人中心与审核界面 |
 | `work-fields.js` / `work-management.js` | 共用作品信息字段与作品管理弹窗 |
-| `question-preview.js` / `result-previews.js` | 代表作品选择和卡片模型展示 |
+| `featured.js` / `result-previews.js` | 代表作品与封面选择、卡片模型展示 |
 | `prompt-variants.js` | 提示词版本、同模型结果分组与当前版本选择 |
 | `references.js` / `reference-files.js` | 题目参考图的展示、大图与打包下载、发起与编辑题目时的上传编辑器；后者为无依赖的命名、提示词说明与 zip 工具 |
 | `preview-model.js` / `scene-resources.js` | 模型读取与资源回收 |

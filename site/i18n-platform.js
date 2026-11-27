@@ -641,6 +641,10 @@ const dynamic = Object.fromEntries(`
 已将 {value} 改为高级管理员|Changed {value} to senior administrator
 已将 {value} 改为普通管理员|Changed {value} to administrator
 已将 {value} 改为成员|Changed {value} to member
+已将 {value} 改为 Lv0 成员|Changed {value} to Lv0 Member
+已将 {value} 改为 Lv1 认证成员|Changed {value} to Lv1 Verified member
+已将 {value} 改为 Lv2 普通管理员|Changed {value} to Lv2 Administrator
+已将 {value} 改为 Lv3 高级管理员|Changed {value} to Lv3 Senior administrator
 显示 {value} / {value2} 件作品|Showing {value} / {value2} works
 全选（{value} 件）|Select all ({value} works)
 全选（{value} 道）|Select all ({value} questions)
@@ -737,7 +741,7 @@ ArenaGalleri 运营团队|ArenaGalleri team
 {value} works已通过核验|{value} works verified
 {value} questions已通过|{value} questions approved
 验证码已发送至 {value}。|Code sent to {value}.
-{value}没收到请检查垃圾邮件箱。|{value} If it hasn't arrived, check your spam folder.
+没收到请检查垃圾邮件箱。|If it hasn't arrived, check your spam folder.
 {value} 秒|{value} seconds
 {value} 分 {value2} 秒|{value} minutes {value2} seconds
 {value}后重发|Resend in {value}
@@ -785,7 +789,7 @@ ArenaGalleri 运营团队|ArenaGalleri team
 正在载入题目…|Loading questions…
 还没有上传作品|No uploads yet
 选一道题，上传你让模型生成的答案。|Choose a question and upload your model's answer.
-{value} 条：{value2}|{value} errors: {value2}
+{count} 条：{value2}|{count} errors: {value2}
 被拦截：{value}|Blocked: {value}
 {value} 个画布|{value} canvases
 现在：{value}|Current: {value}

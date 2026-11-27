@@ -47,7 +47,8 @@ export function checkDatapack(root, site) {
     if (model.vendorNote) warnings.push(`${model.id}: ${model.vendorNote}`);
   }
   for (const vendor of ['three.module.js', 'three.core.js', 'OrbitControls.js', 'BufferGeometryUtils.js']) file(`vendor/${vendor}`, 'Viewer');
-  const reserved = new Set(['questions', 'arena', 'leaderboard', 'changelog', 'new', 'exam', 'submit', 'me', 'review']);
+  // Routes the gallery resolves before task ids, including the trial site's pages.
+  const reserved = new Set(['questions', 'arena', 'leaderboard', 'changelog', 'new', 'exam', 'submit', 'me', 'review', 'terms', 'privacy', 'dimensions', 'team']);
   for (const task of data.tasks) {
     if (!task.id || tasks.has(task.id) || reserved.has(task.id)) errors.push(`Invalid or duplicate task id: ${task.id}`);
     tasks.add(task.id);

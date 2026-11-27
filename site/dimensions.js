@@ -143,7 +143,8 @@ export function mount(root, ctx) {
   }
 
   async function load() {
-    if (!isStaff()) return gate();
+    // Signing out drops the read in flight, so its staff-only chart is never drawn.
+    if (!isStaff()) { request++; return gate(); }
     const id = ++request;
     $('.dims', root)?.classList.add('is-loading');
     if (!data) page('<p class="muted">正在载入维度图…</p>');

@@ -407,6 +407,8 @@ export function createSandtable(root, task, { label, vendorOf, cover, header, in
     const job = loading;
     if (job.importing) return;
     job.importing = true;
+    // The scene is in; a slow import no longer counts against the loading deadline.
+    clearTimeout(job.timeout);
     try {
       const imported = await importArchitecture(job.frame.contentWindow.__galleryScenes, job.entry.result.id);
       if (destroyed || entries.get(job.entry.result.id) !== job.entry) { disposeObject(imported.group); return; }

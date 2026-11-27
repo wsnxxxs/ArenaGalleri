@@ -10,13 +10,18 @@ export const BOOST_VENDORS = new Set([
 ]);
 export const BOOST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
-export function boostOrder(results, { sort = 'added', now = Date.now(), vendorOf = (r) => r.vendor ?? '' } = {}) {
-  if (sort !== 'added') return results;
-  const boosted = results.filter((r) => r.status === 'verified' && BOOST_VENDORS.has(vendorOf(r))
-    && now - (Date.parse(r.addedAt) || 0) <= BOOST_WINDOW_MS);
+// The first card (usually the cover lead) never moves. Boosted works fold on their own, so they
+// do not take over or hide behind their model's representative (see filterResults in app.js).
+export function boostedWorks(results, { sort = 'added', now = Date.now(), vendorOf = (r) => r.vendor ?? '' } = {}) {
+  if (sort !== 'added') return [];
+  return results.slice(1).filter((r) => r.status === 'verified' && BOOST_VENDORS.has(vendorOf(r))
+    && now - (Date.parse(r.addedAt) || 0) <= BOOST_WINDOW_MS)
+    .sort((a, b) => (Date.parse(b.addedAt) || 0) - (Date.parse(a.addedAt) || 0));
+}
+
+export function boostOrder(results, options) {
+  const boosted = boostedWorks(results, options);
   if (!boosted.length) return results;
-  boosted.sort((a, b) => (Date.parse(b.addedAt) || 0) - (Date.parse(a.addedAt) || 0));
   const moving = new Set(boosted);
-  const rest = results.filter((r) => !moving.has(r));
-  return [...rest.slice(0, 1), ...boosted, ...rest.slice(1)];
+  return [results[0], ...boosted, ...results.slice(1).filter((r) => !moving.has(r))];
 }
