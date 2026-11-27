@@ -562,7 +562,7 @@ export function mount(root, ctx) {
         </div>
         <p class="home-lede">同一份提示词交给不同的 AI 模型，并排打开，<span>差距一眼可见。</span></p>
         <div class="home-actions">
-          ${first ? `<a class="btn home-enter" data-home-cta href="${ctx.taskHref(first)}"><span data-home-n>看看这 ${firstCount} 种</span>${icon('right')}</a>` : ''}
+          <a class="btn home-enter" data-home-cta href="${first ? ctx.taskHref(first) : '#/questions'}"${first ? '' : ' hidden'}><span data-home-n>看看这 ${firstCount} 种</span>${icon('right')}</a>
           <a class="home-link" href="#/questions">浏览全部题目${icon('right')}</a>
         </div>
         <div class="home-proof">${lastProof}</div>
@@ -641,8 +641,7 @@ export function mount(root, ctx) {
   const refreshLocale = () => {
     showNews();
     sing(verseCount, currentVerse);
-    const count = answersOf(decks[current]).length;
-    if (cta) cta.querySelector('[data-home-n]').textContent = translate('看看这 {count} 种', { count });
+    if (decks.length) cta.querySelector('[data-home-n]').textContent = translate('看看这 {count} 种', { count: answersOf(decks[current]).length });
   };
   window.addEventListener('localechange', refreshLocale);
   const refreshLinks = () => {
@@ -662,6 +661,7 @@ export function mount(root, ctx) {
     if (catalogReady()) {
       const next = decksOf(ctx.DATA.tasks), selectedId = decks[current]?.id;
       if (next.length) {
+        const wasEmpty = !decks.length;
         decks = next;
         current = Math.max(0, decks.findIndex((t) => t.id === selectedId));
         const nextTabs = tabsMarkup();
@@ -672,6 +672,8 @@ export function mount(root, ctx) {
           tabList.scrollLeft = left;
           tabList.children[current]?.style.setProperty('--progress', autoQuestion ? String(Math.min(elapsed / QUESTION, 1)) : '1');
         }
+        // The first questions with enough answers fill the hero that opened empty.
+        if (wasEmpty) { hero.classList.remove('is-empty'); show(current); }
       }
       const nextStrip = stripMarkup();
       if (nextStrip !== lastStrip) {
@@ -752,6 +754,7 @@ export function mount(root, ctx) {
     // The headline and the number in the button follow the question in the deck.
     turn(works.length);
     cta.querySelector('[data-home-n]').textContent = translate('看看这 {count} 种', { count: works.length });
+    cta.hidden = false;
     const selected = tabList.children[i];
     tabList.scrollTo({ left: selected.offsetLeft - tabList.offsetLeft - 24, behavior: reducedMotion() ? 'auto' : 'smooth' });
     cta.href = ctx.taskHref(t);
@@ -814,7 +817,7 @@ export function mount(root, ctx) {
   // Cards shuffle and a random other question comes up on its own, pausing while the pointer or focus is on the hero.
   const TICK = 100;
   const timer = setInterval(() => {
-    if (carousel.index() !== 0 || !playing || hovering || !heroVisible || document.visibilityState !== 'visible') return;
+    if (!decks.length || carousel.index() !== 0 || !playing || hovering || !heroVisible || document.visibilityState !== 'visible') return;
     sinceShuffle += TICK;
     if (autoQuestion) {
       elapsed += TICK;

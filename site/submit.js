@@ -143,15 +143,15 @@ export function uploadFlow(root, ctx, options) {
         'HTML 标签、链接和图片按原文字显示；平台用统一版式排版，预览、盲评与截图都用排版后的页面。'],
     };
     if (state.template === 'audio') return {
-      summary: ['必须只上传一个 <code>.mp3</code> 文件', `最大 ${formatBytes(maxBytes())}`],
+      summary: ['必须只上传一个 .mp3 文件', `最大 ${formatBytes(maxBytes())}`],
       rules: [esc(MUSIC_LLM_NOTICE),
-        '每次提交只能包含一个有效的 <code>.mp3</code> 音频文件，不接受压缩包、多个文件或 WAV/FLAC/MIDI 等其他格式。',
+        '每次提交只能包含一个有效的 .mp3 音频文件，不接受压缩包、多个文件或 WAV/FLAC/MIDI 等其他格式。',
         '平台会在试加载与双盲测试页面中统一提供播放键、进度条与音频全程频谱，文件名和标签信息不会在盲评中展示。'],
     };
     if (state.template === 'pdf') return {
-      summary: ['单个 <code>.pdf</code> 文件', `最大 ${formatBytes(maxBytes())}`],
+      summary: ['单个 .pdf 文件', `最大 ${formatBytes(maxBytes())}`],
       rules: [esc(PDF_SUBCATEGORY_NOTICE),
-        '每次提交只能包含一个有效的 <code>.pdf</code> 文件，不接受 <code>.html</code>、压缩包或其他格式。',
+        '每次提交只能包含一个有效的 .pdf 文件，不接受 .html、压缩包或其他格式。',
         '请在下面试加载窗口翻阅一遍，确认 PDF 每一页排版与图像都解析正常。'],
     };
     return {
@@ -838,8 +838,13 @@ export function uploadFlow(root, ctx, options) {
     onPlatformChange(reason) {
       // A submit in flight already consumed the draft; redrawing would reload its dead preview.
       if (reason === 'upload' || state.submitting) return;
-      if (!platform.user) restart();
-      else { draw(); findDraft(); }
+      if (!platform.user) { restart(); return; }
+      // The redraw rebuilds the form and reloads the trial frame, as resume() does.
+      saveFields();
+      if (state.draft && state.confirmed) state.trial.settled = true;
+      else if (state.draft) startTrial();
+      draw();
+      findDraft();
     },
     destroy() {
       active = false;

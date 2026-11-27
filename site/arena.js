@@ -797,10 +797,13 @@ function match(root, ctx, first, scope) {
     placeController = controller;
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const board = await api('leaderboard?by=model', { signal: controller.signal });
-      const row = board.rows.find((r) => r.key === pin.key);
+      const [board, { visibleBoardEntries }] = await Promise.all([api('leaderboard?by=model', { signal: controller.signal }), import('./leaderboard.js')]);
+      // The place is the one the overall board shows the reader, which numbers only its visible rows.
+      const rows = visibleBoardEntries(board, store.get('board-show-small-samples') === 'true').rows;
+      const place = rows.findIndex((r) => r.key === pin.key) + 1;
+      const row = rows[place - 1];
       if (!alive || version !== accountVersion() || state.pin !== pin || controller.signal.aborted) return;
-      state.place = row ? `综合第 ${row.rank} 名 · ${row.score} ±${row.interval}${row.provisional ? ' · 暂定' : ''}` : '尚未上榜';
+      state.place = row ? `综合第 ${place} 名 · ${row.score} ±${row.interval}${row.provisional ? ' · 暂定' : ''}` : '尚未上榜';
       if (state.result) drawBar();
     } catch { /* the tally stands without a place */ }
     finally { clearTimeout(timer); if (placeController === controller) placeController = null; }
@@ -1510,7 +1513,10 @@ function match(root, ctx, first, scope) {
       if (answer === 'count') await requireUser('登录后，这一轮的选择会同时计入精选榜。');
       if (answer === 'register') await openAuth({ mode: 'register' });
     }
-    if (alive) next();
+    if (!alive) return;
+    // Signing in from the notice changes the account before the first pair; start with the new one.
+    if (version !== accountVersion() && !state.match) state.error = null;
+    next();
   }
 
   setTask(task);

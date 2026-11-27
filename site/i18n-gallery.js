@@ -282,6 +282,7 @@ export default {
   '查看「{title}」的全部作品': 'View all works for “{title}”',
   '附 {count} 张参考图，作答需要识图': '{count} reference images; answering requires image understanding',
   '参考图 {count}': 'Refs {count}',
+  '参考图 {n} / {total}': 'Reference {n} of {total}',
   '发布者：{name}': 'Published by: {name}',
   '注册表尚未收录这个模型，厂商由投稿者填写': 'This model is not in the registry; its provider was declared by the submitter',
   '注册表尚未收录这个模型，厂商按模型名称推断': 'This model is not in the registry; its provider was inferred from its name',

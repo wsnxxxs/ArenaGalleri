@@ -117,7 +117,7 @@ export function openMember(m, { audit = [], onSaved }) {
           ${level(m) < 2 ? `<div><dt>资格考试</dt><dd>${m.exam?.passedAt ? `通过考试 · ${dateHtml(m.exam.passedAt)}` : examLine(m)}</dd></div>` : ''}
           <div><dt>待审额度</dt><dd>${quota(m)}${level(m) < 2 && !m.trusted ? `<p>可信成员需已核验满 3 件且近 90 天无存疑（现在已核验 ${verified} 件）。</p>` : ''}</dd></div>
         </dl>
-        <div class="actions"><a class="btn sm" href="#/review/works?q=${encodeURIComponent(m.nickname)}">在全部作品中查看${icon('right')}</a></div>
+        <div class="actions"><a class="btn sm" href="#/review/works?${encodeURIComponent(new URLSearchParams({ q: m.nickname }))}">在全部作品中查看${icon('right')}</a></div>
         <details><summary>等级记录 · ${log.length}</summary>
           ${log.length ? `<ol class="audit">${log.map((entry) => `<li>${timeHtml(entry.at)}<span class="audit-actor" data-i18n-ignore>${esc(entry.actor)}</span><b>调整等级</b><span data-i18n-ignore>${esc(entry.detail)}</span></li>`).join('')}</ol>` : '<p class="muted">最近的审核记录里没有等级调整。</p>'}
         </details>

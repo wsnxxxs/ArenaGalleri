@@ -6,7 +6,7 @@ test('the display catalog keeps prompts and runtime paths without private source
   const privateValue = 'PRIVATE-SOURCE';
   const result = { id: 'work', model: 'model', promptVariant: 'short', scene: 'results/work/', previewModel: 'assets/work.sbox',
     source: privateValue, readme: privateValue, sourceUpload: privateValue, sourceDigest: privateValue,
-    futureInternalField: privateValue, captures: { first: 'work/first.jpg' },
+    futureInternalField: privateValue, captures: { first: 'work/first.jpg', rawSource: privateValue },
     guide: { privateNote: privateValue, presets: [{ label: 'Dawn', query: 't=6', provenance: privateValue }] },
     gallery: [{ src: 'work/cover.jpg', caption: 'Cover', provenance: privateValue }] };
   const raw = { title: 'Gallery', repo: 'https://example.test/gallery', schemaVersion: 1,
@@ -28,6 +28,7 @@ test('the display catalog keeps prompts and runtime paths without private source
   assert.equal(display.tasks[0].results[0].promptVariant, 'short');
   assert.equal(display.tasks[0].results[0].scene, result.scene);
   assert.equal(display.tasks[0].results[0].previewModel, result.previewModel);
+  assert.deepEqual(display.tasks[0].results[0].captures, { first: 'work/first.jpg' }, 'captures keep only task conditions');
   assert.equal(display.buildInfo.datapack, info.datapack, 'write/version compatibility identifiers remain available');
   assert.equal(display.buildInfo.frontendCommit, undefined);
   assert.ok(!JSON.stringify(display).includes(privateValue));

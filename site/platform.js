@@ -615,12 +615,15 @@ export function codeSender(sheet, form, request, widgetFor = formWidget(sheet, f
     errorLine.textContent = '';
     cooldownMessage = '';
     notice.textContent = '';
-    let widget = null;
+    let widget = null, sent = false;
     try {
       widget = await widgetFor();
       if (!sheet.el.isConnected) return;
       if (widget && !widget.token) { errorLine.textContent = '请先完成人机验证。'; send.disabled = false; return; }
-      notice.textContent = `${await request(widget?.token)}没收到请检查垃圾邮件箱。`;
+      sent = true;
+      const message = await request(widget?.token);
+      // Two text nodes, so each sentence translates on its own.
+      notice.innerHTML = `<span>${esc(message)}</span> <span>没收到请检查垃圾邮件箱。</span>`;
       if (!sheet.el.isConnected) return;
       coolDown(60);
       form.code.focus();
@@ -633,7 +636,8 @@ export function codeSender(sheet, form, request, widgetFor = formWidget(sheet, f
         coolDown(error.retryAfter);
       } else send.disabled = false;
     } finally {
-      widget?.reset();
+      // A token is spent only by a request; an unfinished challenge keeps running.
+      if (sent) widget?.reset();
     }
   });
   const refreshCountdown = () => { if (timer !== null) tick(); };
@@ -1081,7 +1085,8 @@ document.addEventListener('click', (e) => {
     return;
   }
   const auth = e.target.closest('[data-auth]');
-  if (auth) { closeMenus(); openAuth({ mode: auth.dataset.auth }); return; }
+  // A sign-in button inside a modal sheet closes it first; the page behind a modal dialog is inert.
+  if (auth) { closeMenus(); auth.closest('dialog[open]')?.close(); openAuth({ mode: auth.dataset.auth }); return; }
   if (e.target.closest('[data-bind-email]')) { closeMenus(); openBindEmail(); return; }
   // Signed out, the personal center has nothing to show yet: sign in first, then open it.
   if (!platform.user && platform.available && e.target.closest('a[href="#/me"]')) {

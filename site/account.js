@@ -59,7 +59,7 @@ function thumb(ctx, w, { link = true } = {}) {
 
 function reactionSummary(w) {
   const counts = platform.reactions.counts[`${w.task}/${w.id}`] ?? {};
-  const entries = platform.site.emojis.filter((emoji) => counts[emoji]).map((emoji) => [emoji, counts[emoji]]);
+  const entries = (platform.site?.emojis ?? []).filter((emoji) => counts[emoji]).map((emoji) => [emoji, counts[emoji]]);
   return entries.length ? `<span class="reaction-sum">${entries.map(([emoji, n]) => `<span title="${stickerName(emoji)}">${sticker(emoji)}<b>${n}</b></span>`).join('')}</span>` : '';
 }
 
@@ -400,7 +400,7 @@ function profileOverview(state) {
   </section>
   <section class="profile-reactions" aria-labelledby="received-title">
     <div><h2 id="received-title">获得的表情</h2><p>作品收到了 <b>${received ? received.total : '—'}</b> 个回应</p></div>
-    <div class="received-emojis">${platform.site.emojis.map((emoji) => `<div class="received-emoji" title="${stickerName(emoji)}">${sticker(emoji)}<b>${received ? received.counts[emoji] ?? 0 : '—'}</b></div>`).join('')}</div>
+    <div class="received-emojis">${(platform.site?.emojis ?? []).map((emoji) => `<div class="received-emoji" title="${stickerName(emoji)}">${sticker(emoji)}<b>${received ? received.counts[emoji] ?? 0 : '—'}</b></div>`).join('')}</div>
   </section>`;
 }
 

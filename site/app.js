@@ -24,7 +24,7 @@ import { curatedInfo, invalidateCurated } from './curated.js';
 import { CONTACT, aigcLabel, beianLink, mount as renderLegal } from './legal.js';
 import { effortRank, representatives, standard, taskCover } from './featured.js';
 import { groupVariantResults, variantChoices, variantKey, variantsOf } from './prompt-variants.js';
-import { boostOrder } from './work-boost.js';
+import { boostOrder, boostedWorks } from './work-boost.js';
 import { downloadReference, linkReferences, referenceSheet, useReferenceViewer } from './references.js';
 import { CATEGORIES, aiJudged, aiScoreOf, benchmarkTask, categoryLabel, categoryOf, createQuestionSearch, domainList, domainsIn, domainsOf, subcategoriesOf, subcategoryOf, tracksOf, votedTask } from './categories.js';
 import { BACKEND_TIERS, backendTierMeta } from './backend-board.js';
@@ -542,7 +542,8 @@ function setResultSort(value) {
   resultSort = value;
   store.set('result-sort', value);
 }
-// Cover: the first uniform capture (task condition order), else the author's first screenshot.
+// Cover: the work's own preview capture, else its first-screen capture, else the author's first
+// screenshot, else any other capture (work-preview-media.js).
 const cover = screenshotOf;
 // Works without a screenshot yet show their title instead of an empty frame.
 function coverHtml(r, cls = '', eager = false, task = null) {
@@ -1663,7 +1664,7 @@ function renderTask(t) {
         <a class="side-link" href="${sandtableHref(t)}">${icon('full')}三维沙盘<span class="nav-ext">${icon('arrow')}</span></a>
         <a class="side-link" href="#/${t.id}/exhibition">${icon('grid')}原作展厅<span class="nav-ext">${icon('arrow')}</span></a>` : ''}
       </nav>
-      <div class="side-facts"><p>${new Set(works.map((r) => r.model)).size} 个模型 · ${new Set(works.map(vendorOf)).size} 家厂商</p>
+      <div class="side-facts"><p>${modelCount(works)} 个模型 · ${new Set(works.map(vendorOf)).size} 家厂商</p>
         ${isStaff() && platform.activityReady ? adminPoolLine(t, pool) : ''}</div>
       <section class="side-prompt" aria-labelledby="side-prompt-title">
         <div class="side-prompt-head"><h2 id="side-prompt-title">题面</h2>
@@ -2000,8 +2001,9 @@ function filterResults(t) {
   const unfolded = filtering || familyShown(t);
   const matches = new Set(shown.map((r) => r.id));
   const groups = new Map(), groupByWork = new Map();
+  const boosted = new Set(boostedWorks(displayed, { sort: resultSort, vendorOf }));
   for (const r of displayed) {
-    const key = foldKey(r);
+    const key = boosted.has(r) ? `boost|${r.id}` : foldKey(r);
     if (!groups.has(key)) groups.set(key, { key, first: r, count: 0 });
     const group = groups.get(key);
     group.count++;
@@ -2098,7 +2100,7 @@ function openCompareLightbox(t, resultId) {
   const items = (condId) => {
     const cond = t.conditions.find((c) => c.id === condId);
     return t.results.filter((r) => r.captures[condId]).map((r) => ({
-      id: r.id, src: r.captures[condId], title: `${r.title} · ${cond.label}`, sub: `${label(r)} · ←/→ 换作品，↑/↓ 换条件`,
+      id: r.id, src: versionedMedia(r.captures[condId]), title: `${r.title} · ${cond.label}`, sub: `${label(r)} · ←/→ 换作品，↑/↓ 换条件`,
     }));
   };
   const current = t.results.find((r) => r.id === resultId);
@@ -2252,7 +2254,7 @@ const wide = () => matchMedia('(min-width: 1100px)').matches;
 // How a work was made, in the guide drawer.
 function sourceFacts(r) {
   const harness = harnessOf(r);
-  return `<div><dt>Harness</dt><dd>${harness ? esc(harness.name) : r.tool ? `${esc(r.tool)}（作者原始声明）` : '未注明'}</dd></div>
+  return `<div><dt>Harness</dt><dd>${harness ? esc(harness.name) : r.tool ? `<span data-i18n-ignore>${esc(r.tool)}</span>（<span>作者原始声明</span>）` : '未注明'}</dd></div>
       <div><dt>服务商</dt><dd>${esc(providerOf(r)?.name ?? '未注明')}</dd></div>`;
 }
 // Staff switches beside a verified work: [button, faces, toast].
@@ -2283,7 +2285,9 @@ function createViewer(t) {
   let blurTimer;
   const clearFrameLoads = () => { for (const stop of frameLoads.values()) stop(); frameLoads.clear(); };
   const byId = (id) => t.results.find((r) => r.id === id);
-  const options = () => sortedResults(t).map((r) => option(r.id, `${r.title} · ${label(r)}${r.promptVariant ? ` · ${variantsOf(t).find((variant) => variant.id === r.promptVariant)?.label}` : ''}`, false, r.status !== 'verified' ? ` · ${STATUS[r.status].label}` : '')).join('');
+  // A version the question no longer lists adds nothing to the option text.
+  const versionLabel = (r) => variantsOf(t).find((variant) => variant.id === r.promptVariant)?.label;
+  const options = () => sortedResults(t).map((r) => option(r.id, `${r.title} · ${label(r)}${versionLabel(r) ? ` · ${versionLabel(r)}` : ''}`, false, r.status !== 'verified' ? ` · ${STATUS[r.status].label}` : '')).join('');
   const many = t.results.length > 1;
   setPageTitle(['在线预览', { text: t.title, original: true }]);
 

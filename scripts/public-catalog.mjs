@@ -22,7 +22,8 @@ export function publicCatalog(data, buildInfo) {
           sections: (result.guide?.sections ?? []).map(section => pick(section, ['title', 'items'])),
           presets: (result.guide?.presets ?? []).map(preset => pick(preset, ['label', 'query'])),
         },
-        captures: result.captures ?? {},
+        // Only the task's own conditions; any other key in the package stays private.
+        captures: pick(result.captures ?? {}, (task.conditions ?? []).map(condition => condition.id)),
         gallery: (result.gallery ?? []).map(shot => pick(shot, ['src', 'caption'])),
       })),
     })),

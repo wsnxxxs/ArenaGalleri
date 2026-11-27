@@ -31,9 +31,11 @@ export function referenceSheet(refs = [], { key, credit = '', download = true, s
 export function linkReferences(text, refs = [], key) {
   const html = esc(text);
   if (!refs.length) return html;
-  return html.replace(/references\/([^\s`'"，。；：、）)]+)/g, (match, name) => {
+  // The text is escaped already, so a name ends at an entity (quotes, angle brackets) or punctuation.
+  return html.replace(/references\/([^\s`'"&<>，。；：、）),;]+)/g, (match, raw) => {
+    const name = raw.replace(/[.:!?]+$/, ''), tail = raw.slice(name.length);
     const i = refs.findIndex((ref) => ref.name === name);
-    return i < 0 ? match : `<button type="button" class="ref-mention" data-ref-key="${esc(key)}" data-ref="${i}" title="查看参考图 ${esc(caption(refs[i], i))}">${match}</button>`;
+    return i < 0 ? match : `<button type="button" class="ref-mention" data-ref-key="${esc(key)}" data-ref="${i}" title="查看参考图 ${esc(caption(refs[i], i))}">references/${name}</button>${tail}`;
   });
 }
 

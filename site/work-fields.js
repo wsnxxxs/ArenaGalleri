@@ -16,7 +16,7 @@ const INTERVENTIONS = [
 ];
 
 // Efforts the site offers on top of the server's list; free text still accepts any other.
-export const effortOptions = () => ['Default', ...new Set([...(platform.site.efforts ?? []), 'Ultra', 'Ultracode'])];
+export const effortOptions = () => ['Default', ...new Set([...(platform.site?.efforts ?? []), 'Ultra', 'Ultracode'])];
 // The suggestion list behind a datalist (see suggest.js); the datalist still names registered entries.
 const suggest = (list) => `data-suggest="${list}" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off"`;
 

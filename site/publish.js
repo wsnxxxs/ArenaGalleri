@@ -46,10 +46,11 @@ export function mount(root, ctx) {
   }
   // Reference images upload as they are picked and outlive a return to the form.
   const promptArea = () => $('.publish-form [name="prompt"]', root);
-  function insertNote(text) {
+  // section: the text is the 【参考图】 section and replaces an earlier one.
+  function insertNote(text, { section = true } = {}) {
     const area = promptArea();
     if (!area) return;
-    const replaced = replaceReferenceNote(area.value, text);
+    const replaced = section ? replaceReferenceNote(area.value, text) : null;
     if (replaced !== null) { area.value = replaced; area.focus(); return; }
     const start = area.selectionStart ?? area.value.length, end = area.selectionEnd ?? start;
     const before = area.value.slice(0, start), after = area.value.slice(end);
@@ -168,7 +169,7 @@ export function mount(root, ctx) {
           <label class="field"><span class="field-label">测试简述 *${changedMark('summary')}</span><textarea class="input" name="summary" required maxlength="400" rows="3" placeholder="需要完成什么？能测出模型的哪些能力？">${esc(question.summary)}</textarea></label>
           ${categoryField(question.category, question.subcategory)}
           ${domainField(platform, question.domains)}
-          <label class="field"><span class="field-label">完整提示词 *${changedMark('prompt')}</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="${question.category === '音乐' ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : question.category === '静态网页' && question.subcategory === 'PDF' ? '粘贴完整提示词，并明确要求模型生成并导出为单个 .pdf 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。'}">${esc(question.prompt)}</textarea><p class="fine music-prompt-guide" data-music-prompt-guide${question.category === '音乐' ? '' : ' hidden'}><b>音乐题提示词要求：</b>提示词中须明确要求模型导出单个 <code>.mp3</code> 音频文件。<button class="link" type="button" data-act="insert-mp3-note">插入导出 MP3 要求</button></p><p class="fine music-prompt-guide" data-pdf-prompt-guide${question.category === '静态网页' && question.subcategory === 'PDF' ? '' : ' hidden'}><b>PDF 题提示词要求：</b>建议在提示词中明确要求模型生成并导出为单个 <code>.pdf</code> 文件。<button class="link" type="button" data-act="insert-pdf-note">插入导出 PDF 要求</button></p><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
+          <label class="field"><span class="field-label">完整提示词 *${changedMark('prompt')}</span><textarea class="input" name="prompt" required maxlength="20000" rows="12" placeholder="${question.category === '音乐' ? '粘贴完整提示词，并明确要求模型制作音乐且导出为单个 .mp3 文件。' : question.category === '静态网页' && question.subcategory === 'PDF' ? '粘贴完整提示词，并明确要求模型生成并导出为单个 .pdf 文件。' : '粘贴所有参与模型需要使用的同一份完整提示词。'}">${esc(question.prompt)}</textarea><p class="fine music-prompt-guide" data-music-prompt-guide${question.category === '音乐' ? '' : ' hidden'}><b>音乐题提示词要求：</b><span>提示词中须明确要求模型导出单个 .mp3 音频文件。</span><button class="link" type="button" data-act="insert-mp3-note">插入导出 MP3 要求</button></p><p class="fine music-prompt-guide" data-pdf-prompt-guide${question.category === '静态网页' && question.subcategory === 'PDF' ? '' : ' hidden'}><b>PDF 题提示词要求：</b><span>建议在提示词中明确要求模型生成并导出为单个 .pdf 文件。</span><button class="link" type="button" data-act="insert-pdf-note">插入导出 PDF 要求</button></p><p class="fine">题库搜索会匹配提示词全文，技术栈、主题等写在提示词里即可，不另设标签。</p></label>
           ${refs ? '<div data-ref-host></div>' : ''}
           <div class="field" data-formats>${formatField()}</div>
           ${original ? sampleField() : ''}
@@ -237,12 +238,12 @@ export function mount(root, ctx) {
     };
     root.onclick = (event) => {
       if (event.target.closest('[data-act="insert-mp3-note"]')) {
-        insertNote('请通过代码制作完整音乐，并导出为单个标准的 .mp3 音频文件。');
+        insertNote('请通过代码制作完整音乐，并导出为单个标准的 .mp3 音频文件。', { section: false });
         error.textContent = '';
         return;
       }
       if (event.target.closest('[data-act="insert-pdf-note"]')) {
-        insertNote('请生成并导出为单个标准的 .pdf 文档文件。');
+        insertNote('请生成并导出为单个标准的 .pdf 文档文件。', { section: false });
         error.textContent = '';
         return;
       }
